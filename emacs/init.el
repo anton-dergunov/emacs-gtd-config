@@ -138,3 +138,21 @@
   ([remap describe-variable] . counsel-describe-variable)
   ([remap describe-key] . helpful-key))
 
+;; Keep folders clean
+;; https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Cleaning.org
+;; or use no-littering package:
+;; https://github.com/emacscollective/no-littering
+
+;; Store backup files (init.el~) in ~/.emacs/tmp/backups
+(setq backup-directory-alist `(("." . ,(expand-file-name "tmp/backups/" user-emacs-directory))))
+
+;; Store auto save files (#init.el#) in ~/.emacs/tmp/auto-saves
+;; auto-save-mode doesn't create the path automatically!
+(make-directory (expand-file-name "tmp/auto-saves/" user-emacs-directory) t)
+(setq auto-save-list-file-prefix (expand-file-name "tmp/auto-saves/sessions/" user-emacs-directory)
+  auto-save-file-name-transforms `((".*" ,(expand-file-name "tmp/auto-saves/" user-emacs-directory) t)))
+
+;; Disable lock files (.#init.el)
+(setq create-lockfiles nil)
+
+
