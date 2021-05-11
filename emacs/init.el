@@ -19,23 +19,38 @@
                 eshell-mode-hook))
   (add-hook mode (lambda () (display-line-numbers-mode 0))))
 
+(if (eq system-type 'darwin)
+  (set-face-attribute 'default nil :font "Monaco-14"))
+(if (eq system-type 'windows-nt)
+  (set-face-attribute 'default nil :font "Consolas-11"))
 
-(set-face-attribute 'default nil :font "Monaco-14")
-
-(setq default-directory "/Users/anton/mywork/Dropbox/notes/Plans/Org/")
+(if (eq system-type 'darwin)
+  (setq default-directory "/Users/anton/mywork/Dropbox/notes/Plans/Org/"))
+(if (eq system-type 'windows-nt)
+  (setq default-directory "C:/MyWork/Dropbox/notes/Plans/Org/"))
 
 (define-key global-map "\C-ca" 'org-agenda)
 
 (setq org-todo-keywords '((sequence "TODO(t)" "INPR(i)" "WAIT(w)" "SMDY(s)" "|" "DONE(d)")))
 
-;; Initialize package sources
 (require 'package)
-
-(setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                         ("org" . "https://orgmode.org/elpa/")
-                         ("elpa" . "https://elpa.gnu.org/packages/")))
-
+(let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
+                    (not (gnutls-available-p))))
+       (proto (if no-ssl "http" "https")))
+  (add-to-list 'package-archives (cons "melpa" (concat proto "://melpa.org/packages/")) t))
 (package-initialize)
+
+;; Initialize package sources
+;;(require 'package)
+
+;;(add-to-list 'package-archives
+;;             '("melpa" . "http://melpa.org/packages/") t)
+
+;;(setq package-archives '(("melpa" . "https://melpa.org/packages/")))
+;;                         ; ("org" . "https://orgmode.org/elpa/")))
+;;                         ; ("elpa" . "https://elpa.gnu.org/packages/")))
+
+;; (package-initialize)
 (unless package-archive-contents
   (package-refresh-contents))
 
@@ -74,6 +89,8 @@
 (setq solarized-height-plus-3 1.0)
 (setq solarized-height-plus-4 1.0)
 
+;; Install it first using M-x package-install solarized-theme
+;; https://emacs.stackexchange.com/questions/15120/how-do-i-install-solarized-theme
 (load-theme 'solarized-light t)
 
 (use-package ivy
