@@ -1,3 +1,7 @@
+;; To use on Windows, create file ~/.emacs and put this:
+;; (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
+;; Restart and install Solarized theme (see below)
+
 ;; Disable the splash screen
 (setq inhibit-splash-screen t)
 
@@ -29,9 +33,18 @@
 (if (eq system-type 'windows-nt)
   (setq default-directory "C:/MyWork/Dropbox/notes/Plans/Org/"))
 
+(if (eq system-type 'darwin)
+  (setq org-agenda-files '("/Users/anton/mywork/Dropbox/notes/Plans/Org/")))
+(if (eq system-type 'windows-nt)
+  (setq org-agenda-files '("C:/MyWork/Dropbox/notes/Plans/Org/")))
+
 (define-key global-map "\C-ca" 'org-agenda)
 
-(setq org-todo-keywords '((sequence "TODO(t)" "INPR(i)" "WAIT(w)" "SMDY(s)" "|" "DONE(d)")))
+(setq org-todo-keywords '((sequence "TODO(t)" "NEXT(n)" "INPR(i)" "WAIT(w)" "SMDY(s)" "|" "DONE(d)")))
+
+;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
+(add-hook 'auto-save-hook 'org-save-all-org-buffers)
+(global-auto-revert-mode t)
 
 (require 'package)
 (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
@@ -155,4 +168,8 @@
 ;; Disable lock files (.#init.el)
 (setq create-lockfiles nil)
 
+;; https://stackoverflow.com/questions/2010539/how-can-i-show-the-org-mode-agenda-on-emacs-start-up
+(message "Loading agenda view...")
+(org-todo-list "NEXT")
+(delete-other-windows)
 
