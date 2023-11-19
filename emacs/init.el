@@ -32,11 +32,15 @@
   (setq default-directory "/Users/anton/mywork/Dropbox/notes/Plans/Org/"))
 (if (eq system-type 'windows-nt)
   (setq default-directory "C:/MyWork/Dropbox/notes/Plans/Org/"))
+(if (eq system-type 'gnu/linux)
+  (setq default-directory "/home/anton/Dropbox/notes/Plans/Org/"))
 
 (if (eq system-type 'darwin)
-  (setq org-agenda-files '("/Users/anton/mywork/Dropbox/notes/Plans/Org/")))
+  (setq org-agenda-files '("/Users/anton/Dropbox/notes/Plans/Org/")))
 (if (eq system-type 'windows-nt)
   (setq org-agenda-files '("C:/MyWork/Dropbox/notes/Plans/Org/")))
+(if (eq system-type 'gnu/linux)
+  (setq org-agenda-files '("/home/anton/Dropbox/notes/Plans/Org/")))
 
 (define-key global-map "\C-ca" 'org-agenda)
 
