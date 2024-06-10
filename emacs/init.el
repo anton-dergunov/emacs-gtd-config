@@ -2,6 +2,11 @@
 ;; (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
 ;; Restart and install Solarized theme (see below)
 
+;; This seems to fix showing ??? in agenda view for column
+;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
+;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
+(setq org-element-use-cache nil)
+
 ;; Disable the splash screen
 (setq inhibit-splash-screen t)
 
