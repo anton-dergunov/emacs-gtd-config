@@ -34,22 +34,23 @@
   (set-face-attribute 'default nil :font "Consolas-11"))
 
 (if (eq system-type 'darwin)
-  (setq default-directory "/Users/anton/mywork/Dropbox/notes/Plans/Org/"))
+  (setq default-directory "/Users/anton/mywork/Dropbox/org/Plans/"))
 (if (eq system-type 'windows-nt)
-  (setq default-directory "C:/MyWork/Dropbox/notes/Plans/Org/"))
+  (setq default-directory "C:/MyWork/Dropbox/org/Plans/"))
 (if (eq system-type 'gnu/linux)
-  (setq default-directory "/home/anton/Dropbox/notes/Plans/Org/"))
+  (setq default-directory "/home/anton/Dropbox/org/Plans/"))
 
+;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
 (if (eq system-type 'darwin)
-  (setq org-agenda-files '("/Users/anton/Dropbox/notes/Plans/Org/")))
+  (setq org-agenda-files (directory-files-recursively "/Users/anton/Dropbox/org/" "\\.org$")))
 (if (eq system-type 'windows-nt)
-  (setq org-agenda-files '("C:/MyWork/Dropbox/notes/Plans/Org/")))
+  (setq org-agenda-files (directory-files-recursively "C:/MyWork/Dropbox/org/" "\\.org$")))
 (if (eq system-type 'gnu/linux)
-  (setq org-agenda-files '("/home/anton/Dropbox/notes/Plans/Org/")))
+  (setq org-agenda-files (directory-files-recursively "/home/anton/Dropbox/org/" "\\.org$")))
 
 (define-key global-map "\C-ca" 'org-agenda)
 
-(setq org-todo-keywords '((sequence "TODO(t)" "NEXT(n)" "INPR(i)" "WAIT(w)" "SMDY(s)" "|" "DONE(d)")))
+(setq org-todo-keywords '((sequence "TODO(t)" "NEXT(n)" "IN-PROGRESS(i)" "WAITING(w)" "SOMEDAY(s)" "|" "DONE(d)")))
 
 ;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
 (add-hook 'auto-save-hook 'org-save-all-org-buffers)
@@ -160,6 +161,19 @@
   ([remap describe-variable] . counsel-describe-variable)
   ([remap describe-key] . helpful-key))
 
+;; Install it first using M-x package-install org-journal
+(if (eq system-type 'darwin)
+  (setq org-journal-dir "/Users/anton/Dropbox/org/Journal/"))
+(if (eq system-type 'windows-nt)
+  (setq org-journal-dir "C:/MyWork/Dropbox/org/Journal/"))
+(if (eq system-type 'gnu/linux)
+  (setq org-journal-dir "/home/anton/Dropbox/org/Journal/"))
+(setq org-journal-file-format "%Y-%m-%d.org")
+(setq org-extend-today-until 4)
+(setq org-journal-file-type 'weekly)
+(setq org-journal-date-format "%A, %d %B %Y")
+(require 'org-journal)
+
 ;; Keep folders clean
 ;; https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Cleaning.org
 ;; or use no-littering package:
@@ -181,4 +195,23 @@
 (message "Loading agenda view...")
 (org-todo-list "NEXT")
 (delete-other-windows)
+;; (org-journal-new-entry nil)
+
+(defun my-show-agenda ()
+  (interactive)
+  (org-todo-list "NEXT")
+  (delete-other-windows))
+(global-set-key [f9] 'my-show-agenda)
+
+;; (calendar) 
+;; (other-window 1) 
+;; (split-window-horizontally) 
+;; (other-window 1) 
+
+;; Install it first using M-x package-install neotree
+(require 'neotree)
+;; https://github.com/jaypei/emacs-neotree/issues/164
+(global-set-key [f8] 'neotree-toggle)
+(neotree-dir "/Users/anton/Dropbox/org/")
+(call-interactively 'other-window)
 
