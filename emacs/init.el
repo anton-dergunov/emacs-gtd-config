@@ -2,6 +2,9 @@
 ;; (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
 ;; Restart and install Solarized theme (see below)
 
+;; https://emacs.stackexchange.com/questions/233/how-to-proceed-on-package-el-signature-check-failure
+(setq package-check-signature nil)
+
 ;; This seems to fix showing ??? in agenda view for column
 ;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
 ;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
@@ -22,6 +25,10 @@
 ;; Display line numbers
 (global-display-line-numbers-mode t)
 
+;; Wrap text (but only in text mode, not in agenda)
+;; https://www.inmotionhosting.com/support/edu/software/how-to-wrap-text-in-emacs/
+(add-hook 'text-mode-hook 'visual-line-mode)
+
 ;; Disable line numbers for some modes
 (dolist (mode '(term-mode-hook
                 shell-mode-hook
@@ -33,20 +40,44 @@
 (if (eq system-type 'windows-nt)
   (set-face-attribute 'default nil :font "Consolas-11"))
 
+;; First install it with M-x package-install org-superstar
+(require 'org-superstar)
+(add-hook 'org-mode-hook (lambda () (org-superstar-mode 1)))
+;; https://www.reddit.com/r/orgmode/comments/pfgcql/comment/hb4g8j0/
+(setq org-superstar-leading-bullet ?\s)
+
+;; https://stackoverflow.com/questions/77332358/how-can-i-adjust-the-fonts-and-sizes-of-bullets-in-org-superstar
+;; Increase font slightly for headers
+(custom-set-faces
+  '(org-level-1 ((t (:inherit outline-1 :height 1.04))))
+  '(org-level-2 ((t (:inherit outline-2 :height 1.03))))
+  '(org-level-3 ((t (:inherit outline-3 :height 1.02))))
+  '(org-level-4 ((t (:inherit outline-4 :height 1.01))))
+  '(org-level-5 ((t (:inherit outline-5 :height 1.0))))
+  )
+
+;; https://emacs.stackexchange.com/questions/639/how-can-i-restart-emacs-and-preserve-my-open-buffers-and-interactive-history
+(desktop-save-mode 1)
+(savehist-mode 1)
+(add-to-list 'savehist-additional-variables 'kill-ring)
+;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html#:~:text=You%20can%20avoid%20the%20question,load%20the%20desktop%20without%20asking.
+;; Reload desktop without asking
+(setq desktop-load-locked-desktop t)
+
 (if (eq system-type 'darwin)
-  (setq default-directory "/Users/anton/mywork/Dropbox/org/Plans/"))
+  (setq default-directory "/Users/anton/mywork/Dropbox/notes/org/Plans/"))
 (if (eq system-type 'windows-nt)
-  (setq default-directory "C:/MyWork/Dropbox/org/Plans/"))
+  (setq default-directory "C:/MyWork/Dropbox/notes/org/Plans/"))
 (if (eq system-type 'gnu/linux)
-  (setq default-directory "/home/anton/Dropbox/org/Plans/"))
+  (setq default-directory "/home/anton/Dropbox/notes/org/Plans/"))
 
 ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
 (if (eq system-type 'darwin)
-  (setq org-agenda-files (directory-files-recursively "/Users/anton/Dropbox/org/" "\\.org$")))
+  (setq org-agenda-files (directory-files-recursively "/Users/anton/Dropbox/notes/org/" "\\.org$")))
 (if (eq system-type 'windows-nt)
-  (setq org-agenda-files (directory-files-recursively "C:/MyWork/Dropbox/org/" "\\.org$")))
+  (setq org-agenda-files (directory-files-recursively "C:/MyWork/Dropbox/notes/org/" "\\.org$")))
 (if (eq system-type 'gnu/linux)
-  (setq org-agenda-files (directory-files-recursively "/home/anton/Dropbox/org/" "\\.org$")))
+  (setq org-agenda-files (directory-files-recursively "/home/anton/Dropbox/notes/org/" "\\.org$")))
 
 (define-key global-map "\C-ca" 'org-agenda)
 
@@ -212,6 +243,11 @@
 (require 'neotree)
 ;; https://github.com/jaypei/emacs-neotree/issues/164
 (global-set-key [f8] 'neotree-toggle)
-(neotree-dir "/Users/anton/Dropbox/org/")
+(if (eq system-type 'darwin)
+  (neotree-dir "/Users/anton/Dropbox/notes/org/"))
+(if (eq system-type 'windows-nt)
+  (neotree-dir "C:/MyWork/Dropbox/org/"))
+(if (eq system-type 'gnu/linux)
+  (neotree-dir "/home/anton/Dropbox/notes/org/"))
 (call-interactively 'other-window)
 
