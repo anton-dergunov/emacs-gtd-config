@@ -1,24 +1,5 @@
 #+TITLE: Emacs Configuration for "Getting Things Done" with Org Mode
 
-* Installation Instructions
-
-Please suggest how to format this snippet for org mode so that it is visualized in github well. But it must not be executed. I need to format the M-x commands well.
-
-1. Create file ~/.emacs and load this config:
-   #+BEGIN_COMMENT
-   (package-initialize)
-   (defvar my-base-directory "~/<org-path>")
-   (org-babel-load-file "~/<config-path>/config.org")
-   #+END_COMMENT
-2. Refresh packages:
-   `M-x package-refresh-contents RET`
-3. Install the required packages:
-   `M-x package-install RET magit RET`
-   `M-x package-install RET org-superstar RET`
-   `M-x package-install RET solarized-theme RET`
-   `M-x package-install RET org-journal RET`
-   `M-x package-install RET neotree RET`
-
 * Packages Setup
 ** Disable package signature checking as a workaround for installation issues
 #+BEGIN_SRC emacs-lisp
