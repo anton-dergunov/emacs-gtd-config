@@ -7,6 +7,10 @@
 ;;   M-x package-refresh-contents RET
 ;; Install the required packages:
 ;;   M-x package-install RET magit RET
+;;   M-x package-install RET org-superstar RET
+;;   M-x package-install RET solarized-theme RET
+;;   M-x package-install RET org-journal RET
+;;   M-x package-install RET neotree RET
 
 ;; https://emacs.stackexchange.com/questions/233/how-to-proceed-on-package-el-signature-check-failure
 (setq package-check-signature nil)
@@ -46,7 +50,6 @@
 (if (eq system-type 'windows-nt)
   (set-face-attribute 'default nil :font "Consolas-11"))
 
-;; First install it with M-x package-install org-superstar
 (require 'org-superstar)
 (add-hook 'org-mode-hook (lambda () (org-superstar-mode 1)))
 ;; https://www.reddit.com/r/orgmode/comments/pfgcql/comment/hb4g8j0/
@@ -149,7 +152,6 @@
 (setq solarized-height-plus-3 1.0)
 (setq solarized-height-plus-4 1.0)
 
-;; Install it first using M-x package-install solarized-theme
 ;; https://emacs.stackexchange.com/questions/15120/how-do-i-install-solarized-theme
 (load-theme 'solarized-light t)
 
@@ -198,7 +200,6 @@
   ([remap describe-variable] . counsel-describe-variable)
   ([remap describe-key] . helpful-key))
 
-;; Install it first using M-x package-install org-journal
 (if (eq system-type 'darwin)
   (setq org-journal-dir "/Users/anton/Dropbox/org/Journal/"))
 (if (eq system-type 'windows-nt)
@@ -245,7 +246,6 @@
 ;; (split-window-horizontally) 
 ;; (other-window 1) 
 
-;; Install it first using M-x package-install neotree
 (require 'neotree)
 ;; https://github.com/jaypei/emacs-neotree/issues/164
 (global-set-key [f8] 'neotree-toggle)
@@ -270,9 +270,4 @@
   '(menu-item "Toggle explorer" neotree-toggle :help "Toggle explorer"))
 (define-key my-menu-bar-menu [my-cmd2]
   '(menu-item "Show agenda" my-show-agenda :help "Show agenda"))
-
-;; Install magit
-;; M-x package-refresh-contents RET
-;; M-x package-install RET magit RET
-
 
