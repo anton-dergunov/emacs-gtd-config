@@ -1,11 +1,17 @@
-;; To use on Windows, create file ~/.emacs and put this:
-;; (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
 ;; Restart and install Solarized theme (see below)
+;; 
+;; Installation instructions:
+;; 1. Create file ~/.emacs and put a line to load this config. For example, for Windows:
+;;   (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
+;; Refresh packages:
+;;   M-x package-refresh-contents RET
+;; Install the required packages:
+;;   M-x package-install RET magit RET
 
 ;; https://emacs.stackexchange.com/questions/233/how-to-proceed-on-package-el-signature-check-failure
 (setq package-check-signature nil)
 
-;; This seems to fix showing ??? in agenda view for column
+;; This is a fix for "???" displayed in agenda view columns
 ;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
 ;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
 (setq org-element-use-cache nil)
@@ -250,4 +256,23 @@
 (if (eq system-type 'gnu/linux)
   (neotree-dir "/home/anton/Dropbox/notes/org/"))
 (call-interactively 'other-window)
+
+;; https://emacs.stackexchange.com/questions/15093/how-to-add-an-item-to-the-menu-bar
+;; Add GTD menu to the end of the menu bar
+(defvar my-menu-bar-menu (make-sparse-keymap "GTD"))
+(define-key global-map [menu-bar my-menu] (cons "GTD" my-menu-bar-menu))
+
+;; Insert GTD before the Help menu
+(setq menu-bar-final-items (append menu-bar-final-items '(my-menu)))
+
+;; Define the menu items
+(define-key my-menu-bar-menu [my-cmd1]
+  '(menu-item "Toggle explorer" neotree-toggle :help "Toggle explorer"))
+(define-key my-menu-bar-menu [my-cmd2]
+  '(menu-item "Show agenda" my-show-agenda :help "Show agenda"))
+
+;; Install magit
+;; M-x package-refresh-contents RET
+;; M-x package-install RET magit RET
+
 
