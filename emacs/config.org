@@ -327,11 +327,3 @@
 ;; - no-littering package: https://github.com/emacscollective/no-littering
 #+END_SRC
 
-** Initial Configuration with Org Agenda
-#+BEGIN_SRC emacs-lisp
-;; https://stackoverflow.com/questions/2010539/how-can-i-show-the-org-mode-agenda-on-emacs-start-up
-(message "Loading agenda view...")
-;; (org-todo-list "NEXT")
-;; (delete-other-windows)
-#+END_SRC
-
