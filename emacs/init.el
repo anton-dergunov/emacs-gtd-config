@@ -1,11 +1,9 @@
-;; Restart and install Solarized theme (see below)
-;; 
 ;; Installation instructions:
 ;; 1. Create file ~/.emacs and put a line to load this config. For example, for Windows:
 ;;   (load "C:\\MyWork\\Dropbox\\config\\emacs\\init.el")
-;; Refresh packages:
+;; 2. Refresh packages:
 ;;   M-x package-refresh-contents RET
-;; Install the required packages:
+;; 3. Install the required packages:
 ;;   M-x package-install RET magit RET
 ;;   M-x package-install RET org-superstar RET
 ;;   M-x package-install RET solarized-theme RET
