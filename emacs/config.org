@@ -1,13 +1,7 @@
-#+TITLE: Emacs Configuration for "Getting Things Done" with Org Mode
+#+TITLE: Minimalistic Emacs Configuration for "Getting Things Done" with Org Mode
 
 * Packages Setup
-** Disable package signature checking as a workaround for installation issues
-#+BEGIN_SRC emacs-lisp
-;; https://emacs.stackexchange.com/questions/233/how-to-proceed-on-package-el-signature-check-failure
-(setq package-check-signature nil)
-#+END_SRC
-
-** Initialize =melpa= package repository
+** Initialize the =melpa= package repository
 #+BEGIN_SRC emacs-lisp
 (require 'package)
 (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
@@ -26,7 +20,7 @@
 
 (unless (package-installed-p 'use-package)
         (package-install 'use-package))
-   
+
 (require 'use-package)
 (setq use-package-always-ensure t)
 #+END_SRC
@@ -142,11 +136,11 @@
 ** Enhanced bullets using =org-superstar=
 #+BEGIN_SRC emacs-lisp
 (use-package org-superstar
-:hook (org-mode . org-superstar-mode)
-:config
-;; Disable leading dots for bullets
-;; https://www.reddit.com/r/orgmode/comments/pfgcql/comment/hb4g8j0/
-(setq org-superstar-leading-bullet ?\s))
+  :hook (org-mode . org-superstar-mode)
+  :config
+  ;; Disable leading dots for bullets
+  ;; https://www.reddit.com/r/orgmode/comments/pfgcql/comment/hb4g8j0/
+  (setq org-superstar-leading-bullet ?\s))
 
 ;; Slightly increase header fonts depending on the level
 ;; https://stackoverflow.com/questions/77332358/how-can-i-adjust-the-fonts-and-sizes-of-bullets-in-org-superstar
@@ -179,7 +173,6 @@
   ;; TODO Document these settings
   :bind (("C-s" . swiper)
          :map ivy-minibuffer-map
-         ("TAB" . ivy-alt-done)
          ("C-l" . ivy-alt-done)
          ("C-j" . ivy-next-line)
          ("C-k" . ivy-previous-line)
@@ -202,6 +195,21 @@
 
 (use-package ivy-rich
   :init (ivy-rich-mode 1))
+#+END_SRC
+
+** =projectile= and =counsel-projectile= to search in all files
+#+BEGIN_SRC emacs-lisp
+(use-package projectile
+  :ensure t
+  :config
+  (projectile-mode +1))
+
+(use-package counsel-projectile
+  :ensure t
+  :config
+  (counsel-projectile-mode))
+
+(global-set-key (kbd "s-r") 'counsel-projectile-rg)
 #+END_SRC
 
 ** =helpful= for enhanced help buffers
