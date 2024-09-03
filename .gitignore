@@ -1,4 +1,5 @@
-.DS_Store
-Icon?
-desktop.ini
-config.el
+*
+!init.el
+!config.org
+!local.el.template
+!README.md
