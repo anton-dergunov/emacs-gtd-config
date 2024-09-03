@@ -1,0 +1,2 @@
+;; Path to the base directory for org mode files
+(setq my-org-base-directory "<please provide the path here>")

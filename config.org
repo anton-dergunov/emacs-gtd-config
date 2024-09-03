@@ -1,0 +1,416 @@
+#+TITLE: Minimalistic Emacs Configuration for "Getting Things Done" with Org Mode
+
+* Package Management
+** Set up package management and ensure that all required packages are installed
+#+begin_src emacs-lisp
+  (require 'use-package)
+  (setq use-package-always-ensure t)
+#+end_src
+
+** Load Local Configuration
+#+begin_src emacs-lisp
+  (let ((local-file (expand-file-name "local.el" user-emacs-directory)))
+    (when (file-exists-p local-file)
+      (load local-file)))
+  ;; TODO if file does not exist - make a warning and stop
+#+end_src
+
+* User Interface
+** Basic UI Tweaks
+#+begin_src emacs-lisp
+  ;; Disable the splash screen
+  (setq inhibit-splash-screen t)
+
+  ;; Disable tooltips
+  (tooltip-mode -1)
+
+  ;; Disable the toolbar
+  (tool-bar-mode -1)
+#+end_src
+
+** Line Numbers
+#+begin_src emacs-lisp
+  ;; Show column number in mode line
+  (column-number-mode)
+
+  ;; Display line numbers globally
+  (global-display-line-numbers-mode t)
+
+  ;; Disable line numbers for specific modes
+  (dolist (mode '(term-mode-hook
+		  shell-mode-hook
+		  eshell-mode-hook))
+  (add-hook mode (lambda () (display-line-numbers-mode 0))))
+#+end_src
+
+** Word wrap (but only in text mode, not in agenda)
+#+begin_src emacs-lisp
+  ;; https://www.inmotionhosting.com/support/edu/software/how-to-wrap-text-in-emacs/
+  (add-hook 'text-mode-hook 'visual-line-mode)
+#+end_src
+
+** Font
+#+begin_src emacs-lisp
+  ;; Set font based on the operating system
+  (if (eq system-type 'darwin)
+      (set-face-attribute 'default nil :font "Monaco-14"))
+  (if (eq system-type 'windows-nt)
+      (set-face-attribute 'default nil :font "Consolas-11"))
+#+end_src
+
+** Solarized Light Theme
+#+begin_src emacs-lisp
+  (use-package solarized-theme
+  :config
+  (setq
+      ;; Make the fringe stand out from the background
+      solarized-distinct-fringe-background nil
+
+      ;; Don't change the font for some headings and titles
+      solarized-use-variable-pitch nil
+
+      ;; Make the modeline high contrast
+      solarized-high-contrast-mode-line nil
+
+      ;; Use less bolding
+      solarized-use-less-bold t
+
+      ;; Use more italics
+      solarized-use-more-italic t
+
+      ;; Use less colors for indicators such as git:gutter, flycheck and similar
+      solarized-emphasize-indicators nil
+
+      ;; Don't change size of org-mode headlines (but keep other size-changes)
+      solarized-scale-org-headlines nil
+
+      ;; Avoid all font-size changes
+      solarized-height-minus-1 1.0
+      solarized-height-plus-1 1.0
+      solarized-height-plus-2 1.0
+      solarized-height-plus-3 1.0
+      solarized-height-plus-4 1.0)
+  (load-theme 'solarized-light t))
+#+end_src
+
+* Org Mode
+** Org Agenda
+#+begin_src emacs-lisp
+  ;; Define custom TODO keywords/states
+  (setq org-todo-keywords '((sequence "TODO(t)" "NEXT(n)" "IN-PROGRESS(i)" "WAITING(w)" "SOMEDAY(s)" "|" "DONE(d)")))
+
+  ;; Automatically add all Org files in the specified directory to the agenda
+  ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
+  (setq org-agenda-files (directory-files-recursively (concat my-org-base-directory "Plans/") "\\.org$"))
+
+  ;; Fix displaying "???" in agenda view columns
+  ;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
+  ;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
+  (setq org-element-use-cache nil)
+
+  ;; Allow Emacs Lisp code blocks to be executed without confirmation
+  (setq org-confirm-babel-evaluate
+	(lambda (lang body)
+	  (not (string= lang "emacs-lisp"))))
+
+  ;; Set a global keybinding for accessing Org agenda
+  ;; TODO Consider removing
+  (define-key global-map "\C-ca" 'org-agenda)
+#+end_src
+
+** Auto-save Org buffers
+#+begin_src emacs-lisp
+  ;; Auto-save all Org buffers
+  ;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
+  (add-hook 'auto-save-hook 'org-save-all-org-buffers)
+
+  ;; Automatically revert buffers when files change on disk
+  (global-auto-revert-mode t)
+#+end_src
+
+** Enhanced bullets using =org-superstar=
+#+begin_src emacs-lisp
+  (use-package org-superstar
+    :hook (org-mode . org-superstar-mode)
+    :config
+    ;; Disable leading dots for bullets
+    ;; https://www.reddit.com/r/orgmode/comments/pfgcql/comment/hb4g8j0/
+    (setq org-superstar-leading-bullet ?\s))
+
+  ;; Slightly increase header fonts depending on the level
+  ;; https://stackoverflow.com/questions/77332358/how-can-i-adjust-the-fonts-and-sizes-of-bullets-in-org-superstar
+  (custom-set-faces
+    '(org-level-1 ((t (:inherit outline-1 :height 1.04))))
+    '(org-level-2 ((t (:inherit outline-2 :height 1.03))))
+    '(org-level-3 ((t (:inherit outline-3 :height 1.02))))
+    '(org-level-4 ((t (:inherit outline-4 :height 1.01))))
+    '(org-level-5 ((t (:inherit outline-5 :height 1.0))))
+    )
+#+end_src
+
+** Org Super Agenda
+#+begin_src emacs-lisp
+  (use-package org-super-agenda
+    :after org-agenda
+    :init
+    (setq org-agenda-skip-scheduled-if-done t
+	  org-agenda-skip-deadline-if-done t
+	  org-agenda-include-deadlines t
+	  org-agenda-block-separator nil
+	  org-agenda-compact-blocks nil
+	  org-agenda-start-day nil ;; i.e. today
+	  org-agenda-span 1
+	  org-agenda-start-on-weekday nil)
+
+    (setq org-agenda-custom-commands
+	  '(("c" "Super Agenda"
+	     ((agenda "" ((org-agenda-overriding-header "")
+			  (org-super-agenda-groups
+			   '((:name "Due today:"
+				    :deadline today
+				    :order 2)
+			     (:name "Overdue:"
+				    :deadline past
+				    :order 3)
+			     (:name "Scheduled earlier:"
+				    :scheduled past
+				    :order 4)
+			     (:name "Due soon:"
+				    :deadline future
+				    :order 5)
+			     (:name "Schedule:"
+				  :time-grid t
+				  :date today
+				  :order 1)))))
+	      (tags-todo "+PRIORITY=\"A\""
+			 ((org-agenda-overriding-header "\n High-priority:")))
+	      (todo "IN-PROGRESS"
+		    ((org-agenda-overriding-header "\n In progress:")))))
+	    ("n" "NEXT tasks"
+	     ((todo "NEXT")))))
+
+    :config
+    (org-super-agenda-mode))
+#+end_src
+
+#+RESULTS:
+: t
+
+** =org-journal=
+#+begin_src emacs-lisp
+  (use-package org-journal
+  :config
+  ;; TODO Comment these settings
+  (setq org-journal-file-format "%Y-%m-%d.org"
+	org-extend-today-until 4
+	org-journal-file-type 'weekly
+	org-journal-date-format "%A, %d %B %Y"
+	org-journal-dir (concat my-org-base-directory "Journal/")))
+#+end_src
+** Start week on Monday in calendars
+#+begin_src emacs-lisp
+  ;; https://emacs.stackexchange.com/questions/42571/org-agenda-date-prompt-mini-calendar-start-week-on-monday
+  (setq calendar-week-start-day 1)
+#+end_src
+
+* Workflow Enhancements
+** =ivy=, =counsel=, and =swiper= for enhanced completion and searching
+#+begin_src emacs-lisp
+  (use-package ivy
+    :diminish
+    ;; TODO Document these settings
+    :bind (("C-s" . swiper)
+	   :map ivy-minibuffer-map
+	   ("C-l" . ivy-alt-done)
+	   ("C-j" . ivy-next-line)
+	   ("C-k" . ivy-previous-line)
+	   :map ivy-switch-buffer-map
+	   ("C-k" . ivy-previous-line)
+	   ("C-l" . ivy-done)
+	   ("C-d" . ivy-switch-buffer-kill)
+	   :map ivy-reverse-i-search-map
+	   ("C-k" . ivy-previous-line)
+	   ("C-d" . ivy-reverse-i-search-kill))
+    :config
+    (ivy-mode 1))
+
+  (use-package counsel
+    :bind (("M-x" . counsel-M-x)
+	   ("C-x b" . counsel-ibuffer)
+	   ("C-x C-f" . counsel-find-file)
+	   :map minibuffer-local-map
+	   ("C-r" . counsel-minibuffer-history)))
+
+  (use-package ivy-rich
+    :init (ivy-rich-mode 1))
+#+end_src
+
+** =projectile= and =counsel-projectile= to search in all files
+#+begin_src emacs-lisp
+  (use-package projectile
+    :ensure t
+    :config
+    (projectile-mode +1))
+
+  (use-package counsel-projectile
+    :ensure t
+    :config
+    (counsel-projectile-mode))
+
+  (global-set-key (kbd "s-r") 'counsel-projectile-rg)
+#+end_src
+
+** =helpful= for enhanced help buffers
+#+begin_src emacs-lisp
+  (use-package helpful
+    :custom
+    (counsel-describe-function-function #'helpful-callable)
+    (counsel-describe-variable-function #'helpful-variable)
+    :bind
+    ([remap describe-function] . counsel-describe-function)
+    ([remap describe-command] . helpful-command)
+    ([remap describe-variable] . counsel-describe-variable)
+    ([remap describe-key] . helpful-key))
+#+end_src
+** =which-key= for displaying available keybindings
+#+begin_src emacs-lisp
+(use-package which-key
+  :init (which-key-mode)
+  :diminish which-key-mode
+  :config (setq which-key-idle-delay 0.3))
+#+end_src
+
+* File and Directory Management
+** Default directory
+#+begin_src emacs-lisp
+  (setq default-directory (concat my-org-base-directory "Plans/"))
+#+end_src
+
+** Workaround error on startup regarding unsupported =ls --dired= on MacOS
+#+begin_src emacs-lisp
+  ;; https://stackoverflow.com/questions/25125200/emacs-error-ls-does-not-support-dired
+  (when (string= system-type "darwin")
+    (setq dired-use-ls-dired nil))
+#+end_src
+
+** =neotree= for file explorer functionality
+#+begin_src emacs-lisp
+  (use-package neotree
+    :config
+    (neotree-dir my-org-base-directory))
+#+end_src
+
+* Menu Bar and Keybindings
+** F8 to Show Neotree
+#+begin_src emacs-lisp
+  (global-set-key [f8] 'neotree-toggle)
+#+end_src
+
+** F9 to Show Agenda
+#+begin_src emacs-lisp
+  ;; Show the agenda with the "NEXT" tasks and delete other windows
+  (defun my-show-agenda ()
+    (interactive)
+    (org-todo-list "NEXT")
+    (delete-other-windows))
+
+  (global-set-key [f9] 'my-show-agenda)
+#+end_src
+
+** F10 to Open Config File
+#+begin_src emacs-lisp
+  (defun my-open-config-file ()
+    (interactive)
+    (find-file (expand-file-name "config.org" user-emacs-directory)))
+
+  (global-set-key [f10] 'my-open-config-file)
+#+end_src
+
+#+RESULTS:
+: my-open-config-file
+
+** GTD Menu
+#+begin_src emacs-lisp
+  ;; Add a custom "GTD" menu to the menu bar
+  ;; https://emacs.stackexchange.com/questions/15093/how-to-add-an-item-to-the-menu-bar
+  (defvar my-menu-bar-menu (make-sparse-keymap "GTD"))
+  (define-key global-map [menu-bar my-menu] (cons "GTD" my-menu-bar-menu))
+
+  ;; Insert GTD before the Help menu
+  (setq menu-bar-final-items (append menu-bar-final-items '(my-menu)))
+
+  ;; Define the menu items for GTD
+  (define-key my-menu-bar-menu [my-cmd3]
+	      '(menu-item "Open Config File" my-open-config-file :help "Open the Emacs config file"))
+  (define-key my-menu-bar-menu [my-cmd2]
+	      '(menu-item "Toggle Neotree" neotree-toggle :help "Toggle Neotree"))
+  (define-key my-menu-bar-menu [my-cmd1]
+	      '(menu-item "Show Agenda" my-show-agenda :help "Show Agenda"))
+#+end_src
+
+* Session Management and Backups
+** Toggle horizontal and vertical split
+#+begin_src emacs-lisp
+  ;; Partially reuses the code from:
+  ;; https://emacs.stackexchange.com/questions/5371/how-to-change-emacs-windows-from-vertical-split-to-horizontal-split
+  (defun window-split-toggle ()
+    "Toggle between horizontal and vertical split with exactly two windows, preserving buffer order."
+    (interactive)
+    ;; Check if NeoTree is open
+    (let ((neo-open (neo-global--window-exists-p)))
+      (when neo-open
+	(neotree-hide))  ;; Hide NeoTree temporarily
+
+      ;; Check if there are exactly two windows
+      (if (/= (length (window-list)) 2)
+	  (error "Can only toggle with exactly 2 windows!")
+	(let* ((win1 (nth 0 (window-list)))
+	       (win2 (nth 1 (window-list)))
+	       (buf1 (window-buffer win1))
+	       (buf2 (window-buffer win2))
+	       (split-func (if (window-full-height-p)
+			       #'split-window-vertically
+			     #'split-window-horizontally)))
+	  (delete-other-windows win1)
+	  (let ((new-win (funcall split-func)))
+	    (set-window-buffer win1 buf1)
+	    (set-window-buffer new-win buf2))))
+
+      ;; Reopen NeoTree if it was open before
+      (when neo-open
+	(neotree-show))))
+
+  (global-set-key (kbd "C-x |") 'window-split-toggle)
+#+end_src
+
+** Save and Restore Sessions
+#+begin_src emacs-lisp
+  ;; Save and restore the Emacs session (buffers, history, etc.)
+  ;; https://emacs.stackexchange.com/questions/639/how-can-i-restart-emacs-and-preserve-my-open-buffers-and-interactive-history
+  (desktop-save-mode 1)
+  (savehist-mode 1)
+
+  ;; Save the kill-ring to the history
+  (add-to-list 'savehist-additional-variables 'kill-ring)
+
+  ;; Reload desktop without asking
+  ;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html
+  (setq desktop-load-locked-desktop t)
+#+end_src
+
+** Backup and Autosave Configuration
+#+begin_src emacs-lisp
+  ;; Store backup files and auto-save files in a specific directory
+  (setq backup-directory-alist `(("." . ,(expand-file-name "tmp/backups/" user-emacs-directory)))
+	auto-save-list-file-prefix (expand-file-name "tmp/auto-saves/sessions/" user-emacs-directory)
+	auto-save-file-name-transforms `((".*" ,(expand-file-name "tmp/auto-saves/" user-emacs-directory) t))
+	;; Disable lock files
+	create-lockfiles nil)
+
+  ;; Ensure the auto-save directory exists (auto-save-mode doesn't create it)
+  (make-directory (expand-file-name "tmp/auto-saves/" user-emacs-directory) t)
+
+  ;; Alternatives:
+  ;; - https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Cleaning.org
+  ;; - no-littering package: https://github.com/emacscollective/no-littering
+#+end_src
