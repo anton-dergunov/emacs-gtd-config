@@ -1,41 +1,52 @@
-This repository contains the minimalistic Emacs config to use [Org Mode](https://orgmode.org/) for "[Getting Things Done](https://en.wikipedia.org/wiki/Getting_Things_Done)"
+This repository contains a minimalistic Emacs configuration to use [Org Mode](https://orgmode.org/) for implementing [Getting Things Done](https://en.wikipedia.org/wiki/Getting_Things_Done).
 
 The main configuration file is [config.org](config.org).
 
 ## Installation Instructions
 
-1. Install [Emacs](https://www.gnu.org/software/emacs/download.html).
+1. **Install [Emacs](https://www.gnu.org/software/emacs/download.html).**
 
-2. Install `ripgrep` (used by `counsel-projectile` for searching all files).
+2. **Install `ripgrep`** (used by `counsel-projectile` for searching through files).
 
-```bash
-brew install ripgrep       # MacOs
-sudo apt install ripgrep   # Ubuntu
-```
+   ```bash
+   # macOS
+   brew install ripgrep
 
-3. Clone this repository to `~/.emacs.d`.
+   # Ubuntu
+   sudo apt install ripgrep
+   ```
 
-```bash
-git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
-```
+3. **Clone this repository** to `~/.emacs.d`.
 
-4. Copy `local.el.template` to `local.el` and adjust `my-org-base-directory` to point to the base directory for org mode files. I like to keep them in Dropbox so that they are synchronized across different devices. To get you started, you can create a directory with a file `Example.org`. See "[Org for GTD and other Task managment systems](https://orgmode.org/worg/org-gtd-etc.html)" for more details.
+   ```bash
+   git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
+   ```
 
-```elisp
-* My project
-** TODO [#A] Task 1
-** IN-PROGRESS Task 2
-** TODO Overdue task 3
-DEADLINE: <2024-01-01 Mon>
-** TODO Overdue task 4
-SCHEDULED: <2024-01-01 Mon 13:30-15:00>
-```
+4. **Configure `local.el`**:
 
-5. (Optional) Ensure that all Emacs packages are initialized. This step can be skipped.
+   - Copy `local.el.template` to `local.el`.
+   - Adjust the `my-org-base-directory` variable in `local.el` to point to the base directory for your Org mode files. I recommend using Dropbox or another sync service to keep your files synchronized across devices.
 
-```bash
-emacs --batch -l ~/.emacs.d/init.el
-```
+   To get started, you can create a directory with a file named `Example.org`. See "[Org for GTD and other Task Management Systems](https://orgmode.org/worg/org-gtd-etc.html)" for more details.
 
-6. Run Emacs and enjoy.
+   **Example `Example.org` file:**
 
+   ```org
+   * My Project
+   ** TODO [#A] Task 1
+   ** IN-PROGRESS Task 2
+   ** TODO Overdue Task 3
+      DEADLINE: <2024-01-01 Mon>
+   ** TODO Overdue Task 4
+      SCHEDULED: <2024-01-01 Mon 13:30-15:00>
+   ```
+
+5. **(Optional) Initialize Emacs packages**:
+
+   You can skip this step, since Emacs will initialize them during first start instead.
+
+   ```bash
+   emacs --batch -l ~/.emacs.d/init.el
+   ```
+
+6. **Run Emacs and enjoy** your setup.
