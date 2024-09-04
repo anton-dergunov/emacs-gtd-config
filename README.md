@@ -16,7 +16,7 @@ The main configuration file is [config.org](config.org).
    sudo apt install ripgrep
    ```
 
-  [Instructions for Windows](https://stackoverflow.com/questions/76666894/how-to-install-ripgrep-on-windows).
+   [Instructions for Windows](https://stackoverflow.com/questions/76666894/how-to-install-ripgrep-on-windows).
 
 3. **Clone this repository** to `~/.emacs.d`.
 
