@@ -162,8 +162,8 @@
            (org-agenda-finalize . org-modern-agenda))
     :config
     ;; Set larger font for timestamp
-    (set-face-attribute 'org-modern-date-active nil :height 1.2)
-    (set-face-attribute 'org-modern-time-active nil :height 1.2)
+    (set-face-attribute 'org-modern-date-active nil :height 1.2 :foreground "gray30" :background "gray90")
+    (set-face-attribute 'org-modern-time-active nil :height 1.2 :foreground "gray30" :background "gray80")
     (set-face-attribute 'org-modern-date-inactive nil :height 1.2)
     (set-face-attribute 'org-modern-time-inactive nil :height 1.2)
     ;; Disable modern bullets
