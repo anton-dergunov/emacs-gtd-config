@@ -64,6 +64,7 @@
   (setq main-font (cond
                    ((eq system-type 'darwin) "Monaco-14")
                    ((eq system-type 'windows-nt) "Consolas-11")
+                   ((eq system-type 'gnu/linux) "monospace-10")
                    (t "default-font")))
 
   ;; Apply the default font
