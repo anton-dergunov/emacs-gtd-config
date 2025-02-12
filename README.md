@@ -24,6 +24,8 @@ The main configuration file is [config.org](config.org).
    git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
    ```
 
+   Note: on Windows the location is usually the following `C:\Users\<CURRENT_USER_NAME>\AppData\Roaming\.emacs.d`
+
 4. **Configure `local.el`**:
 
    - Copy `local.el.template` to `local.el`.
