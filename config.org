@@ -116,9 +116,6 @@
   ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
   (setq org-agenda-files (directory-files-recursively (concat my-org-base-directory "Plans/") "\\.org$"))
 
-  ;; Log the task completion time
-  (setq org-log-done 'time)
-
   ;; Fix displaying "???" in agenda view columns
   ;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
   ;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
@@ -280,6 +277,11 @@
 #+begin_src emacs-lisp
   ;; https://emacs.stackexchange.com/questions/42571/org-agenda-date-prompt-mini-calendar-start-week-on-monday
   (setq calendar-week-start-day 1)
+#+end_src
+
+** Do not add CLOSED timestamp when completing a task
+#+begin_src emacs-lisp
+  (setq org-log-done nil)
 #+end_src
 
 * Workflow Enhancements
