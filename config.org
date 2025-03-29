@@ -343,12 +343,30 @@
     ([remap describe-variable] . counsel-describe-variable)
     ([remap describe-key] . helpful-key))
 #+end_src
+
 ** =which-key= for displaying available keybindings
 #+begin_src emacs-lisp
 (use-package which-key
   :init (which-key-mode)
   :diminish which-key-mode
   :config (setq which-key-idle-delay 0.3))
+#+end_src
+
+** Define custom org link for Obsidian to make them short
+#+begin_src emacs-lisp
+(defun open-obsidian-note (path)
+  "Open the Obsidian note at PATH using the Obsidian URL scheme."
+  (let ((vault "obsidian"))
+    (browse-url
+     (format "obsidian://open?vault=%s&file=%s"
+             vault
+             (url-hexify-string path)))))
+
+(org-add-link-type "obsidian" 'open-obsidian-note)
+
+;; Now the links can be defined either using the full or the short format:
+;; [[obsidian://open?vault=obsidian&file=Maps]]
+;; [[obsidian:Maps]]
 #+end_src
 
 * File and Directory Management
