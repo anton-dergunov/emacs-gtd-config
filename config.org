@@ -387,6 +387,18 @@
   (use-package neotree
     :config
     (neotree-dir my-org-base-directory))
+
+  (defun my-neotree-customizations (&optional _)
+    (display-line-numbers-mode -1)
+    (setq left-margin-width 1) ;; set margin width to 2 spaces
+    (set-window-buffer nil (current-buffer))) ;; refresh buffer display
+
+  (add-hook 'neo-after-create-hook 'my-neotree-customizations)
+
+  ;; Ensure refresh after startup (if neotree is opened early)
+  (add-hook 'emacs-startup-hook
+    (lambda ()
+      (run-at-time "0.1 sec" nil #'my-neotree-customizations)))
 #+end_src
 
 * Menu Bar and Keybindings
