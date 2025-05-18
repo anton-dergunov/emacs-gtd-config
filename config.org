@@ -41,6 +41,10 @@
                   shell-mode-hook
                   eshell-mode-hook))
   (add-hook mode (lambda () (display-line-numbers-mode 0))))
+
+  ;; Disable line numbers for neotree
+  (add-hook 'neo-after-create-hook
+          (lambda (&rest _) (display-line-numbers-mode 0)))
 #+end_src
 
 ** Always use spaces for indentation
@@ -127,7 +131,6 @@
           (not (string= lang "emacs-lisp"))))
 
   ;; Set a global keybinding for accessing Org agenda
-  ;; TODO Consider removing
   (define-key global-map "\C-ca" 'org-agenda)
 #+end_src
 
@@ -389,8 +392,7 @@
     (neotree-dir my-org-base-directory))
 
   (defun my-neotree-customizations (&optional _)
-    (display-line-numbers-mode -1)
-    (setq left-margin-width 1) ;; set margin width to 2 spaces
+    (setq left-margin-width 1) ;; add extra 1 space for left margin
     (set-window-buffer nil (current-buffer))) ;; refresh buffer display
 
   (add-hook 'neo-after-create-hook 'my-neotree-customizations)
