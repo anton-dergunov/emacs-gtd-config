@@ -280,15 +280,15 @@
   "Idle timer used to debounce emoji updates in the agenda.")
 
 (defun my/extract-agenda-tasks ()
-  "Extract all visible tasks from the *Org Agenda* buffer."
+  "Extract all visible TODO-like tasks from the *Org Agenda* buffer."
   (let (tasks)
     (save-excursion
       (goto-char (point-min))
+      ;; Match lines that contain a TODO keyword, possibly after 'Scheduled:', 'Deadline:', etc.
       (while (re-search-forward
-              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]+\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
+              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]*\\(?:Scheduled:\\|Deadline:\\|In[[:space:]]+[0-9]+[[:space:]]+d.:\\)?[[:space:]]*\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
               nil t)
         (let ((task (match-string 2)))
-          ;; Clean up tags like :work: at the end
           (setq task (replace-regexp-in-string "\\s-+:[^:]+:$" "" task))
           (push task tasks))))
     (nreverse tasks)))
@@ -299,7 +299,7 @@
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward
-              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]+\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
+              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]*\\(?:Scheduled:\\|Deadline:\\|In[[:space:]]+[0-9]+[[:space:]]+d.:\\)?[[:space:]]*\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
               nil t)
         (let* ((task (match-string 2))
                (emojis (alist-get task emoji-map nil nil #'string=)))
@@ -361,7 +361,7 @@
            (my/org-agenda-update-emojis)))))
 
 ;; Run after agenda renders
-(advice-add 'org-agenda-finalize :after #'my/org-agenda-append-emojis)
+(add-hook 'org-agenda-finalize-hook #'my/org-agenda-append-emojis)
 #+end_src
 
 ** =org-journal=
