@@ -4,6 +4,8 @@
 ** Set up package management and ensure that all required packages are installed
 #+begin_src emacs-lisp
   ;; -*- lexical-binding: t; -*-
+  ;; Code above enables lexical scoping so lambdas can capture variables (needed for async code)
+
   (require 'use-package)
   (setq use-package-always-ensure t)
 #+end_src
@@ -265,12 +267,13 @@
     (org-super-agenda-mode))
 #+end_src
 
-** Display emojis for tasks in Org Agenda to grasp them easier visually
+** Visually enhance Org Agenda tasks with emojis for faster recognition
 #+begin_src emacs-lisp
 (require 'json)
 
 (defvar my/emoji-matcher-path
-  (expand-file-name "~/.emacs.d/emoji_matcher.py")
+  (expand-file-name "emoji_matcher.py"
+                    (file-name-directory (or load-file-name buffer-file-name)))
   "Path to the emoji_matcher.py script.")
 
 (defvar my/org-agenda-emoji-timer nil
@@ -285,7 +288,7 @@
               "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]+\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
               nil t)
         (let ((task (match-string 2)))
-          ;; Clean up tags at the end of line like ":work:"
+          ;; Clean up tags like :work: at the end
           (setq task (replace-regexp-in-string "\\s-+:[^:]+:$" "" task))
           (push task tasks))))
     (nreverse tasks)))
@@ -306,18 +309,19 @@
              (concat " "
                      (mapconcat
                       (lambda (e)
-                        ;; Append emoji
                         (propertize e 'face '(:height 0.8)))
                       emojis " ")))))))))
 
 (defun my/run-emoji-matcher (tasks callback)
   "Run Python emoji matcher asynchronously, then call CALLBACK with result."
-  (let ((buf (generate-new-buffer " *emoji-matcher-output*")))
+  (let* ((buf (generate-new-buffer " *emoji-matcher-output*"))
+         (python-exec (or (executable-find "python3")
+                          (executable-find "python")
+                          "/usr/bin/python3")))
     (make-process
      :name "emoji-matcher-proc"
      :buffer buf
-     :command (list "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
-                    my/emoji-matcher-path)
+     :command (list python-exec my/emoji-matcher-path)
      :noquery t
      :connection-type 'pipe
      :sentinel
@@ -327,15 +331,15 @@
            (with-current-buffer (process-buffer p)
              (let* ((raw (buffer-string))
                     (parsed (ignore-errors (json-read-from-string raw))))
-               (when parsed (funcall callback parsed))))
+               (if parsed
+                   (funcall callback parsed)
+                 (message "[emoji-matcher] Failed to parse output:\n%s" raw))))
            (kill-buffer (process-buffer p))))))
-    ;; Send JSON input
     (process-send-string "emoji-matcher-proc" (concat (json-encode tasks) "\n"))
     (process-send-eof "emoji-matcher-proc")))
 
-(defun my/org-agenda-append-emojis ()
-  "Append emojis to agenda tasks using external Python script."
-  (interactive)
+(defun my/org-agenda-update-emojis ()
+  "Run the Python matcher and update the agenda buffer with emojis."
   (when (get-buffer "*Org Agenda*")
     (with-current-buffer "*Org Agenda*"
       (let ((tasks (my/extract-agenda-tasks)))
@@ -345,8 +349,8 @@
            (with-current-buffer "*Org Agenda*"
              (my/apply-emojis emoji-map))))))))
 
-(defun my/org-agenda-append-emojis-debounced (&rest _)
-  "Run emoji updater with small delay after agenda renders."
+(defun my/org-agenda-append-emojis (&rest _)
+  "Debounce emoji update after agenda render."
   (when my/org-agenda-emoji-timer
     (cancel-timer my/org-agenda-emoji-timer))
   (setq my/org-agenda-emoji-timer
@@ -354,9 +358,10 @@
          0.4 nil
          (lambda ()
            (setq my/org-agenda-emoji-timer nil)
-           (my/org-agenda-append-emojis)))))
+           (my/org-agenda-update-emojis)))))
 
-(advice-add 'org-agenda-finalize :after #'my/org-agenda-append-emojis-debounced)
+;; Run after agenda renders
+(advice-add 'org-agenda-finalize :after #'my/org-agenda-append-emojis)
 #+end_src
 
 ** =org-journal=
