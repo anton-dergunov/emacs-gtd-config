@@ -3,6 +3,7 @@
 * Package Management
 ** Set up package management and ensure that all required packages are installed
 #+begin_src emacs-lisp
+  ;; -*- lexical-binding: t; -*-
   (require 'use-package)
   (setq use-package-always-ensure t)
 #+end_src
@@ -264,6 +265,100 @@
     (org-super-agenda-mode))
 #+end_src
 
+** Display emojis for tasks in Org Agenda to grasp them easier visually
+#+begin_src emacs-lisp
+(require 'json)
+
+(defvar my/emoji-matcher-path
+  (expand-file-name "~/.emacs.d/emoji_matcher.py")
+  "Path to the emoji_matcher.py script.")
+
+(defvar my/org-agenda-emoji-timer nil
+  "Idle timer used to debounce emoji updates in the agenda.")
+
+(defun my/extract-agenda-tasks ()
+  "Extract all visible tasks from the *Org Agenda* buffer."
+  (let (tasks)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward
+              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]+\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
+              nil t)
+        (let ((task (match-string 2)))
+          ;; Clean up tags at the end of line like ":work:"
+          (setq task (replace-regexp-in-string "\\s-+:[^:]+:$" "" task))
+          (push task tasks))))
+    (nreverse tasks)))
+
+(defun my/apply-emojis (emoji-map)
+  "Append emojis from EMOJI-MAP (alist) to matching tasks in *Org Agenda*."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward
+              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]+\\(TODO\\|NEXT\\|IN-PROGRESS\\)[[:space:]]+\\(.*\\)$"
+              nil t)
+        (let* ((task (match-string 2))
+               (emojis (alist-get task emoji-map nil nil #'string=)))
+          (when emojis
+            (end-of-line)
+            (insert
+             (concat " "
+                     (mapconcat
+                      (lambda (e)
+                        ;; Append emoji
+                        (propertize e 'face '(:height 0.8)))
+                      emojis " ")))))))))
+
+(defun my/run-emoji-matcher (tasks callback)
+  "Run Python emoji matcher asynchronously, then call CALLBACK with result."
+  (let ((buf (generate-new-buffer " *emoji-matcher-output*")))
+    (make-process
+     :name "emoji-matcher-proc"
+     :buffer buf
+     :command (list "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3"
+                    my/emoji-matcher-path)
+     :noquery t
+     :connection-type 'pipe
+     :sentinel
+     (lambda (p _event)
+       (when (eq (process-status p) 'exit)
+         (when (buffer-live-p (process-buffer p))
+           (with-current-buffer (process-buffer p)
+             (let* ((raw (buffer-string))
+                    (parsed (ignore-errors (json-read-from-string raw))))
+               (when parsed (funcall callback parsed))))
+           (kill-buffer (process-buffer p))))))
+    ;; Send JSON input
+    (process-send-string "emoji-matcher-proc" (concat (json-encode tasks) "\n"))
+    (process-send-eof "emoji-matcher-proc")))
+
+(defun my/org-agenda-append-emojis ()
+  "Append emojis to agenda tasks using external Python script."
+  (interactive)
+  (when (get-buffer "*Org Agenda*")
+    (with-current-buffer "*Org Agenda*"
+      (let ((tasks (my/extract-agenda-tasks)))
+        (my/run-emoji-matcher
+         tasks
+         (lambda (emoji-map)
+           (with-current-buffer "*Org Agenda*"
+             (my/apply-emojis emoji-map))))))))
+
+(defun my/org-agenda-append-emojis-debounced (&rest _)
+  "Run emoji updater with small delay after agenda renders."
+  (when my/org-agenda-emoji-timer
+    (cancel-timer my/org-agenda-emoji-timer))
+  (setq my/org-agenda-emoji-timer
+        (run-with-idle-timer
+         0.4 nil
+         (lambda ()
+           (setq my/org-agenda-emoji-timer nil)
+           (my/org-agenda-append-emojis)))))
+
+(advice-add 'org-agenda-finalize :after #'my/org-agenda-append-emojis-debounced)
+#+end_src
+
 ** =org-journal=
 #+begin_src emacs-lisp
   (use-package org-journal
@@ -285,6 +380,16 @@
 ** Do not add CLOSED timestamp when completing a task
 #+begin_src emacs-lisp
   (setq org-log-done nil)
+#+end_src
+
+** Prevent org-mode from collapsing yanked (pasted) subtrees
+#+begin_src emacs-lisp
+(setq org-yank-folded-subtrees nil)
+#+end_src
+
+** Disable clock report so that it does not show in agenda
+#+begin_src emacs-lisp
+(setq org-agenda-start-with-clockreport-mode nil)
 #+end_src
 
 * Workflow Enhancements
@@ -324,7 +429,9 @@
   (use-package projectile
     :ensure t
     :config
-    (projectile-mode +1))
+    (projectile-mode +1)
+    ;; Remove the Projectile menu from the menu bar
+    (define-key projectile-mode-map [menu-bar projectile] nil))
 
   (use-package counsel-projectile
     :ensure t
@@ -525,6 +632,9 @@
 
   (global-set-key (kbd "C-x |") 'window-split-toggle)
 #+end_src
+
+#+RESULTS:
+: window-split-toggle
 
 ** Enable Magit for version control
 #+begin_src emacs-lisp
