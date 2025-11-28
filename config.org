@@ -469,19 +469,38 @@
 
 ** Define custom org link for Obsidian to make them short
 #+begin_src emacs-lisp
-(defun open-obsidian-note (path)
-  "Open the Obsidian note at PATH using the Obsidian URL scheme."
-  (let ((vault "obsidian"))
-    (browse-url
-     (format "obsidian://open?vault=%s&file=%s"
-             vault
-             (url-hexify-string path)))))
+  (defun open-obsidian-note (path)
+    "Open the Obsidian note at PATH using the Obsidian URL scheme."
+    (let ((vault "obsidian"))
+      (browse-url
+       (format "obsidian://open?vault=%s&file=%s"
+               vault
+               (url-hexify-string path)))))
 
-(org-add-link-type "obsidian" 'open-obsidian-note)
+  (org-add-link-type "obsidian" 'open-obsidian-note)
 
-;; Now the links can be defined either using the full or the short format:
-;; [[obsidian://open?vault=obsidian&file=Maps]]
-;; [[obsidian:Maps]]
+  ;; Now the links can be defined either using the full or the short format:
+  ;; [[obsidian://open?vault=obsidian&file=Maps]]
+  ;; [[obsidian:Maps]]
+
+  (defcustom my/obsidian-link-icon "► "
+    "Visual replacement for the `obsidian:` prefix in Org-mode.
+  This affects only display, not the actual link text.")
+
+  (defun my/org-compose-obsidian-prefix (limit)
+    "Replace visible `obsidian:` with `my/obsidian-link-icon` via composition.
+  Text & link properties remain unchanged, so links are still clickable."
+    (when (re-search-forward "\\(\\bobsidian:\\)" limit t)
+      (let ((start (match-beginning 1))
+            (end   (match-end 1)))
+        ;; visually replace only — underlying text remains `obsidian:`
+        (compose-region start end my/obsidian-link-icon)))
+    nil)
+
+  ;; Register rewrite rule in Org font-lock
+  (font-lock-add-keywords
+   'org-mode
+   '((my/org-compose-obsidian-prefix 0 t)))
 #+end_src
 
 * File and Directory Management
