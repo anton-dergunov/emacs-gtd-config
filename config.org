@@ -503,6 +503,24 @@
    '((my/org-compose-obsidian-prefix 0 t)))
 #+end_src
 
+** Auto-insert org-links with fetched page title
+#+begin_src emacs-lisp
+  (use-package org-cliplink
+    :ensure t)
+
+  (defun my/org-insert-link-from-url ()
+    "Prompt for URL and insert [[URL][title]] via org-cliplink."
+    (interactive)
+    (let ((url (read-string "URL: ")))
+      (org-cliplink-insert-transformed-title
+       url
+       (lambda (url title)
+         (org-cliplink-org-mode-link-transformer url title)))))
+
+  ;; Bind to F6
+  (global-set-key (kbd "<f6>") #'my/org-insert-link-from-url)
+#+end_src
+
 * File and Directory Management
 ** Default directory
 #+begin_src emacs-lisp
@@ -612,14 +630,16 @@
   (setq menu-bar-final-items (append menu-bar-final-items '(my-menu)))
 
   ;; Define the menu items for GTD
-  (define-key my-menu-bar-menu [my-cmd3]
+  (define-key my-menu-bar-menu [my-cmd4]
               '(menu-item "Open Config File" my-open-config-file :help "Open the Emacs config file"))
-  (define-key my-menu-bar-menu [my-cmd2]
+  (define-key my-menu-bar-menu [my-cmd3]
               '(menu-item "Toggle Neotree" neotree-toggle :help "Toggle Neotree"))
-  (define-key my-menu-bar-menu [my-cmd1]
+  (define-key my-menu-bar-menu [my-cmd2]
               '(menu-item "Show Agenda" my-show-agenda :help "Show Agenda"))
-  (define-key my-menu-bar-menu [my-cmd0]
+  (define-key my-menu-bar-menu [my-cmd1]
               '(menu-item "Reinsert Empty Lines" reinsert-empty-lines-in-org-files :help "Reinsert Empty Lines"))
+  (define-key my-menu-bar-menu [my-cmd0]
+              '(menu-item "Insert URL (auto-title)" my/org-insert-link-from-url :help "Insert URL (auto-title)"))  
 #+end_src
 
 * Session Management and Backups
