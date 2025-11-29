@@ -505,20 +505,118 @@
 
 ** Auto-insert org-links with fetched page title
 #+begin_src emacs-lisp
-  (use-package org-cliplink
-    :ensure t)
+  (require 'url)
+  (require 'subr-x) ;; string-trim etc.
 
-  (defun my/org-insert-link-from-url ()
-    "Prompt for URL and insert [[URL][title]] via org-cliplink."
+  (defcustom my/org-link-title-max-length 200
+    "Max title length before truncation."
+    :type 'integer)
+
+  (defun my/org--shorten (s)
+    (if (and s (> (length s) my/org-link-title-max-length))
+        (concat (substring s 0 my/org-link-title-max-length) "...")
+      s))
+
+  (defun my/org--clean-title (s)
+    "Remove non-printable characters from string S."
+    (replace-regexp-in-string "[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\uD7FF\uE000-\uFFFD]" "" s))
+  
+  (defun my/org--system-clipboard-url ()
+    "Try to return a URL from GUI selection or pbpaste, or nil."
+    (or
+     (when (fboundp 'gui-get-selection)
+       (let ((sel (or (gui-get-selection 'CLIPBOARD)
+                      (gui-get-selection 'PRIMARY))))
+         (and sel (string-trim sel) (when (string-match-p "^https?://" sel) sel))))
+     (when (executable-find "pbpaste")
+       (let ((s (string-trim (with-temp-buffer
+                               (call-process "pbpaste" nil t)
+                               (buffer-string)))))
+         (and (not (string-empty-p s)) (when (string-match-p "^https?://" s) s))))))
+
+  (defun my/org--replace-marked-region-with (start-marker end-marker text)
+    "Replace region between START-MARKER and END-MARKER with TEXT."
+    (when (and (marker-position start-marker) (marker-position end-marker))
+      (let ((inhibit-read-only t))
+        (save-excursion
+          (goto-char (marker-position start-marker))
+          (delete-region (marker-position start-marker) (marker-position end-marker))
+          (insert text)))))
+
+  ;;; The interactive command (must be defined before the key binding)
+  (defun my/org-insert-link-async ()
+    "Insert an Org link from URL found at point/clipboard or prompted.
+
+  Inserts placeholder `[[URL][Fetching title...]]` and updates it asynchronously.
+  If a URL was present at point, it is removed and replaced by the org link."
     (interactive)
-    (let ((url (read-string "URL: ")))
-      (org-cliplink-insert-transformed-title
-       url
-       (lambda (url title)
-         (org-cliplink-org-mode-link-transformer url title)))))
+    (let* ((url-at-point-bounds (bounds-of-thing-at-point 'url))
+           (url-at-point (when url-at-point-bounds
+                           (buffer-substring-no-properties (car url-at-point-bounds)
+                                                           (cdr url-at-point-bounds))))
+           (maybe-url (or url-at-point
+                          (my/org--system-clipboard-url)
+                          (read-string "URL: "))))
+      (unless (and maybe-url (string-match-p "^https?://" maybe-url))
+        (user-error "No valid URL found or provided"))
 
-  ;; Bind to F6
-  (global-set-key (kbd "<f6>") #'my/org-insert-link-from-url)
+      ;; If there was a URL at point, delete it
+      (when url-at-point-bounds
+        (delete-region (car url-at-point-bounds) (cdr url-at-point-bounds)))
+
+      ;; Insert placeholder and set markers
+      (let ((start-marker (set-marker (make-marker) (point))))
+        (insert (format "[[%s][Fetching title...]]" maybe-url))
+        (let ((end-marker (set-marker (make-marker) (point)))
+              (orig-buf (current-buffer)))
+          (condition-case err
+              (url-retrieve
+               maybe-url
+               (lambda (status &rest _)
+                 (let ((error-desc (plist-get status :error)))
+                   (unwind-protect
+                       (if error-desc
+                           (progn
+                             (when (buffer-live-p orig-buf)
+                               (with-current-buffer orig-buf
+                                 (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
+                             (message "[org-link] Failed to fetch %s: %s" maybe-url error-desc))
+                         (goto-char (point-min))
+                         (when (search-forward "\n\n" nil t)
+                           (let* ((html (buffer-substring-no-properties (point) (point-max)))
+                                  (title
+                                   (or
+                                    (when (string-match "<meta[^>]*property=[\"']og:title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
+                                      (match-string 1 html))
+                                    (when (string-match "<meta[^>]*name=[\"']title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
+                                      (match-string 1 html))
+                                    (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
+                                      (match-string 1 html)))))
+                           (setq title
+                                 (when title
+                                   (string-trim
+                                     (my/org--clean-title
+                                       (condition-case _ (xml-substitute-special-chars title) (error title))))))
+                             (if (and title (not (string-empty-p title)))
+                                 (let ((final (my/org--shorten title)))
+                                   (when (buffer-live-p orig-buf)
+                                     (with-current-buffer orig-buf
+                                       (my/org--replace-marked-region-with start-marker end-marker (format "[[%s][%s]]" maybe-url final)))))
+                               (when (buffer-live-p orig-buf)
+                                 (with-current-buffer orig-buf
+                                   (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
+                               (message "[org-link] No title found for %s" maybe-url))))))
+                   (when (buffer-live-p (current-buffer))
+                     (kill-buffer (current-buffer))))))
+               (error
+                (when (buffer-live-p orig-buf)
+                  (with-current-buffer orig-buf
+                    (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
+                (message "[org-link] Error fetching %s: %s" maybe-url (error-message-string err)))))
+          )))
+
+  ;; Now that the command is defined, bind it to F6
+  (global-set-key (kbd "<f6>") #'my/org-insert-link-async)
 #+end_src
 
 * File and Directory Management
@@ -639,7 +737,7 @@
   (define-key my-menu-bar-menu [my-cmd1]
               '(menu-item "Reinsert Empty Lines" reinsert-empty-lines-in-org-files :help "Reinsert Empty Lines"))
   (define-key my-menu-bar-menu [my-cmd0]
-              '(menu-item "Insert URL (auto-title)" my/org-insert-link-from-url :help "Insert URL (auto-title)"))  
+              '(menu-item "Insert URL (auto-title)" my/org-insert-link-async :help "Insert URL (auto-title)"))  
 #+end_src
 
 * Session Management and Backups
