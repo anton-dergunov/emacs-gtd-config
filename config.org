@@ -483,7 +483,7 @@
   ;; [[obsidian://open?vault=obsidian&file=Maps]]
   ;; [[obsidian:Maps]]
 
-  (defcustom my/obsidian-link-icon "► "
+  (defcustom my/obsidian-link-icon "✎ "
     "Visual replacement for the `obsidian:` prefix in Org-mode.
   This affects only display, not the actual link text.")
 
