@@ -3,3 +3,5 @@
 !config.org
 !local.el.template
 !README.md
+!scripts/
+!scripts/*.py
