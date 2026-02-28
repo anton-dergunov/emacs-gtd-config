@@ -1,18 +1,54 @@
 #!/usr/bin/env python3
 
 """
-org-shift-timezone.py — Convert Org-mode timestamps between timezones.
+org_shift_timezone.py
+=====================
 
-Features:
-- Per-file timezone header
-- Automatic system timezone detection
-- Human-friendly timezone names
-- Converts dates when crossing midnight
-- Updates file in place
+Convert Org-mode timestamps between timezones.
 
-Requirements:
-  pip install geopy timezonefinder
+The script updates all timestamps in-place and keeps a per-file
+timezone header so travelling between regions becomes effortless.
+
+Supported timezone input:
+    • IANA timezone name      → Europe/London
+    • City / place name       → London, Berlin, Bali, Buenos Aires
+    • Abbreviation            → CET, EST, WITA, WIB, JST, etc.
+    • UTC offset              → UTC+2, GMT-5
+    • Automatic system detection
+
+Features
+--------
+✓ Offline-first timezone resolution
+✓ Online geolocation fallback (Nominatim + TimezoneFinder)
+✓ Correct date rollover across midnight
+✓ Updates Org headers automatically
+✓ Batch processing of multiple files
+✓ No hardcoded timezone aliases
+✓ Cross-platform (macOS / Linux)
+
+Org headers used:
+    #+TIMEZONE: Europe/London
+    #+TZ_LABEL: Europe London
+
+Examples
+--------
+Auto-detect system timezone:
+
+    python org_shift_timezone.py notes.org
+
+Convert explicitly:
+
+    python org_shift_timezone.py -t London notes.org
+
+Convert multiple files:
+
+    python org_shift_timezone.py -t CET *.org
+
+Requirements
+------------
+    pip install geopy timezonefinder
 """
+
 
 import os
 import re
@@ -21,10 +57,14 @@ import difflib
 import time
 import subprocess
 import platform
-from datetime import datetime
+import argparse
+from typing import Optional, cast
+from functools import lru_cache
+from datetime import datetime, UTC
 from zoneinfo import ZoneInfo, available_timezones
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+from geopy.location import Location
 from timezonefinder import TimezoneFinder
 
 
@@ -97,27 +137,129 @@ def system_timezone():
     raise RuntimeError("Could not detect system timezone automatically.")
 
 
-def resolve_timezone(place):
+def extract_city(tz):
+    return tz.split("/")[-1].replace("_", " ").lower()
+
+
+@lru_cache
+def canonical_timezones():
+    return sorted(available_timezones())
+
+
+@lru_cache
+def build_abbreviation_map():
+    """
+    Build mapping like:
+        EST -> America/New_York
+        CET -> Europe/Berlin
+        WITA -> Asia/Makassar
+    using CURRENT timezone abbreviations.
+    """
+    now = datetime.now(UTC)
+
+    mapping = {}
+
+    for tz in canonical_timezones():
+        try:
+            abbr = now.astimezone(ZoneInfo(tz)).tzname()
+            if not abbr:
+                continue
+
+            # keep first occurrence only
+            mapping.setdefault(abbr.upper(), tz)
+
+        except Exception:
+            continue
+
+    return mapping
+
+
+OFFSET_RE = re.compile(r"(utc|gmt)\s*([+-]\d{1,2})", re.I)
+
+
+def parse_offset(user_input):
+    """UTC / GMT offset parsing"""
+    m = OFFSET_RE.fullmatch(user_input.strip())
+    if not m:
+        return None
+
+    offset = int(m.group(2))
+
+    # IANA GMT sign is reversed
+    sign = "+" if offset >= 0 else "-"
+    return f"Etc/GMT{sign}{-offset}"
+
+
+def resolve_timezone_offline(user_input):
+    user_input = user_input.strip()
+    user_lower = user_input.lower()
+
+    tzs = canonical_timezones()
+
+    # 1. Exact timezone name
+    for tz in tzs:
+        if tz.lower() == user_lower:
+            return tz
+
+    # 2. UTC/GMT offset
+    offset = parse_offset(user_input)
+    if offset:
+        return offset
+
+    # 3. Abbreviation (EST, CET, WITA, MSK, ...)
+    abbr_map = build_abbreviation_map()
+    abbr = user_input.upper()
+
+    if abbr in abbr_map:
+        return abbr_map[abbr]
+
+    # 4. Exact city match
+    city_matches = [
+        tz for tz in tzs
+        if extract_city(tz) == user_lower
+    ]
+
+    if len(city_matches) == 1:
+        return city_matches[0]
+
+    # 5. Strong fuzzy match
+    scored = []
+
+    for tz in tzs:
+        city = extract_city(tz)
+        score = difflib.SequenceMatcher(None, user_lower, city).ratio()
+        scored.append((score, tz))
+
+    scored.sort(reverse=True)
+
+    best_score, best_match = scored[0]
+
+    if best_score >= 0.9:
+        print(f"Using best match: {best_match}")
+        return best_match
+
+    return None
+
+
+def resolve_timezone_online(place):
     """
     Resolve human place name to IANA timezone.
     Robust against network timeout.
     """
 
-    geolocator = Nominatim(
-        user_agent="org-timezone-tool",
-        timeout=5,
-    )
+    geolocator = Nominatim(user_agent="org-timezone-tool")
 
     tf = TimezoneFinder()
 
     print(f"Resolving location: {place}")
 
-    location = None
+    location: Optional[Location] = None
 
     for attempt in range(3):
         try:
-            location = geolocator.geocode(place)
-            if location:
+            result = cast(Optional[Location], geolocator.geocode(place))
+            if result is not None:
+                location = result
                 break
         except (GeocoderTimedOut, GeocoderServiceError):
             print("Geocoder timeout — retrying...")
@@ -136,7 +278,26 @@ def resolve_timezone(place):
         raise RuntimeError("Could not determine timezone.")
 
     print(f"Location found: {location.address}")
-    print(f"Timezone: {tz}")
+
+    return tz
+
+
+def resolve_timezone(user_input):
+    # ---- OFFLINE FIRST ----
+    tz = resolve_timezone_offline(user_input)
+
+    if tz:
+        print(f"Resolved locally: {tz}")
+        return tz
+
+    # ---- ONLINE FALLBACK ----
+    print("No local match — trying online lookup...")
+    try:
+        tz = resolve_timezone_online(user_input)
+    except Exception as e:
+        raise RuntimeError(f"Online lookup failed: {e}")
+
+    print(f"Resolved via geolocation: {tz}")
 
     confirm = input("Use this timezone? [Y/n] ").strip().lower()
 
@@ -194,27 +355,23 @@ def update_header(lines, new_tz):
 # ------------------------------------------------
 
 def convert_timestamp(date, start, end, old_tz, new_tz):
-    dt = datetime.fromisoformat(f"{date} {start}")
-    dt = dt.replace(tzinfo=ZoneInfo(old_tz))
-    dt2 = dt.astimezone(ZoneInfo(new_tz))
+    start_dt = datetime.fromisoformat(f"{date} {start}").replace(tzinfo=ZoneInfo(old_tz))
+    start_dt = start_dt.astimezone(ZoneInfo(new_tz))
 
-    new_date = dt2.strftime("%Y-%m-%d")
-    new_start = dt2.strftime("%H:%M")
+    new_date = start_dt.strftime("%Y-%m-%d")
+    weekday = start_dt.strftime("%a")
+    new_start = start_dt.strftime("%H:%M")
 
+    new_end = None
     if end:
-        dt_end = datetime.fromisoformat(f"{date} {end}")
-        dt_end = dt_end.replace(tzinfo=ZoneInfo(old_tz))
-        dt_end = dt_end.astimezone(ZoneInfo(new_tz))
-        new_end = dt_end.strftime("%H:%M")
-    else:
-        new_end = None
-
-    weekday = dt2.strftime("%a")
+        end_dt = datetime.fromisoformat(f"{date} {end}").replace(tzinfo=ZoneInfo(old_tz))
+        end_dt = end_dt.astimezone(ZoneInfo(new_tz))
+        new_end = end_dt.strftime("%H:%M")
 
     if new_end:
         return f"<{new_date} {weekday} {new_start}-{new_end}>"
-    else:
-        return f"<{new_date} {weekday} {new_start}>"
+
+    return f"<{new_date} {weekday} {new_start}>"
 
 
 def convert_file(lines, old_tz, new_tz):
@@ -240,46 +397,69 @@ def convert_file(lines, old_tz, new_tz):
 # Main
 # ------------------------------------------------
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python org_shift_timezone.py FILE [NEW_TIMEZONE]")
-        sys.exit(1)
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Convert Org-mode timestamps between timezones."
+    )
 
-    filename = sys.argv[1]
+    parser.add_argument(
+        "-t",
+        "--to",
+        dest="target_tz",
+        help="Target timezone (city, timezone name, abbreviation, or UTC offset)",
+    )
 
-    with open(filename) as f:
-        lines = f.readlines()
+    parser.add_argument(
+        "files",
+        nargs="+",
+        help="Org files to convert",
+    )
 
-    old_tz, _ = parse_header(lines)
+    args = parser.parse_args(argv)
 
-    if not old_tz:
-        print("ERROR: File has no #+TIMEZONE header.")
-        sys.exit(1)
+    # ------------------------------------------------
+    # Resolve target timezone
+    # ------------------------------------------------
 
-    if len(sys.argv) >= 3:
-        new_tz = resolve_timezone(sys.argv[2])
+    if args.target_tz:
+        new_tz = resolve_timezone(args.target_tz)
     else:
         detected = system_timezone()
         print(f"Detected timezone: {detected}")
-        confirm = input("Use this timezone? [Y/n] ")
 
-        if confirm.lower().startswith("n"):
+        confirm = input("Use this timezone? [Y/n] ").strip().lower()
+
+        if confirm.startswith("n"):
             user = input("Enter timezone/city: ")
             new_tz = resolve_timezone(user)
         else:
             new_tz = detected
 
-    if new_tz == old_tz:
-        print("Timezone unchanged.")
-        return
+    # ------------------------------------------------
+    # Process files
+    # ------------------------------------------------
 
-    print(f"Converting {old_tz} → {new_tz}")
+    for filename in args.files:
+        with open(filename) as f:
+            lines = f.readlines()
 
-    lines = convert_file(lines, old_tz, new_tz)
-    lines = update_header(lines, new_tz)
+        old_tz, _ = parse_header(lines)
 
-    with open(filename, "w") as f:
-        f.writelines(lines)
+        if not old_tz:
+            print(f"{filename}: missing #+TIMEZONE header — skipped")
+            continue
+
+        if new_tz == old_tz:
+            print(f"{filename}: timezone unchanged")
+            continue
+
+        print(f"{filename}: {old_tz} → {new_tz}")
+
+        lines = convert_file(lines, old_tz, new_tz)
+        lines = update_header(lines, new_tz)
+
+        with open(filename, "w") as f:
+            f.writelines(lines)
 
     print("Done.")
 
