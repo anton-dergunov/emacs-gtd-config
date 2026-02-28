@@ -7,17 +7,17 @@ Usage (CLI):
 Returns JSON mapping { "Clean up local space on iPhone": ["📱", "💾", ...], ... }
 
 Requirements:
-  pip install sentence-transformers emoji numpy scikit-learn tqdm
+  pip install sentence-transformers emoji numpy
 """
 
 import sys
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 try:
-    from sentence_transformers import SentenceTransformer, util
+    from sentence_transformers import SentenceTransformer
 except Exception as e:
     raise RuntimeError("Please install sentence-transformers: pip install sentence-transformers") from e
 
@@ -27,7 +27,6 @@ except Exception as e:
     raise RuntimeError("Please install emoji: pip install emoji") from e
 
 import numpy as np
-from tqdm import tqdm
 
 MODEL_NAME = os.environ.get("EMOJI_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 CACHE_DIR = Path.home() / ".cache" / "emoji_matcher"

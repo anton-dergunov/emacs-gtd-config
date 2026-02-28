@@ -9,16 +9,23 @@ Features:
 - Human-friendly timezone names
 - Converts dates when crossing midnight
 - Updates file in place
+
+Requirements:
+  pip install geopy timezonefinder
 """
 
 import os
 import re
 import sys
-from datetime import datetime
-from zoneinfo import ZoneInfo, available_timezones
 import difflib
+import time
 import subprocess
 import platform
+from datetime import datetime
+from zoneinfo import ZoneInfo, available_timezones
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+from timezonefinder import TimezoneFinder
 
 
 HEADER_TZ = "#+TIMEZONE:"
@@ -90,101 +97,53 @@ def system_timezone():
     raise RuntimeError("Could not detect system timezone automatically.")
 
 
-def canonical_timezones():
+def resolve_timezone(place):
     """
-    Remove duplicate/linked zones.
-    Keep one representative per real timezone.
+    Resolve human place name to IANA timezone.
+    Robust against network timeout.
     """
-    groups = {}
 
-    for tz in available_timezones():
+    geolocator = Nominatim(
+        user_agent="org-timezone-tool",
+        timeout=5,
+    )
+
+    tf = TimezoneFinder()
+
+    print(f"Resolving location: {place}")
+
+    location = None
+
+    for attempt in range(3):
         try:
-            key = ZoneInfo(tz).key
-            groups.setdefault(key, []).append(tz)
-        except Exception:
-            continue
+            location = geolocator.geocode(place)
+            if location:
+                break
+        except (GeocoderTimedOut, GeocoderServiceError):
+            print("Geocoder timeout — retrying...")
+            time.sleep(1)
 
-    # choose shortest readable name as canonical
-    canonical = []
-    for key, names in groups.items():
-        canonical.append(sorted(names, key=len)[0])
-
-    return sorted(canonical)
-
-
-def extract_city(tz):
-    return tz.split("/")[-1].replace("_", " ").lower()
-
-
-def resolve_timezone(user_input):
-    user_input = user_input.strip().lower()
-
-    tzs = canonical_timezones()
-
-    # ------------------------------------------------
-    # 1. Exact timezone match
-    # ------------------------------------------------
-    for tz in tzs:
-        if user_input == tz.lower():
-            return tz
-
-    # ------------------------------------------------
-    # 2. Exact city match
-    # ------------------------------------------------
-    city_matches = [
-        tz for tz in tzs
-        if user_input == extract_city(tz)
-    ]
-
-    if len(city_matches) == 1:
-        return city_matches[0]
-
-    # ------------------------------------------------
-    # 3. Substring match (semantic)
-    # ------------------------------------------------
-    substring_matches = [
-        tz for tz in tzs
-        if user_input in extract_city(tz)
-    ]
-
-    if len(substring_matches) == 1:
-        return substring_matches[0]
-
-    # ------------------------------------------------
-    # 4. Fuzzy match on CITY ONLY
-    # ------------------------------------------------
-    scored = []
-
-    for tz in tzs:
-        city = extract_city(tz)
-        score = difflib.SequenceMatcher(None, user_input, city).ratio()
-        scored.append((score, tz))
-
-    scored.sort(reverse=True)
-
-    best_score, best_match = scored[0]
-
-    # Only auto-accept VERY strong matches
-    if best_score >= 0.88:
-        print(f"Using best match: {best_match}")
-        return best_match
-
-    # ------------------------------------------------
-    # 5. Suggest reasonable options
-    # ------------------------------------------------
-    suggestions = [tz for score, tz in scored if score >= 0.6][:5]
-
-    if not suggestions:
-        raise ValueError(
-            f"No reasonable timezone match for '{user_input}'."
+    if location is None:
+        raise RuntimeError(
+            "Could not resolve location (network timeout or unknown place)."
         )
 
-    print("Possible matches:")
-    for i, tz in enumerate(suggestions):
-        print(f"{i+1}. {tz}")
+    lat, lon = location.latitude, location.longitude
 
-    choice = int(input("Choose timezone: "))
-    return suggestions[choice - 1]
+    tz = tf.timezone_at(lat=lat, lng=lon)
+
+    if tz is None:
+        raise RuntimeError("Could not determine timezone.")
+
+    print(f"Location found: {location.address}")
+    print(f"Timezone: {tz}")
+
+    confirm = input("Use this timezone? [Y/n] ").strip().lower()
+
+    if confirm not in ("", "y", "yes"):
+        raise RuntimeError("Aborted.")
+
+    return tz
 
 
 # ------------------------------------------------
@@ -283,7 +242,7 @@ def convert_file(lines, old_tz, new_tz):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python org-shift-timezone.py FILE [NEW_TIMEZONE]")
+        print("Usage: python org_shift_timezone.py FILE [NEW_TIMEZONE]")
         sys.exit(1)
 
     filename = sys.argv[1]

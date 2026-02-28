@@ -272,9 +272,9 @@
 (require 'json)
 
 (defvar my/emoji-matcher-path
-  (expand-file-name "emoji_matcher.py"
-                    (file-name-directory (or load-file-name buffer-file-name)))
-  "Path to the emoji_matcher.py script.")
+  (expand-file-name "scripts/org_emoji_matcher.py"
+                    user-emacs-directory)
+  "Path to the org_emoji_matcher.py script.")
 
 (defvar my/org-agenda-emoji-timer nil
   "Idle timer used to debounce emoji updates in the agenda.")

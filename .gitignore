@@ -5,3 +5,5 @@
 !README.md
 !scripts/
 !scripts/*.py
+!tests/
+!tests/*.py
