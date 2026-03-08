@@ -203,58 +203,6 @@
     )
 #+end_src
 
-** Fade DONE tasks
-#+begin_src emacs-lisp
-  (defvar my/org-done-fade-color "gray75"
-    "Color used to fade DONE tasks.")
-
-  (defun my/org-fade-done-subtrees ()
-    "Fade DONE subtree contents, including stripping org-modern's timestamp pills."
-    (interactive)
-    (save-excursion
-      (save-restriction
-        (widen)
-        ;; 1. Clear old fade overlays
-        (remove-overlays (point-min) (point-max) 'my-org-done-fade t)
-
-        (goto-char (point-min))
-        ;; 2. Loop through headlines
-        (while (re-search-forward org-heading-regexp nil t)
-          (when (string= (org-get-todo-state) "DONE")
-            (let* ((element (org-element-at-point))
-                   (begin (org-element-property :contents-begin element))
-                   (end   (org-element-property :contents-end element)))
-              (when (and begin end)
-                ;; 3. Apply general fade overlay to the entire body
-                (let ((ov (make-overlay begin end)))
-                  (overlay-put ov 'face `(:foreground ,my/org-done-fade-color))
-                  (overlay-put ov 'priority 10)
-                  (overlay-put ov 'my-org-done-fade t))
-
-                ;; 4. Find timestamps and strip the org-modern "pill" (the black time part)
-                (save-excursion
-                  (goto-char begin)
-                  (while (re-search-forward org-ts-regexp-both end t)
-                    (let* ((ts-start (match-beginning 0))
-                           (ts-end (match-end 0))
-                           ;; Get plain text of timestamp to replace the 'display' property
-                           (ts-text (buffer-substring-no-properties ts-start ts-end))
-                           (ts-ov (make-overlay ts-start ts-end)))
-                      ;; Kill the 'display' property that org-modern uses for the pill
-                      (overlay-put ts-ov 'display ts-text)
-                      ;; Apply gray face with strike-through
-                      (overlay-put ts-ov 'face `(:foreground ,my/org-done-fade-color :strike-through t))
-                      (overlay-put ts-ov 'priority 20)
-                      (overlay-put ts-ov 'my-org-done-fade t)))))))))))
-
-  ;; Hooks to trigger the update
-  (add-hook 'org-mode-hook
-            (lambda ()
-              (add-hook 'after-save-hook #'my/org-fade-done-subtrees nil t)
-              (add-hook 'org-after-todo-state-change-hook #'my/org-fade-done-subtrees nil t)
-              (my/org-fade-done-subtrees)))
-#+end_src
-
 ** Replace SCHEDULED / DEADLINE labels with icons
 #+begin_src emacs-lisp
   (defvar my/org-scheduled-icon "⏱ "
@@ -264,20 +212,71 @@
     "Icon used to replace DEADLINE keyword.")
 
   (defun my/org-compose-scheduled-deadline (limit)
-    "Visually replace SCHEDULED and DEADLINE keywords with icons."
-    (when (re-search-forward "\\<\\(SCHEDULED:\\|DEADLINE:\\)\\>" limit t)
-      (let ((start (match-beginning 1))
-            (end (match-end 1)))
-        (compose-region
-         start end
-         (if (string= (match-string 1) "SCHEDULED:")
-             my/org-scheduled-icon
-           my/org-deadline-icon))))
+    "Visually replace SCHEDULED: and DEADLINE: with dark icons."
+    ;; 'while' ensures every instance in the buffer is caught
+    (while (re-search-forward "\\(SCHEDULED:\\|DEADLINE:\\)" limit t)
+      (let* ((start (match-beginning 1))
+             (end (match-end 1))
+             (label (match-string 1))
+             (icon (if (string= label "SCHEDULED:")
+                       my/org-scheduled-icon
+                     my/org-deadline-icon)))
+        ;; We apply the icon and a 'dark black' face.
+        ;; The 'Fade' overlay will override this color for DONE tasks automatically.
+        (add-text-properties start end
+                             `(display ,icon
+                               face (:foreground "#000000" :weight bold)))))
     nil)
 
   (font-lock-add-keywords
    'org-mode
    '((my/org-compose-scheduled-deadline 0 t)))
+#+end_src
+
+** Fade DONE tasks
+#+begin_src emacs-lisp
+  (defvar my/org-done-fade-color "gray75"
+    "Color used to fade DONE tasks.")
+
+  (defun my/org-fade-done-subtrees ()
+    "Fade DONE subtree contents and strip org-modern pills."
+    (interactive)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (remove-overlays (point-min) (point-max) 'my-org-done-fade t)
+        (goto-char (point-min))
+        (while (re-search-forward org-heading-regexp nil t)
+          (when (string= (org-get-todo-state) "DONE")
+            (let* ((element (org-element-at-point))
+                   (begin (org-element-property :contents-begin element))
+                   (end   (org-element-property :contents-end element)))
+              (when (and begin end)
+                ;; General fade for everything (this grays out the icons too)
+                (let ((ov (make-overlay begin end)))
+                  (overlay-put ov 'face `(:foreground ,my/org-done-fade-color))
+                  (overlay-put ov 'priority 10)
+                  (overlay-put ov 'my-org-done-fade t))
+
+                ;; Specific fix for timestamps to kill org-modern black pills
+                (save-excursion
+                  (goto-char begin)
+                  (while (re-search-forward org-ts-regexp-both end t)
+                    (let* ((ts-start (match-beginning 0))
+                           (ts-end (match-end 0))
+                           (ts-text (buffer-substring-no-properties ts-start ts-end))
+                           (ts-ov (make-overlay ts-start ts-end)))
+                      (overlay-put ts-ov 'display ts-text)
+                      (overlay-put ts-ov 'face `(:foreground ,my/org-done-fade-color :strike-through t))
+                      (overlay-put ts-ov 'priority 20)
+                      (overlay-put ts-ov 'my-org-done-fade t)))))))))))
+
+  ;; Update triggers
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (add-hook 'after-save-hook #'my/org-fade-done-subtrees nil t)
+              (add-hook 'org-after-todo-state-change-hook #'my/org-fade-done-subtrees nil t)
+              (my/org-fade-done-subtrees)))
 #+end_src
 
 ** Make sure tags are visible in the agenda view
