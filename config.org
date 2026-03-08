@@ -722,20 +722,23 @@
          (and (not (string-empty-p s)) (when (string-match-p "^https?://" s) s))))))
 
   (defun my/org--replace-marked-region-with (start-marker end-marker text)
-    "Replace region between START-MARKER and END-MARKER with TEXT."
+    "Replace region between START-MARKER and END-MARKER with TEXT.
+  Clears markers afterward to prevent double-execution bugs."
     (when (and (marker-position start-marker) (marker-position end-marker))
       (let ((inhibit-read-only t))
         (save-excursion
           (goto-char (marker-position start-marker))
           (delete-region (marker-position start-marker) (marker-position end-marker))
-          (insert text)))))
+          (insert text)
+          ;; Nullify markers to prevent the url.el double-callback bug
+          (set-marker start-marker nil)
+          (set-marker end-marker nil)))))
 
   ;;; The interactive command (must be defined before the key binding)
   (defun my/org-insert-link-async ()
-    "Insert an Org link from URL found at point/clipboard or prompted.
-
-  Inserts placeholder `[[URL][Fetching title...]]` and updates it asynchronously.
-  If a URL was present at point, it is removed and replaced by the org link."
+    "Insert an Org link from URL.
+  Spoofs a browser User-Agent to bypass bot protections.
+  Falls back to a raw URL if the title cannot be fetched."
     (interactive)
     (let* ((url-at-point-bounds (bounds-of-thing-at-point 'url))
            (url-at-point (when url-at-point-bounds
@@ -743,7 +746,9 @@
                                                            (cdr url-at-point-bounds))))
            (maybe-url (or url-at-point
                           (my/org--system-clipboard-url)
-                          (read-string "URL: "))))
+                          (read-string "URL: ")))
+           ;; SPOOF USER AGENT HERE: Look like Chrome instead of Emacs
+           (url-user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
       (unless (and maybe-url (string-match-p "^https?://" maybe-url))
         (user-error "No valid URL found or provided"))
 
@@ -766,7 +771,8 @@
                            (progn
                              (when (buffer-live-p orig-buf)
                                (with-current-buffer orig-buf
-                                 (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
+                                 ;; Fallback to RAW URL
+                                 (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
                              (message "[org-link] Failed to fetch %s: %s" maybe-url error-desc))
                          (goto-char (point-min))
                          (when (search-forward "\n\n" nil t)
@@ -779,28 +785,29 @@
                                       (match-string 1 html))
                                     (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
                                       (match-string 1 html)))))
-                           (setq title
-                                 (when title
-                                   (string-trim
-                                     (my/org--clean-title
+                             (setq title
+                                   (when title
+                                     (string-trim
+                                      (my/org--clean-title
                                        (condition-case _ (xml-substitute-special-chars title) (error title))))))
                              (if (and title (not (string-empty-p title)))
                                  (let ((final (my/org--shorten title)))
                                    (when (buffer-live-p orig-buf)
                                      (with-current-buffer orig-buf
                                        (my/org--replace-marked-region-with start-marker end-marker (format "[[%s][%s]]" maybe-url final)))))
+                               ;; Fallback to RAW URL
                                (when (buffer-live-p orig-buf)
                                  (with-current-buffer orig-buf
-                                   (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
-                               (message "[org-link] No title found for %s" maybe-url))))))
-                   (when (buffer-live-p (current-buffer))
-                     (kill-buffer (current-buffer))))))
-               (error
-                (when (buffer-live-p orig-buf)
-                  (with-current-buffer orig-buf
-                    (my/org--replace-marked-region-with start-marker end-marker (format "[[%s]]" maybe-url))))
-                (message "[org-link] Error fetching %s: %s" maybe-url (error-message-string err)))))
-          )))
+                                   (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
+                               (message "[org-link] No title found for %s" maybe-url)))))
+                     (when (buffer-live-p (current-buffer))
+                       (kill-buffer (current-buffer)))))))
+            (error
+             (when (buffer-live-p orig-buf)
+               (with-current-buffer orig-buf
+                 ;; Fallback to RAW URL
+                 (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
+             (message "[org-link] Error fetching %s: %s" maybe-url (error-message-string err))))))))
 
   ;; Now that the command is defined, bind it to F6
   (global-set-key (kbd "<f6>") #'my/org-insert-link-async)
