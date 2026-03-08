@@ -693,7 +693,8 @@
 ** Auto-insert org-links with fetched page title
 #+begin_src emacs-lisp
   (require 'url)
-  (require 'subr-x) ;; string-trim etc.
+  (require 'subr-x)
+  (require 'xml)
 
   (defcustom my/org-link-title-max-length 200
     "Max title length before truncation."
@@ -705,8 +706,50 @@
       s))
 
   (defun my/org--clean-title (s)
-    "Remove non-printable characters from string S."
-    (replace-regexp-in-string "[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\uD7FF\uE000-\uFFFD]" "" s))
+    "Decode ALL HTML entities (named, numeric, hex) and clean string S."
+    (when (and s (not (string-empty-p s)))
+      (let ((decoded s)
+            (limit 0))
+        ;; Use a while loop with a safety limit to prevent infinite loops
+        ;; We process the string until no more &...; entities remain
+        (while (and (string-match "&\\([^;]+\\);" decoded) (< limit 10))
+          (let* ((entity (match-string 1 decoded))
+                 (replacement
+                  (cond
+                   ;; 1. Check Named Entities (e.g., &amp;)
+                   ((assoc entity xml-entity-alist)
+                    (let ((val (cdr (assoc entity xml-entity-alist))))
+                      (if (characterp val) (string val) val)))
+
+                   ;; 2. HTML specific fallbacks
+                   ((string= entity "nbsp") " ")
+                   ((string= entity "mdash") "—")
+
+                   ;; 3. Hex entities: &#x...; (Safe length check)
+                   ((and (string-prefix-p "#x" entity) (> (length entity) 2))
+                    (condition-case nil
+                        (string (string-to-number (substring entity 2) 16))
+                      (error nil)))
+
+                   ;; 4. Numeric entities: &#...; (Safe length check)
+                   ((and (string-prefix-p "#" entity) (> (length entity) 1))
+                    (condition-case nil
+                        (string (string-to-number (substring entity 1)))
+                      (error nil))))))
+
+            (setq decoded (if replacement
+                              (replace-match replacement t t decoded)
+                            ;; If we can't decode it, replace '&' with a temp char
+                            ;; so we don't match this specific broken entity again
+                            (replace-match "AMP_INTERNAL" t t decoded)))
+            (setq limit (1+ limit))))
+
+        ;; Final cleanup: Restore any un-decodable amps and strip non-printables
+        (let* ((final-s (replace-regexp-in-string "AMP_INTERNAL" "&" decoded))
+               (cleaned (replace-regexp-in-string
+                         "[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\uD7FF\uE000-\uFFFD]"
+                         "" final-s)))
+          (string-trim cleaned)))))
 
   (defun my/org--system-clipboard-url ()
     "Try to return a URL from GUI selection or pbpaste, or nil."
@@ -736,9 +779,8 @@
 
   ;;; The interactive command (must be defined before the key binding)
   (defun my/org-insert-link-async ()
-    "Insert an Org link from URL.
-  Spoofs a browser User-Agent to bypass bot protections.
-  Falls back to a raw URL if the title cannot be fetched."
+    "Insert an Org link from URL found at point/clipboard or prompted.
+    Spoofs User-Agent to bypass bot detection."
     (interactive)
     (let* ((url-at-point-bounds (bounds-of-thing-at-point 'url))
            (url-at-point (when url-at-point-bounds
@@ -747,7 +789,6 @@
            (maybe-url (or url-at-point
                           (my/org--system-clipboard-url)
                           (read-string "URL: ")))
-           ;; SPOOF USER AGENT HERE: Look like Chrome instead of Emacs
            (url-user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
       (unless (and maybe-url (string-match-p "^https?://" maybe-url))
         (user-error "No valid URL found or provided"))
@@ -785,11 +826,7 @@
                                       (match-string 1 html))
                                     (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
                                       (match-string 1 html)))))
-                             (setq title
-                                   (when title
-                                     (string-trim
-                                      (my/org--clean-title
-                                       (condition-case _ (xml-substitute-special-chars title) (error title))))))
+                             (setq title (my/org--clean-title title))
                              (if (and title (not (string-empty-p title)))
                                  (let ((final (my/org--shorten title)))
                                    (when (buffer-live-p orig-buf)
