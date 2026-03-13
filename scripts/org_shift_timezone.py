@@ -52,7 +52,6 @@ Requirements
 
 import os
 import re
-import sys
 import difflib
 import time
 import subprocess
@@ -60,7 +59,7 @@ import platform
 import argparse
 from typing import Optional, cast
 from functools import lru_cache
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from zoneinfo import ZoneInfo, available_timezones
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
@@ -73,7 +72,7 @@ HEADER_LABEL = "#+TZ_LABEL:"
 
 
 TIMESTAMP_RE = re.compile(
-    r"<(\d{4}-\d{2}-\d{2})\s+\w+\s+(\d{2}:\d{2})(?:-(\d{2}:\d{2}))?>"
+    r"<(\d{4}-\d{2}-\d{2})(?:\s+(\w+))?(?:\s+(\d{2}:\d{2})(?:-(\d{2}:\d{2}))?)?>"
 )
 
 
@@ -364,7 +363,12 @@ def convert_timestamp(date, start, end, old_tz, new_tz):
 
     new_end = None
     if end:
-        end_dt = datetime.fromisoformat(f"{date} {end}").replace(tzinfo=ZoneInfo(old_tz))
+        if end == "24:00":
+            end_dt = datetime.fromisoformat(f"{date} 00:00") + timedelta(days=1)
+            end_dt = end_dt.replace(tzinfo=ZoneInfo(old_tz))
+        else:
+            end_dt = datetime.fromisoformat(f"{date} {end}").replace(tzinfo=ZoneInfo(old_tz))
+
         end_dt = end_dt.astimezone(ZoneInfo(new_tz))
         new_end = end_dt.strftime("%H:%M")
 
@@ -379,10 +383,19 @@ def convert_file(lines, old_tz, new_tz):
 
     for line in lines:
         def repl(match):
+            date = match.group(1)
+            weekday = match.group(2)
+            start = match.group(3)
+            end = match.group(4)
+
+            # If no time component => leave timestamp unchanged
+            if start is None:
+                return match.group(0)
+
             return convert_timestamp(
-                match.group(1),
-                match.group(2),
-                match.group(3),
+                date,
+                start,
+                end,
                 old_tz,
                 new_tz,
             )

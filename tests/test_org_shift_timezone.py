@@ -1,10 +1,3 @@
-import subprocess
-from pathlib import Path
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-import pytest
-
 import scripts.org_shift_timezone as tz
 
 
@@ -87,6 +80,105 @@ def test_convert_file_multiple():
     assert len(out) == 3
     assert "<" in out[1]
     assert "<" in out[2]
+
+
+def test_date_only_timestamp_unchanged():
+    content = """#+TIMEZONE: UTC
+<2026-03-15 Sun>
+"""
+
+    lines = content.splitlines(True)
+
+    out = tz.convert_file(lines, "UTC", "Europe/Berlin")
+
+    assert "<2026-03-15 Sun>" in "".join(out)
+
+
+def test_date_without_weekday_unchanged():
+    content = """#+TIMEZONE: UTC
+<2026-03-15>
+"""
+
+    lines = content.splitlines(True)
+
+    out = tz.convert_file(lines, "UTC", "Europe/Berlin")
+
+    assert "<2026-03-15>" in "".join(out)
+
+
+def test_midnight_24_hour_range():
+    content = """#+TIMEZONE: Asia/Makassar
+<2026-02-27 Fri 22:30-24:00>
+"""
+
+    lines = content.splitlines(True)
+
+    out = tz.convert_file(lines, "Asia/Makassar", "Europe/London")
+
+    text = "".join(out)
+
+    assert "<" in text
+    assert "24:00" not in text
+
+
+def test_time_range_over_midnight_kept_single_timestamp():
+    result = tz.convert_timestamp(
+        "2026-03-15",
+        "23:00",
+        "01:00",
+        "UTC",
+        "UTC",
+    )
+
+    assert "<2026-03-15 Sun 23:00-01:00>" == result
+
+
+def test_cross_midnight_becomes_same_day_backward():
+    result = tz.convert_timestamp(
+        "2026-03-15",
+        "23:00",
+        "01:00",
+        "Asia/Makassar",
+        "Europe/London",
+    )
+
+    assert result == "<2026-03-15 Sun 15:00-17:00>"
+
+
+def test_cross_midnight_forward_timezone():
+    result = tz.convert_timestamp(
+        "2026-03-15",
+        "23:00",
+        "01:00",
+        "Europe/London",
+        "Asia/Makassar",
+    )
+
+    assert result == "<2026-03-16 Mon 07:00-09:00>"
+
+
+def test_same_day_becomes_midnight_cross_backward():
+    result = tz.convert_timestamp(
+        "2026-03-15",
+        "06:00",
+        "08:00",
+        "Asia/Makassar",
+        "Europe/London",
+    )
+
+    assert result == "<2026-03-14 Sat 22:00-00:00>"
+
+
+def test_same_day_forward_timezone():
+    result = tz.convert_timestamp(
+        "2026-03-15",
+        "18:00",
+        "20:00",
+        "Europe/London",
+        "Asia/Makassar",
+    )
+
+    assert result == "<2026-03-16 Mon 02:00-04:00>"
 
 
 # ------------------------------------------------
