@@ -1,6 +1,4 @@
-[![Tests](https://github.com/anton-dergunov/emacs-gtd-config
-/actions/workflows/tests.yaml/badge.svg)](https://github.com/anton-dergunov/emacs-gtd-config
-/actions/workflows/tests.yaml)
+[![Tests](https://github.com/anton-dergunov/emacs-gtd-config/actions/workflows/tests.yaml/badge.svg)](https://github.com/anton-dergunov/emacs-gtd-config/actions/workflows/tests.yaml)
 
 This repository contains a minimalistic Emacs configuration to use [Org Mode](https://orgmode.org/) for implementing [Getting Things Done](https://en.wikipedia.org/wiki/Getting_Things_Done).
 
