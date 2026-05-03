@@ -1,0 +1,6 @@
+numpy
+geopy
+timezonefinder
+emoji
+sentence-transformers
+pytest
