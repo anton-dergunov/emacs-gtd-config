@@ -172,7 +172,7 @@ def format_slot(s, e, use_12h):
     return f"{format_time(s, use_12h)}-{format_time(e, use_12h)}"
 
 
-def format_day(date, slots, use_12h):
+def format_day_inline(date, slots, use_12h):
     day_str = date.strftime("%A, %-d %B")
     if not slots:
         return f"- {day_str}: (no availability)"
@@ -181,11 +181,24 @@ def format_day(date, slots, use_12h):
     return f"- {day_str}: {slot_str}"
 
 
+def format_day_bullets(date, slots, use_12h):
+    day_str = date.strftime("%A, %-d %B")
+
+    if not slots:
+        return f"{day_str}\n  (no availability)"
+
+    lines = [day_str + ":"]
+    for s, e in slots:
+        lines.append(f"  - {format_slot(s, e, use_12h)}")
+
+    return "\n".join(lines)
+
+
 # ------------------------------------------------
 # Main
 # ------------------------------------------------
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Generate availability from Org-mode files"
     )
@@ -208,25 +221,39 @@ def main():
     )
 
     parser.add_argument(
-        "--format",
+        "--time-format",
         choices=["12h", "24h"],
         default="12h",
         help="Time format"
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--layout",
+        choices=["bullets", "inline"],
+        default="bullets",
+        help="Output layout style"
+    )
 
-    use_12h = args.format == "12h"
+    parser.add_argument(
+        "--start-date",
+        help="Start date in YYYY-MM-DD (default: today)"
+    )
+
+    args = parser.parse_args(argv)
+
+    use_12h = args.time_format == "12h"
 
     work_start = parse_time(args.start)
     work_end = parse_time(args.end)
 
     events = load_events(args.directory)
 
-    today = datetime.now().date()
+    if args.start_date:
+        today = datetime.strptime(args.start_date, "%Y-%m-%d").date()
+    else:
+        today = datetime.now().date()
 
     for day in daterange(today, args.days):
-
         if not args.include_weekends and is_weekend(day):
             continue
 
@@ -257,7 +284,10 @@ def main():
         if not args.raw:
             free = filter_min_duration(free, args.min_duration)
 
-        print(format_day(day, free, use_12h))
+        if args.layout == "inline":
+            print(format_day_inline(day, free, use_12h))
+        else:
+            print(format_day_bullets(day, free, use_12h))
 
 
 if __name__ == "__main__":

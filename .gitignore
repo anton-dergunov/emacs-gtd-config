@@ -7,3 +7,6 @@
 !scripts/*.py
 !tests/
 !tests/*.py
+!.github/
+!.github/workflows/
+!.github/workflows/tests.yml

@@ -1,6 +1,11 @@
+[![Tests](https://github.com/anton-dergunov/emacs-gtd-config
+/actions/workflows/tests.yaml/badge.svg)](https://github.com/anton-dergunov/emacs-gtd-config
+/actions/workflows/tests.yaml)
+
 This repository contains a minimalistic Emacs configuration to use [Org Mode](https://orgmode.org/) for implementing [Getting Things Done](https://en.wikipedia.org/wiki/Getting_Things_Done).
 
 The main configuration file is [config.org](config.org).
+
 
 ## Installation Instructions
 
@@ -54,3 +59,14 @@ The main configuration file is [config.org](config.org).
    ```
 
 6. **Run Emacs and enjoy** your setup.
+
+
+## Running Unit Tests
+
+To run tests locally:
+
+```bash
+cd ~/.emacs.d
+PYTHONPATH=. pytest
+```
+
