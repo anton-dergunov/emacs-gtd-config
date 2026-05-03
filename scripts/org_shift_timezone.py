@@ -10,21 +10,21 @@ The script updates all timestamps in-place and keeps a per-file
 timezone header so travelling between regions becomes effortless.
 
 Supported timezone input:
-    • IANA timezone name      → Europe/London
-    • City / place name       → London, Berlin, Bali, Buenos Aires
-    • Abbreviation            → CET, EST, WITA, WIB, JST, etc.
-    • UTC offset              → UTC+2, GMT-5
-    • Automatic system detection
+- IANA timezone name      -> Europe/London
+- City / place name       -> London, Berlin, Bali, Buenos Aires
+- Abbreviation            -> CET, EST, WITA, WIB, JST, etc.
+- UTC offset              -> UTC+2, GMT-5
+- Automatic system detection
 
 Features
 --------
-✓ Offline-first timezone resolution
-✓ Online geolocation fallback (Nominatim + TimezoneFinder)
-✓ Correct date rollover across midnight
-✓ Updates Org headers automatically
-✓ Batch processing of multiple files
-✓ No hardcoded timezone aliases
-✓ Cross-platform (macOS / Linux)
+- Offline-first timezone resolution
+- Online geolocation fallback (Nominatim + TimezoneFinder)
+- Correct date rollover across midnight
+- Updates Org headers automatically
+- Batch processing of multiple files
+- No hardcoded timezone aliases
+- Cross-platform (macOS / Linux)
 
 Org headers used:
     #+TIMEZONE: Europe/London

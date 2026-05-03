@@ -63,7 +63,7 @@ def test_cross_midnight():
         "Europe/London",
     )
 
-    # London is earlier → date changes
+    # London is earlier -> date changes
     assert "2026-02-27" in result or "2026-02-26" in result
 
 
