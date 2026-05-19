@@ -879,6 +879,17 @@
   (add-hook 'emacs-startup-hook
     (lambda ()
       (run-at-time "0.1 sec" nil #'my-neotree-customizations)))
+
+  (setq neo-autorefresh t)
+
+  (with-eval-after-load 'neotree
+    ;; Avoid redisplay races during auto-revert
+    (advice-add
+     'neo-buffer--get-filename-current-line
+     :around
+     (lambda (orig-fun &rest args)
+       (ignore-errors
+         (apply orig-fun args)))))
 #+end_src
 
 * Menu Bar and Keybindings
@@ -1022,6 +1033,221 @@
   (use-package magit
     :bind (("C-x g" . magit-status))
     )
+#+end_src
+
+** Automatic Git Sync for Org Files
+#+begin_src emacs-lisp
+  (require 'subr-x)
+
+  ;; ------------------------------------------------------------
+  ;; Icons
+  ;; ------------------------------------------------------------
+
+  (defvar my/org-git-icon-ok "⇅")
+  (defvar my/org-git-icon-syncing "↻")
+  (defvar my/org-git-icon-offline "◌")
+  (defvar my/org-git-icon-error "×")
+
+  ;; ------------------------------------------------------------
+  ;; Configuration
+  ;; ------------------------------------------------------------
+
+  (defvar my/org-git-sync-interval 60)
+
+  (defvar my/org-git-sync-timer nil)
+  (defvar my/org-git-sync-running nil)
+  (defvar my/org-git-sync-paused nil)
+
+  (defvar my/org-git-sync-last-status
+    my/org-git-icon-offline)
+
+  (defvar my/org-git-sync-last-message "")
+
+  ;; ------------------------------------------------------------
+  ;; Modeline
+  ;; ------------------------------------------------------------
+
+  (defun my/org-git-sync-modeline ()
+    (propertize
+     (format " %s" my/org-git-sync-last-status)
+     'help-echo my/org-git-sync-last-message
+     'face
+     (cond
+      (my/org-git-sync-paused
+       '(:foreground "firebrick"))
+      ((equal my/org-git-sync-last-status
+              my/org-git-icon-ok)
+       '(:foreground "gray40"))
+      (t
+       '(:foreground "gray60")))))
+
+  (unless (member '(:eval (my/org-git-sync-modeline))
+                  global-mode-string)
+    (setq global-mode-string
+          (append global-mode-string
+                  '((:eval (my/org-git-sync-modeline))))))
+
+  ;; ------------------------------------------------------------
+  ;; Git helpers
+  ;; ------------------------------------------------------------
+
+  (defun my/org-git-root ()
+    (when (and (boundp 'my-org-base-directory)
+               (file-directory-p my-org-base-directory))
+      (let ((default-directory my-org-base-directory))
+        (string-trim
+         (shell-command-to-string
+          "git rev-parse --show-toplevel 2>/dev/null")))))
+
+  (defun my/org-git-inside-repo-p ()
+    (let ((root (my/org-git-root)))
+      (and root
+           (not (string-empty-p root)))))
+
+  (defun my/org-git-set-status (icon message)
+    (setq my/org-git-sync-last-status icon)
+    (setq my/org-git-sync-last-message message)
+    (force-mode-line-update t))
+
+  ;; ------------------------------------------------------------
+  ;; Conflict handling
+  ;; ------------------------------------------------------------
+
+  (defun my/org-git-handle-conflict (output)
+    (setq my/org-git-sync-paused t)
+
+    (my/org-git-set-status
+     my/org-git-icon-error
+     "Git sync paused due to conflict")
+
+    (with-current-buffer
+        (get-buffer-create "*Org Git Conflict*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert output)
+        (goto-char (point-min))
+        (special-mode))
+      (display-buffer (current-buffer))))
+
+  ;; ------------------------------------------------------------
+  ;; Main sync
+  ;; ------------------------------------------------------------
+
+  (defun my/org-git-sync ()
+    (when (and
+           (not my/org-git-sync-running)
+           (not my/org-git-sync-paused)
+           (my/org-git-inside-repo-p))
+
+      (setq my/org-git-sync-running t)
+
+      (my/org-git-set-status
+       my/org-git-icon-syncing
+       "Git sync in progress")
+
+      (org-save-all-org-buffers)
+
+      (let* ((default-directory my-org-base-directory)
+             (host system-name)
+             (timestamp
+              (format-time-string "%Y-%m-%d %H:%M:%S"))
+             (commit-message
+              (format "Auto backup: %s (%s)"
+                      timestamp
+                      host))
+
+             (cmd
+              (format
+               (concat
+                "git pull && "
+                "git add -A && "
+                "if ! git diff --cached --quiet; then "
+                "git commit -m %S; "
+                "fi && "
+                "git push")
+               commit-message))
+
+             (buffer
+              (generate-new-buffer
+               " *org-git-sync*")))
+
+        (make-process
+         :name "org-git-sync"
+         :buffer buffer
+         :command (list "sh" "-c" cmd)
+         :noquery t
+
+         :sentinel
+         (lambda (proc _event)
+
+           (when (memq (process-status proc)
+                       '(exit signal))
+
+             (setq my/org-git-sync-running nil)
+
+             (let ((output
+                    (with-current-buffer
+                        (process-buffer proc)
+                      (buffer-string))))
+
+               (if (= (process-exit-status proc) 0)
+
+                   ;; Success
+                   (my/org-git-set-status
+                    my/org-git-icon-ok
+                    (format "Git sync OK (%s)"
+                            (format-time-string "%H:%M:%S")))
+
+                 ;; Failure
+                 (if (string-match-p
+                      (regexp-opt
+                       '("CONFLICT"
+                         "Automatic merge failed"))
+                      output)
+
+                     ;; serious issue
+                     (my/org-git-handle-conflict output)
+
+                   ;; transient issue
+                   (progn
+                     (my/org-git-set-status
+                      my/org-git-icon-offline
+                      "Temporary git sync issue")
+
+                     (message
+                      "[org-git] temporary issue: %s"
+                      (string-trim output))))))
+
+             (kill-buffer (process-buffer proc))))))))
+
+  ;; ------------------------------------------------------------
+  ;; Start timer
+  ;; ------------------------------------------------------------
+
+  (when (my/org-git-inside-repo-p)
+
+    (when my/org-git-sync-timer
+      (cancel-timer my/org-git-sync-timer))
+
+    (setq my/org-git-sync-timer
+          (run-with-timer
+           10
+           my/org-git-sync-interval
+           #'my/org-git-sync)))
+
+  ;; ------------------------------------------------------------
+  ;; Manual resume
+  ;; ------------------------------------------------------------
+
+  (defun my/org-git-sync-resume ()
+    (interactive)
+
+    (setq my/org-git-sync-paused nil)
+
+    (my/org-git-set-status
+     my/org-git-icon-offline
+     "Git sync resumed"))
+
 #+end_src
 
 ** Save and Restore Sessions
