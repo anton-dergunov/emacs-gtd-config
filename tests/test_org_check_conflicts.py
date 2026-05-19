@@ -85,7 +85,7 @@ def test_small_gaps(tmp_path):
 def test_cli_runs(tmp_path, capsys):
     d = write_org(tmp_path)
 
-    cc.main([str(d)])
+    cc.main([str(d), "--include-past"])
 
     out = capsys.readouterr().out
 
