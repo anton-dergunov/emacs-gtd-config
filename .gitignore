@@ -10,6 +10,7 @@
 
 !scripts/
 !scripts/*.py
+!scripts/*.sh
 
 !tests/
 !tests/*.py
