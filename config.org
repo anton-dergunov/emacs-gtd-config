@@ -763,12 +763,16 @@
   This affects only display, not the actual link text.")
 
   (defun my/org-compose-obsidian-prefix (limit)
-    "Replace visible `obsidian:` with `my/obsidian-link-icon` via composition.
-  Text & link properties remain unchanged, so links are still clickable."
-    (when (re-search-forward "\\(\\bobsidian:\\)" limit t)
+    "Replace all visible `obsidian:` prefixes with icon composition."
+    (while (re-search-forward "\\(\\bobsidian:\\)" limit t)
       (let ((start (match-beginning 1))
             (end   (match-end 1)))
-        ;; visually replace only — underlying text remains `obsidian:`
+        ;; Remove any stale composition first
+        (remove-text-properties
+         start end
+         '(composition nil))
+
+        ;; Apply fresh composition
         (compose-region start end my/obsidian-link-icon)))
     nil)
 
@@ -776,6 +780,12 @@
   (font-lock-add-keywords
    'org-mode
    '((my/org-compose-obsidian-prefix 0 t)))
+
+  (add-hook
+   'org-mode-hook
+   (lambda ()
+     (font-lock-flush)
+     (font-lock-ensure)))
 
   ;; Insert Obsidian link from clipboard
   (defun my/insert-obsidian-link-from-clipboard ()
