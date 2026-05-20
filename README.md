@@ -63,10 +63,15 @@ The main configuration file is [config.org](config.org).
 
 ## Running Unit Tests
 
-To run tests locally:
+To run python tests locally:
 
 ```bash
 cd ~/.emacs.d
 PYTHONPATH=. pytest
 ```
 
+To run elisp tests locally:
+
+```bash
+EMACS_BIN="/Applications/Emacs.app/Contents/MacOS/Emacs" ./scripts/org_test.sh
+```

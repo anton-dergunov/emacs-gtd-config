@@ -5,15 +5,18 @@
 !local.el.template
 !requirements.txt
 
-# directories
-!.github/
-!.github/**
+!lisp/
+!lisp/*.el
 
 !scripts/
 !scripts/*.py
 
 !tests/
 !tests/*.py
+!tests/*.el
 
 !samples/
 !samples/**
+
+!.github/
+!.github/**
