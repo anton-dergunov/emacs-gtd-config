@@ -1,4 +1,4 @@
-#+TITLE: Minimalistic Emacs Configuration for "Getting Things Done" with Org Mode
+#+TITLE: Emacs Configuration for Productivity, Planning, "Getting Things Done" and Knowledge Management with Org Mode
 
 * Package Management
 ** Set up package management and ensure that all required packages are installed
@@ -268,7 +268,7 @@
                      (point-max)
                      'my-org-done-fade t))
 
-  (defun my/org-fade-done-subtrees ()
+  (defun my/org-fade-done-subtrees (&rest _)
     "Fade DONE subtree contents and strip org-modern pills."
     (interactive)
 
@@ -988,6 +988,8 @@
 
 ** =neotree= for file explorer functionality
 #+begin_src emacs-lisp
+  (setq neo-autorefresh nil)
+
   (use-package neotree
     :config
     (neotree-dir my-org-base-directory))
@@ -1002,8 +1004,6 @@
   (add-hook 'emacs-startup-hook
     (lambda ()
       (run-at-time "0.1 sec" nil #'my-neotree-customizations)))
-
-  (setq neo-autorefresh t)
 
   (with-eval-after-load 'neotree
     ;; Avoid redisplay races during auto-revert
