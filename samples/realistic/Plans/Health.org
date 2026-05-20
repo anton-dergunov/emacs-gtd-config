@@ -1,0 +1,43 @@
+#+TITLE: Health
+
+* Fitness
+** TODO Walk at least 8k steps daily
+** TODO Resume strength training
+** TODO Improve mobility routine
+** TODO Stretch after long coding sessions
+** TODO Improve posture while working
+
+* Nutrition
+** TODO Meal prep on weekends
+** TODO Reduce sugary snacks
+** TODO Drink more water
+** TODO Learn simple healthy recipes
+** TODO Track caffeine intake
+
+* Sleep
+** TODO Keep consistent sleep schedule
+** TODO Reduce screen time before bed
+** TODO Improve bedroom lighting
+** TODO Avoid late-night work sessions
+
+* Mental Health
+** TODO Reduce information overload
+** TODO Schedule regular breaks
+** TODO Spend more time outdoors
+** TODO Practice mindfulness occasionally
+
+* Medical
+** TODO Schedule routine health check
+** TODO Book dental appointment
+** TODO Replace old desk chair
+** TODO Review ergonomic desk setup
+
+* Sports
+** TODO Try swimming again
+** TODO Explore indoor climbing
+** TODO Continue regular walking habit
+
+* Notes
+- Energy management affects productivity
+- Small habits compound over time
+- Recovery matters as much as intensity

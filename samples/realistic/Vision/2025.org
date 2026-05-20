@@ -1,0 +1,38 @@
+#+TITLE: Vision 2025
+
+* Career
+** Work on technically meaningful ML systems
+** Improve architecture and leadership skills
+** Become stronger at communicating trade-offs
+** Publish technical writing consistently
+
+* Learning
+** Stronger understanding of modern LLM systems
+** Better intuition for statistics and evaluation
+** Build practical distributed systems experience
+** Improve systems programming knowledge
+
+* Projects
+** Complete several polished side projects
+** Build reusable ML evaluation tooling
+** Create searchable personal knowledge system
+
+* Organization
+** Maintain cleaner and simpler workflows
+** Reduce digital clutter
+** Build sustainable routines
+
+* Health
+** Better sleep consistency
+** Regular exercise
+** Improved posture and mobility
+
+* Creativity
+** Develop photography skills
+** Create more visual storytelling work
+** Build habit of publishing ideas
+
+* Lifestyle
+** Spend more time outdoors
+** Travel more intentionally
+** Maintain sustainable work-life balance

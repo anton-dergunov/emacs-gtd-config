@@ -1,0 +1,45 @@
+#+TITLE: Week
+
+* Monday
+** Review notes from retrieval evaluation experiments
+** Continue debugging async task queue
+** Read article about MCP Sampling
+** Buy groceries
+** Stretching routine in evening
+
+* Tuesday
+** Finish benchmark for vector search latency
+** Clean Downloads directory
+** Reply to recruiter emails
+** Review probability notes
+** Photography walk after work
+
+* Wednesday
+** Prepare architecture diagrams for blog post
+** Test org capture templates
+** Refactor notebook into Python package
+** Watch lecture about ranking systems
+
+* Thursday
+** Practice ML system design interview
+** Implement chunk overlap experiment
+** Continue reading book about distributed systems
+** Backup photo archive
+
+* Friday
+** Weekly review
+** Archive completed TODOs
+** Review spending
+** Plan next week priorities
+
+* Weekend
+** Visit museum
+** Edit travel photos
+** Long walk in park
+** Read fiction book
+** Meal prep for next week
+
+* Someday
+** Learn more about Zig
+** Build static blog generator
+** Improve home office lighting

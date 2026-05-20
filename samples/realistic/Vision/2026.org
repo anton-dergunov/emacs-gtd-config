@@ -1,0 +1,38 @@
+#+TITLE: Vision 2026
+
+* Professional
+** Lead technically ambitious projects
+** Become highly effective at ML system evaluation
+** Build strong portfolio of practical ML infrastructure work
+** Mentor junior engineers effectively
+
+* Technical
+** Deep understanding of retrieval and ranking systems
+** Strong practical knowledge of agent architectures
+** Better low-level systems understanding
+** Confident distributed systems design skills
+
+* Writing and Sharing
+** Publish long-form technical articles
+** Build public knowledge base
+** Create educational open-source projects
+
+* Personal Systems
+** Reliable weekly and monthly review habits
+** Cleaner note organization
+** Sustainable long-term workflows
+
+* Health
+** Consistent exercise habit
+** Better stress management
+** More outdoor activity
+
+* Photography
+** Build curated photo portfolio
+** Improve editing consistency
+** Print favorite work physically
+
+* Life
+** More deliberate use of time
+** Stronger focus on meaningful work
+** More consistent deep work habits

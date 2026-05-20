@@ -1,0 +1,47 @@
+#+TITLE: Focus
+
+* Current Priorities
+** Finish prototype for local RAG assistant
+*** Compare SQLite + LanceDB + DuckDB workflows
+*** Measure indexing speed on large markdown vault
+*** Add OCR pipeline for scanned PDFs
+** Improve interview preparation workflow
+*** System design exercises
+*** PyTorch debugging refresh
+*** Behavioural interview examples
+** Organize personal knowledge system
+*** Reduce duplicate notes
+*** Standardize TODO keywords
+*** Improve capture templates
+** Health
+*** Resume stretching routine
+*** Reduce caffeine after 15:00
+*** Walk at least 8k steps daily
+** Photography
+*** Learn composition fundamentals
+*** Process backlog of RAW files
+*** Create shortlist of favorite lenses
+** Writing
+*** Publish article about lightweight coding agents
+*** Create diagrams for architecture article
+*** Prepare screenshots and examples
+
+* Short-Term Ideas
+** Try using org-roam for evergreen notes
+** Experiment with weekly review template
+** Compare GPT-style agents with classical pipelines
+** Build a toy MCP server
+** Read papers about long-context evaluation
+** Create shell aliases for common git workflows
+
+* Things To Avoid
+** Too many simultaneous projects
+** Endless tooling customization
+** Watching tutorials without implementation
+** Buying new hardware without clear need
+
+* Longer Horizon
+** Strong portfolio of ML infrastructure projects
+** More public technical writing
+** Better statistics intuition
+** Better sleep schedule

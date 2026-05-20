@@ -1,0 +1,62 @@
+#+TITLE: Projects
+
+* Local AI Workspace
+** TODO Create unified search across notes and PDFs
+** TODO Add OCR pipeline
+** TODO Implement semantic search
+** TODO Add local embedding generation
+** TODO Benchmark indexing performance
+** TODO Create lightweight web UI
+** TODO Add document chunking experiments
+
+* Coding Agent
+** TODO Implement tool calling framework
+** TODO Add sandboxed execution
+** TODO Build planning loop
+** TODO Add retry logic
+** TODO Create execution traces viewer
+** TODO Add token usage tracking
+** TODO Compare different prompting strategies
+
+* ML Evaluation Toolkit
+** TODO Create regression test framework
+** TODO Add dataset versioning
+** TODO Implement metric dashboards
+** TODO Add hallucination detection experiments
+** TODO Create synthetic data generation pipeline
+
+* Photography Archive
+** TODO Build metadata viewer
+** TODO Generate contact sheets automatically
+** TODO Add duplicate detection
+** TODO Create backup verification scripts
+
+* Personal Dashboard
+** TODO Create task summary widget
+** TODO Display calendar agenda
+** TODO Track weekly goals
+** TODO Add weather integration
+** TODO Create simple habit tracker
+
+* Blog
+** TODO Write article about lightweight agents
+** TODO Publish article about retrieval evaluation
+** TODO Create diagrams for ML systems article
+** TODO Improve blog theme performance
+
+* Tiny Utilities
+** TODO Create markdown cleanup script
+** TODO Build CLI for transcript processing
+** TODO Create image compression utility
+** TODO Build shell helper scripts
+
+* Ideas
+** TODO Explore offline-first applications
+** TODO Experiment with multimodal search
+** TODO Create searchable paper archive
+** TODO Build local voice transcription workflow
+
+* Notes
+- Prefer smaller maintainable projects
+- Focus on shipping working prototypes
+- Avoid premature abstractions

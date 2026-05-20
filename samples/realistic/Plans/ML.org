@@ -1,0 +1,89 @@
+#+TITLE: ML
+
+* Foundation Models
+** TODO Read paper "Attention Is All You Need"
+** TODO Read paper "FlashAttention"
+** TODO Compare transformer inference optimizations
+** TODO Experiment with grouped-query attention
+** TODO Build tiny transformer from scratch in PyTorch
+** TODO Learn more about KV cache management
+** TODO Understand speculative decoding
+** TODO Compare tokenizer approaches
+** TODO Benchmark quantized models locally
+** TODO Read about retrieval-augmented generation
+** TODO Compare dense vs sparse retrieval
+** TODO Evaluate reranking models
+** TODO Learn how modern embedding models are trained
+
+* LLM Evaluation
+** TODO Create benchmark dataset for hallucination testing
+** TODO Compare judge-model approaches
+** TODO Study pairwise ranking evaluation
+** TODO Learn about calibration metrics
+** TODO Investigate retrieval recall metrics
+** TODO Study context-window degradation
+** TODO Implement automatic regression testing
+** TODO Review red-teaming techniques
+** TODO Learn about factuality evaluation
+** TODO Compare online vs offline evaluation
+
+* ML Infrastructure
+** TODO Learn Ray for distributed workloads
+** TODO Compare orchestration tools
+** TODO Study feature store design
+** TODO Learn model serving with vLLM
+** TODO Create reproducible experiment template
+** TODO Improve Docker workflows
+** TODO Understand GPU profiling tools
+** TODO Learn Triton inference server basics
+** TODO Benchmark local inference hardware
+** TODO Study scheduling systems
+
+* Statistics
+** TODO Revisit Bayesian statistics
+** TODO Review confidence intervals
+** TODO Study survival analysis basics
+** TODO Review probability distributions
+** TODO Learn causal inference concepts
+** TODO Study calibration curves
+** TODO Review statistical testing pitfalls
+** TODO Learn uplift modeling basics
+
+* Recommender Systems
+** TODO Study candidate generation systems
+** TODO Learn ranking loss functions
+** TODO Review matrix factorization
+** TODO Understand exploration vs exploitation
+** TODO Read about contextual bandits
+** TODO Implement toy recommender system
+** TODO Compare offline and online metrics
+
+* Vision Models
+** TODO Learn segmentation architectures
+** TODO Study diffusion models
+** TODO Review image augmentation strategies
+** TODO Compare OCR frameworks
+** TODO Explore multimodal embeddings
+** TODO Study synthetic data generation
+
+* Interesting Articles
+** TODO "The Bitter Lesson"
+https://www.cs.utexas.edu/~eunsol/courses/data/bitter_lesson.pdf
+** TODO "Hidden Technical Debt in Machine Learning Systems"
+https://papers.nips.cc/paper/5656-hidden-technical-debt-in-machine-learning-systems.pdf
+** TODO "Scaling Laws for Neural Language Models"
+https://arxiv.org/abs/2001.08361
+
+* Practical Experiments
+** TODO Fine-tune a small open-source model
+** TODO Create retrieval benchmark on personal notes
+** TODO Build lightweight agent framework
+** TODO Create synthetic evaluation dataset
+** TODO Compare inference costs across providers
+** TODO Build semantic code search demo
+
+* Notes
+- Prefer practical implementation over passive reading
+- Keep experiments reproducible
+- Track metrics consistently
+- Avoid over-engineering early prototypes

@@ -1,0 +1,79 @@
+#+TITLE: Photo
+
+* Photography Goals
+** Improve composition
+** Practice storytelling through photos
+** Learn better color grading
+** Build consistent editing workflow
+** Improve low-light photography
+** Learn portrait lighting basics
+
+* Street Photography
+** TODO Study framing techniques
+** TODO Practice zone focusing
+** TODO Learn how to approach candid scenes
+** TODO Review work of famous street photographers
+** TODO Explore monochrome editing styles
+
+* Landscape Photography
+** TODO Learn exposure blending
+** TODO Practice sunrise and sunset planning
+** TODO Learn focus stacking basics
+** TODO Experiment with telephoto landscapes
+** TODO Improve weather planning workflows
+
+* Editing Workflow
+** TODO Organize RAW archive
+** TODO Create Lightroom presets
+** TODO Learn color calibration basics
+** TODO Experiment with film emulation
+** TODO Learn masking tools properly
+** TODO Compare Lightroom and Darktable
+
+* Gear
+** Mirrorless Camera
+*** TODO Read manual fully
+*** TODO Configure custom buttons
+*** TODO Test autofocus modes
+*** TODO Compare electronic and mechanical shutter
+** Compact Camera
+*** TODO Create travel setup checklist
+*** TODO Test stabilization modes
+** Drone
+*** TODO Learn legal flight requirements
+*** TODO Practice cinematic movements
+
+* Learning Resources
+** TODO Course "Fundamentals of Photography"
+https://www.creativelive.com/class/fundamentals-of-photography
+** TODO Video "Understanding Light"
+https://www.youtube.com/watch?v=VArISvUuyr0
+** TODO Video "Color Theory for Photographers"
+https://www.youtube.com/watch?v=UYFGXQlre3M
+
+* Travel Photography
+** TODO Create shortlist of photogenic locations
+** TODO Learn efficient travel backup workflow
+** TODO Build lightweight travel kit
+** TODO Study documentary-style editing
+
+* Mobile Photography
+** TODO Learn manual camera apps
+** TODO Compare mobile RAW workflows
+** TODO Practice night photography on phone
+** TODO Create quick editing workflow
+
+* Inspiration
+** TODO Review photography books monthly
+** TODO Analyze favorite photographers
+** TODO Build reference mood boards
+
+* Printing
+** TODO Learn print preparation basics
+** TODO Compare paper finishes
+** TODO Create first small photo book
+
+* Notes
+- Good light matters more than equipment
+- Consistency is more important than perfection
+- Take fewer but more intentional photos

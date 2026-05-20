@@ -1,0 +1,60 @@
+#+TITLE: Productivity
+
+* Organization
+** TODO Create better weekly review workflow
+** TODO Reduce duplicate notes
+** TODO Improve naming conventions
+** TODO Archive outdated material
+** TODO Standardize project templates
+** TODO Create monthly review checklist
+
+* Time Management
+** TODO Track focused work sessions
+** TODO Reduce context switching
+** TODO Batch shallow tasks
+** TODO Experiment with calendar blocking
+** TODO Create realistic daily plans
+
+* Knowledge Management
+** TODO Improve searchability of notes
+** TODO Tag evergreen notes consistently
+** TODO Create summary notes for books
+** TODO Link related concepts together
+** TODO Build glossary of technical concepts
+
+* Digital Cleanup
+** TODO Clean old screenshots
+** TODO Organize Downloads directory
+** TODO Remove unused apps
+** TODO Review browser extensions
+** TODO Consolidate cloud storage
+
+* Writing
+** TODO Create reusable blog post template
+** TODO Publish one technical article monthly
+** TODO Improve diagram creation workflow
+** TODO Build idea backlog
+
+* Learning
+** TODO Create spaced repetition workflow
+** TODO Build reading queue
+** TODO Reduce passive tutorial watching
+** TODO Track completed projects instead of courses
+
+* Experiments
+** TODO Try paper-based planning for a week
+** TODO Compare note-taking workflows
+** TODO Test distraction blockers
+** TODO Experiment with shorter meetings
+
+* Health and Energy
+** TODO Improve sleep consistency
+** TODO Take walking breaks during work
+** TODO Reduce doomscrolling
+** TODO Stretch during long coding sessions
+
+* Notes
+- Systems beat motivation
+- Keep friction low
+- Focus on consistency
+- Simpler workflows usually win

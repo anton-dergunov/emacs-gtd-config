@@ -1,0 +1,110 @@
+#+TITLE: Inbox
+
+Interesting article about long-context memory failures in LLMs:
+https://arxiv.org/abs/2404.12345
+
+Need to investigate whether SQLite FTS5 could replace current search setup.
+
+Idea:
+Use OCR + embeddings + BM25 hybrid retrieval for scanned books.
+
+Cheap portable monitor recommendations for travel setup.
+
+Check:
+https://github.com/ollama/ollama
+
+Potential blog topics:
+- Why small local tools are underrated
+- Retrieval evaluation mistakes
+- Why notebooks become unmaintainable
+- Long-context myths
+
+Look into MCP servers and sampling.
+
+Interesting:
+https://github.com/microsoft/markitdown
+
+Remember to compare:
+- LanceDB
+- Chroma
+- Qdrant
+- SQLite vector extensions
+
+Maybe create dashboard for:
+- active projects
+- interview prep
+- weekly goals
+
+Need better workflow for bookmarking papers.
+
+Podcast recommendation:
+"Practical AI"
+
+Try local transcription workflow for meetings.
+
+Potential future project:
+voice-controlled note search.
+
+Check whether there are decent EPUB parsers in Python.
+
+Interesting phrase:
+"Make the simple thing easy and the complex thing possible."
+
+Read later:
+https://norvig.com/21-days.html
+
+Possible issue:
+too many overlapping TODO systems.
+
+Maybe use tags more aggressively.
+
+Need cleaner workflow for screenshots and temporary files.
+
+Try:
+- uv package manager
+- ruff
+- justfile
+- nushell
+
+Interesting hardware idea:
+small fanless mini PC for local inference.
+
+Potential experiment:
+Compare semantic chunking vs fixed chunking.
+
+Look into sentence window retrieval.
+
+Need to understand better:
+- reciprocal rank fusion
+- calibration
+- uncertainty estimation
+
+Interesting quote:
+"Premature optimization is the root of many architecture problems."
+
+Maybe test:
+- whisper.cpp
+- llama.cpp
+- vLLM
+
+Could create tiny benchmark suite for coding agents.
+
+Find examples of good engineering blogs.
+
+Check static site generators:
+- Hugo
+- Zola
+- Astro
+
+Potential reading list:
+- Designing Data-Intensive Applications
+- Refactoring
+- Pragmatic Programmer
+
+Need better backup workflow for photo archive.
+
+Maybe buy:
+standing desk lamp.
+
+Interesting UX idea:
+agenda view grouped by energy level.

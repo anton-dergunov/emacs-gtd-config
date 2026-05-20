@@ -1,0 +1,83 @@
+#+TITLE: Programming
+
+* Python
+** TODO Improve asyncio understanding
+** TODO Study advanced typing features
+** TODO Learn profiling techniques
+** TODO Review packaging best practices
+** TODO Compare dependency managers
+** TODO Improve pytest workflows
+** TODO Learn memory optimization techniques
+** TODO Create reusable CLI template
+** TODO Learn better logging practices
+** TODO Study generators and iterators deeply
+
+* C++
+** TODO Refresh modern C++ features
+** TODO Study move semantics carefully
+** TODO Learn more about allocators
+** TODO Practice multithreading exercises
+** TODO Review compiler optimization flags
+** TODO Build small networking project
+** TODO Learn modern build systems
+
+* Rust
+** TODO Build toy CLI tool
+** TODO Learn ownership model deeply
+** TODO Understand async ecosystem
+** TODO Compare Rust and Go ergonomics
+** TODO Experiment with embedded databases
+
+* Linux
+** TODO Learn more about systemd
+** TODO Create better shell aliases
+** TODO Improve tmux setup
+** TODO Learn tracing tools
+** TODO Study process management
+** TODO Improve SSH workflows
+
+* Emacs
+** TODO Refactor configuration into modules
+** TODO Learn more Elisp
+** TODO Improve org agenda setup
+** TODO Add custom capture templates
+** TODO Improve startup performance
+** TODO Review package loading strategy
+** TODO Learn transient package
+** TODO Improve note search workflows
+
+* Git
+** TODO Learn advanced rebasing
+** TODO Improve commit hygiene
+** TODO Create reusable git hooks
+** TODO Learn signed commits
+** TODO Improve branch naming conventions
+
+* Databases
+** TODO Compare SQLite extensions
+** TODO Learn PostgreSQL indexing
+** TODO Experiment with DuckDB
+** TODO Understand vector databases better
+** TODO Benchmark full-text search systems
+
+* Architecture
+** TODO Read about event-driven systems
+** TODO Study distributed tracing
+** TODO Review CAP theorem examples
+** TODO Learn queueing patterns
+** TODO Study caching strategies
+** TODO Understand backpressure handling
+
+* Algorithms
+** TODO Practice graph algorithms
+** TODO Review dynamic programming
+** TODO Implement LRU cache from scratch
+** TODO Practice interval problems
+** TODO Refresh heap-based algorithms
+** TODO Review trie structures
+
+* Random Ideas
+** TODO Build markdown knowledge search engine
+** TODO Create terminal dashboard
+** TODO Build lightweight OCR pipeline
+** TODO Explore static site generators

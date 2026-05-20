@@ -1,0 +1,101 @@
+#+TITLE: Interviews
+#+TIMEZONE: Europe/London
+#+TZ_LABEL: Europe/London
+
+* Redwood AI - Senior ML Engineer
+** DONE Recruiter screening call
+SCHEDULED: <2026-02-10 Tue 11:00-11:30>
+Discussed ML infrastructure background and distributed training experience.
+** DONE Technical interview
+SCHEDULED: <2026-02-17 Tue 14:00-15:00>
+Topics:
+- Retrieval evaluation
+- Embedding systems
+- Ranking metrics
+- Async processing pipelines
+** TODO Prepare for architecture round
+SCHEDULED: <2026-05-22 Fri 13:00-14:00>
+Review:
+- Multi-tenant inference systems
+- Evaluation pipelines
+- Cost optimization
+- Observability
+
+* Atlas Robotics
+** DONE Introductory conversation
+SCHEDULED: <2026-03-03 Tue 10:00-10:30>
+** DONE Coding interview
+SCHEDULED: <2026-03-10 Tue 15:00-16:00>
+Topics:
+- BFS/DFS
+- Dynamic programming
+- Concurrency
+** TODO Robotics systems interview
+SCHEDULED: <2026-05-26 Tue 16:00-17:00>
+Review SLAM basics and sensor fusion concepts.
+
+* Nimbus Search
+** DONE Recruiter call
+SCHEDULED: <2026-04-01 Wed 09:30-10:00>
+** DONE ML systems interview
+SCHEDULED: <2026-04-08 Wed 12:00-13:00>
+Covered:
+- RAG architectures
+- Search ranking
+- Evaluation design
+- Long-context limitations
+** DONE Behavioural interview
+SCHEDULED: <2026-04-15 Wed 11:00-11:45>
+** TODO Final panel interview
+SCHEDULED: <2026-05-28 Thu 15:00-16:30>
+
+* Harbor Analytics
+** DONE Initial recruiter screen
+SCHEDULED: <2026-03-11 Wed 16:00-16:30>
+** TODO Take-home exercise
+DEADLINE: <2026-05-24 Sun>
+Implement:
+- Feature engineering pipeline
+- Simple prediction service
+- Monitoring dashboard
+- Documentation
+
+* Northwind Labs
+** DONE System design interview
+SCHEDULED: <2026-04-21 Tue 13:00-14:00>
+Discussion:
+- Scaling vector search
+- Fault tolerance
+- Caching layers
+- Streaming ingestion
+** TODO Prepare examples of leadership experience
+** TODO Prepare examples of difficult debugging sessions
+
+* General Preparation
+** TODO Refresh probability and statistics
+** TODO Practice explaining trade-offs clearly
+** TODO Prepare STAR-format behavioural answers
+** TODO Review PyTorch tensor operations
+** TODO Practice whiteboard communication
+** TODO Review SQL joins and window functions
+** TODO Practice latency estimation exercises
+** TODO Prepare examples of project failures
+** TODO Practice discussing ambiguous requirements
+
+* Useful Resources
+** System Design
+https://github.com/donnemartin/system-design-primer
+** ML Interview Questions
+https://github.com/khangich/machine-learning-interview
+** SQL Practice
+https://www.sql-practice.com/
+** Coding Problems
+https://leetcode.com/
+https://neetcode.io/
+
+* Notes
+- Keep answers concise initially
+- Clarify assumptions early
+- Discuss trade-offs explicitly
+- Mention monitoring and observability
+- Avoid overcomplicated solutions

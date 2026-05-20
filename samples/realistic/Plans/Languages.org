@@ -1,0 +1,50 @@
+# File: Plans/Languages.org
+
+#+TITLE: Languages
+
+* Spanish
+** TODO Practice listening daily
+** TODO Review common verb conjugations
+** TODO Build vocabulary deck
+** TODO Watch beginner podcasts
+** TODO Read simple news articles
+** TODO Practice shadowing exercises
+
+* Japanese
+** TODO Learn hiragana thoroughly
+** TODO Continue katakana practice
+** TODO Learn basic sentence structure
+** TODO Study particles carefully
+** TODO Build travel vocabulary
+** TODO Practice reading simple texts
+
+* Language Learning Workflow
+** TODO Create capture workflow for unknown words
+** TODO Export highlights from reading apps
+** TODO Build spaced repetition process
+** TODO Track weekly vocabulary progress
+
+* Resources
+** Spanish
+*** TODO Podcast "Coffee Break Spanish"
+*** TODO YouTube "Dreaming Spanish"
+*** TODO Read graded readers
+** Japanese
+*** TODO Learn with NHK Easy News
+*** TODO Review Genki exercises
+*** TODO Practice writing kana daily
+
+* Speaking Practice
+** TODO Practice describing daily routine
+** TODO Record short speaking clips
+** TODO Improve pronunciation consistency
+
+* Reading
+** TODO Read short stories
+** TODO Highlight unknown expressions
+** TODO Create summary notes for grammar
+
+* Notes
+- Consistency matters more than intensity
+- Listening should start early
+- Active recall is essential

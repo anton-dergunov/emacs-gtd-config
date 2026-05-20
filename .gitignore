@@ -1,13 +1,19 @@
 *
+!README.md
 !init.el
 !config.org
 !local.el.template
-!README.md
+!requirements.txt
+
+# directories
+!.github/
+!.github/**
+
 !scripts/
 !scripts/*.py
+
 !tests/
 !tests/*.py
-!.github/
-!.github/workflows/
-!.github/workflows/tests.yml
-!requirements.txt
+
+!samples/
+!samples/**
