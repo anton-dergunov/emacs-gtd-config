@@ -1,0 +1,46 @@
+#+TITLE: Statistics
+
+* Core Concepts
+** TODO Review hypothesis testing
+** TODO Understand confidence intervals deeply
+** TODO Study statistical power
+
+* Experimentation
+** TODO Learn CUPED adjustment
+** TODO Compare Bayesian and frequentist approaches
+** TODO Understand sequential testing pitfalls
+
+* Practical ML Statistics
+** TODO Calibration metrics for classifiers
+** TODO Precision/recall tradeoffs
+** TODO Ranking metrics
+** TODO Offline vs online evaluation
+
+* Causal Inference
+** TODO Introductory material on causal graphs
+** TODO Study Simpson's paradox
+** TODO Learn basics of uplift modeling
+
+* Time Series
+** TODO Study stationarity
+** TODO Review ARIMA intuition
+** TODO Understand forecasting evaluation
+
+* Data Quality
+** TODO Create checklist for dataset validation
+** TODO Study label noise handling
+** TODO Detect leakage in ML datasets
+
+* Reading
+** TODO Book "Practical Statistics for Data Scientists"
+** TODO Book "Causal Inference: The Mixtape"
+** TODO Watch lectures on statistical learning
+
+* Notes
+- Most practical problems are data quality problems.
+- Metrics should align with product goals.
+- Aggregates often hide important slices.
+
+* Projects
+** TODO Simulate A/B testing scenarios in Python
+** TODO Create notebook on calibration curves

@@ -1,0 +1,55 @@
+#+TITLE: Math
+
+* Linear Algebra
+** TODO Review eigendecomposition and SVD
+** TODO Implement PCA from scratch in NumPy
+** TODO Study numerical stability issues
+
+* Probability
+** TODO Refresh Bayes theorem intuitions
+** TODO Work through conditional probability exercises
+** TODO Study entropy and KL divergence
+
+* Optimization
+** TODO Understand AdamW in detail
+** TODO Compare SGD vs adaptive optimizers
+** TODO Learn trust region optimization basics
+
+* Calculus
+** TODO Review chain rule for backpropagation
+** TODO Practice partial derivatives
+** TODO Understand Jacobians and Hessians
+
+* Information Theory
+** TODO Read introductory material on coding theory
+** TODO Study mutual information applications
+** TODO Explore compression intuition
+
+* Geometry
+** TODO Learn intuition for manifolds
+** TODO Understand cosine similarity geometrically
+** TODO Explore high-dimensional spaces
+
+* Mathematical Notes
+** Gradient Descent
+- Learning rate sensitivity
+- Saddle points
+- Local minima
+- Batch size effects
+
+** Statistics Refresher
+- Expectation
+- Variance
+- Covariance
+- Correlation
+
+* Reading
+** TODO Book "Mathematics for Machine Learning"
+** TODO Book "Linear Algebra Done Right"
+** TODO Video series by 3Blue1Brown
+
+* Problem Solving
+** NEXT Solve one math problem daily
+SCHEDULED: <2026-05-21 Thu +1d>
+
+** TODO Create spaced repetition deck for formulas

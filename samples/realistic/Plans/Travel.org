@@ -1,0 +1,46 @@
+#+TITLE: Travel
+
+* Travel Ideas
+** TODO Research train travel across Europe
+** TODO Plan photography-focused city trip
+** TODO Explore hiking destinations with good public transport
+
+* Packing System
+** TODO Create lightweight travel checklist
+** TODO Optimize camera gear packing
+** TODO Build minimal remote-work setup
+
+* Photography Trips
+** TODO Find sunrise locations for landscape photography
+** TODO Research night photography locations
+** TODO Practice travel storytelling through photos
+
+* Travel Workflow
+** TODO Create reusable itinerary template
+** TODO Improve offline map workflow
+** TODO Organize travel documents digitally
+
+* Language Learning
+** TODO Practice basic travel phrases in Spanish
+** TODO Improve listening comprehension
+
+* Cities to Visit
+** SOMEDAY Visit Tokyo during autumn
+** SOMEDAY Explore small coastal towns in Portugal
+** SOMEDAY Visit mountain regions for landscape photography
+
+* Practical Tasks
+** TODO Review travel insurance options
+** TODO Create backup strategy for photos
+** TODO Test portable SSD workflow
+
+* Notes
+- Slow travel is usually more enjoyable.
+- Less equipment leads to more shooting.
+- Morning light changes everything for photography.
+
+* Inspiration
+- National parks
+- Street photography
+- Architecture
+- Local food markets

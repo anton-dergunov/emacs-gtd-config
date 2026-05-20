@@ -1,0 +1,45 @@
+#+TITLE: Misc
+
+* Random Ideas
+** TODO Try mechanical keyboard switches sampler
+** TODO Research standing desk setups
+** TODO Compare note-taking workflows
+
+* Interesting Links
+- https://gwern.net/
+- https://www.lesswrong.com/
+- https://architecturenotes.co/
+
+* Books
+** TODO Read more fiction regularly
+** TODO Find books on creativity and design
+
+* Productivity
+** TODO Simplify recurring task management
+** TODO Reduce notification noise
+** TODO Improve weekly review process
+
+* Home
+** TODO Organize cables and chargers
+** TODO Reduce unused electronics
+** TODO Create backup inventory
+
+* Health
+** TODO Improve sleep consistency
+** TODO Stretch daily
+** TODO Reduce screen time before sleep
+
+* Fun Projects
+** SOMEDAY Build retro-style terminal dashboard
+** SOMEDAY Create tiny personal search engine
+** SOMEDAY Build custom RSS aggregation workflow
+
+* Notes
+- Most systems become too complicated over time.
+- Consistency beats intensity.
+- Small frictions compound quickly.
+
+* Someday Ideas
+** SOMEDAY Learn basic music theory
+** SOMEDAY Try watercolor painting
+** SOMEDAY Build small home server

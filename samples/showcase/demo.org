@@ -1,0 +1,179 @@
+#+TITLE: Features Demo
+
+* TODO Simple task
+
+* NEXT Next state task
+
+* IN-PROGRESS Active task
+Started working on this recently.
+
+* WAITING External dependency task
+Waiting for another person.
+
+* SOMEDAY Future idea
+
+* DONE Completed task
+CLOSED: [2026-05-10 Sun]
+
+* Priorities
+** TODO [#A] Critical task
+** TODO [#B] Medium priority task
+** TODO [#C] Low priority task
+
+* Scheduling
+** TODO Scheduled today
+SCHEDULED: <2026-05-20 Wed>
+
+** TODO Scheduled tomorrow
+SCHEDULED: <2026-05-21 Thu>
+
+** TODO Overdue scheduled task
+SCHEDULED: <2026-05-01 Fri>
+
+** TODO Deadline example
+DEADLINE: <2026-05-25 Mon>
+
+** TODO Scheduled and deadline together
+SCHEDULED: <2026-05-21 Thu>
+DEADLINE: <2026-05-28 Thu>
+
+** TODO Recurring weekly
+SCHEDULED: <2026-05-20 Wed +1w>
+
+** TODO Recurring monthly
+SCHEDULED: <2026-06-01 Mon +1m>
+
+* Time Variations
+** TODO Morning task
+SCHEDULED: <2026-05-21 Thu 08:00-09:00>
+
+** TODO Afternoon task
+SCHEDULED: <2026-05-21 Thu 14:00-15:00>
+
+** TODO Evening task
+SCHEDULED: <2026-05-21 Thu 20:00-21:00>
+
+** TODO Multi-hour meeting
+SCHEDULED: <2026-05-21 Thu 09:00-12:00>
+
+** TODO Overlapping meeting A
+SCHEDULED: <2026-05-21 Thu 10:00-11:00>
+
+** TODO Overlapping meeting B
+SCHEDULED: <2026-05-21 Thu 10:30-12:00>
+
+* Tags
+** TODO Single tag                                     :tag1:
+** TODO Two tags                                  :tag1:tag2:
+** TODO Many tags                :ml:research:planning:architecture:
+** TODO Very long tags           :verylongtagexample:anotherlongtag:
+
+* Notes Under Tasks
+** TODO Task with detailed notes
+This is a paragraph under the task.
+
+Another paragraph.
+
+- bullet one
+- bullet two
+- bullet three
+
+* Nested Trees
+** TODO Level 2
+*** TODO Level 3
+**** TODO Level 4
+***** TODO Level 5
+****** TODO Level 6
+
+* Mixed States
+** IN-PROGRESS Parent task
+*** DONE Finished subtask
+*** TODO Remaining task
+*** WAITING External blocker
+
+* URLs
+** TODO Example URLs
+https://example.com
+https://orgmode.org/
+
+* Obsidian Links
+** TODO Obsidian integration example
+[[obsidian:Project Notes]]
+[[obsidian:Architecture]]
+[[obsidian:Ideas]]
+
+* Inactive Timestamps
+** TODO Example inactive timestamp
+[2026-05-10 Sun]
+
+* Empty Lines Demo
+
+** TODO Task separated by empty lines
+
+
+Some text here.
+
+
+More text here.
+
+* Large Project Example
+** IN-PROGRESS Project
+*** TODO Planning
+**** TODO Requirements
+**** TODO Milestones
+
+*** IN-PROGRESS Implementation
+**** DONE Setup
+**** TODO Development
+**** TODO Testing
+
+*** WAITING Review
+**** TODO Final approval
+
+* Long Text Example
+** TODO Task with free-form description
+This demonstrates how larger bodies of text render.
+
+Sometimes notes are structured.
+
+Sometimes they are messy.
+
+Important observations:
+- rendering,
+- alignment,
+- metadata fading,
+- bullet rendering,
+- folding behavior.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+
+* Recurrence Examples
+** TODO Daily recurring
+SCHEDULED: <2026-05-20 Wed +1d>
+
+** TODO Weekly recurring
+SCHEDULED: <2026-05-20 Wed +1w>
+
+** TODO Monthly recurring
+SCHEDULED: <2026-05-20 Wed +1m>
+
+* DONE Rendering Tests
+** DONE Completed child task
+** DONE Another completed child task
+
+* Deep Nesting
+** A
+*** B
+**** C
+***** D
+****** E
+******* F
+******** G
+
+* Alignment Demo
+** TODO Small tag                                           :a:
+** TODO Medium tag                                   :medium:
+** TODO Long tag example             :verylongtagdemonstration:
+
+* Final Section
+** TODO Final task

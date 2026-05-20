@@ -1,0 +1,47 @@
+#+TITLE: Work
+
+* ML Infrastructure
+** TODO Improve experiment tracking workflow
+** TODO Compare feature store architectures
+** TODO Learn modern vector database patterns
+
+* LLM Systems
+** TODO Study evaluation frameworks for LLM agents
+** TODO Understand prompt caching strategies
+** TODO Research memory architectures for agents
+
+* Engineering Skills
+** TODO Improve debugging speed in PyTorch
+** TODO Learn advanced profiling tools
+** TODO Practice writing better technical RFCs
+
+* Distributed Systems
+** TODO Review Kafka fundamentals
+** TODO Learn batching strategies for inference
+** TODO Study latency optimization patterns
+
+* Research Topics
+** TODO Read recent papers on retrieval augmentation
+** TODO Compare open-weight embedding models
+** TODO Explore structured generation techniques
+
+* Team Skills
+** TODO Improve technical mentoring skills
+** TODO Learn better meeting facilitation
+** TODO Practice concise architecture explanations
+
+* Notes
+- Production systems fail differently from notebooks.
+- Simpler systems are easier to debug.
+- Good evaluation infrastructure compounds over time.
+
+* Learning Projects
+** IN-PROGRESS Build toy coding agent
+Started: [2026-05-12 Tue]
+
+** TODO Create synthetic evaluation datasets
+** TODO Experiment with lightweight RAG pipeline
+
+* Long-Term
+** SOMEDAY Learn Rust for systems programming
+** SOMEDAY Contribute to open-source ML tooling

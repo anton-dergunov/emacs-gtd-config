@@ -1,0 +1,58 @@
+#+TITLE: Financial
+
+* Financial Planning
+** TODO Create 12-month emergency fund target
+** TODO Estimate monthly recurring expenses
+** TODO Review annual subscriptions
+** TODO Compare long-term investment approaches
+
+* Budget Categories
+** Housing
+- Rent
+- Utilities
+- Internet
+- Insurance
+
+** Transportation
+- Public transport
+- Occasional travel
+- Car rental budget
+
+** Professional Development
+- Books
+- Courses
+- Conference tickets
+- Cloud computing costs
+
+* Investing
+** TODO Read about index fund strategies :finance:
+** TODO Understand tax-efficient investing accounts
+** TODO Compare investment platforms
+** SOMEDAY Learn more about bond allocation
+
+* Career and Compensation
+** TODO Research compensation trends for ML engineers
+** TODO Understand equity compensation basics
+** TODO Learn negotiation strategies for senior roles
+
+* Expense Tracking
+** NEXT Create simple monthly review template
+SCHEDULED: <2026-05-25 Mon>
+
+** TODO Categorize historical expenses
+** TODO Reduce unused subscriptions
+
+* Long-Term Goals
+** TODO Save for extended travel period
+** TODO Build relocation flexibility fund
+** TODO Create hardware replacement budget
+
+* Reading
+** TODO Book "The Psychology of Money"
+** TODO Book "I Will Teach You To Be Rich"
+** TODO Article "Index Funds for Beginners"
+
+* Notes
+- Simplicity is more sustainable than optimization.
+- Automation reduces missed payments.
+- Budgeting systems should require low maintenance.

@@ -1,0 +1,88 @@
+#+TITLE: Blog
+
+* Blog Ideas
+** TODO Write article "Building a Personal Workflow System in Org Mode" :writing:emacs:
+SCHEDULED: <2026-06-01 Mon>
+- Explain agenda workflow
+- Explain task states
+- Explain GTD adaptation
+- Include screenshots
+- Mention long-term maintainability
+
+** TODO Draft article "What ML Engineers Can Learn from Knowledge Management" :ml:pkm:
+DEADLINE: <2026-06-14 Sun>
+Topics:
+- Information overload
+- Retrieval vs understanding
+- Long-term notes
+- Incremental learning
+- Context accumulation
+
+** SOMEDAY Write article about debugging neural networks :ml:debugging:
+Potential sections:
+- Gradient explosions
+- Silent NaNs
+- Tensor shape mismatches
+- Dataset leakage
+- Distributed training failures
+
+** NEXT Create outline for article "Designing Better AI Coding Agents"
+SCHEDULED: <2026-05-22 Fri>
+- Planning loops
+- Tool usage
+- Failure recovery
+- Context management
+- Evaluation harnesses
+
+* Publishing Workflow
+** TODO Create reusable blog post template
+- Header image
+- TL;DR
+- Table of contents
+- Key takeaways
+- Further reading
+
+** TODO Improve screenshot workflow for Emacs articles
+- Consistent font
+- Window layout
+- SVG export
+- Terminal screenshots
+
+** IN-PROGRESS Build static site preview pipeline
+Started: [2026-05-18 Sun]
+Current blockers:
+- CSS organization
+- Syntax highlighting
+- Mobile rendering
+
+* Writing Skills
+** TODO Read "On Writing Well"
+** TODO Practice concise technical explanations
+** TODO Study strong introductions in technical blogs
+** TODO Analyze popular engineering posts on Hacker News
+
+* Technical Content Ideas
+** TODO Article "Practical Embedding Systems for Small Projects"
+** TODO Article "Evaluation Strategies for RAG Systems"
+** TODO Article "Why Personal Knowledge Systems Matter for Engineers"
+** TODO Compare vector databases for hobby projects
+** TODO Write about failure modes in LLM agents
+
+* Research Notes
+** Links
+- https://martinfowler.com/
+- https://simonwillison.net/
+- https://www.benkuhn.net/
+- https://lilianweng.github.io/
+
+** Observations
+- Good engineering writing is concrete.
+- Screenshots matter more than expected.
+- Architecture diagrams improve engagement.
+- Real examples outperform abstract explanations.
+
+* Content Pipeline
+** TODO Maintain backlog of small article ideas
+** TODO Publish shorter posts more frequently
+** TODO Reuse notes from org files as source material
+** WAITING Feedback from peer review on workflow article
