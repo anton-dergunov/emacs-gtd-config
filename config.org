@@ -51,6 +51,12 @@
         ps/org-avail-layout           "bullets")
 #+end_src
 
+** Conflict Settings
+#+begin_src emacs-lisp
+  (setq ps/conflicts-gap-minutes    15
+        ps/conflicts-include-past   nil)
+#+end_src
+
 * User Interface
 ** Basic UI Tweaks
 #+begin_src emacs-lisp
@@ -657,7 +663,7 @@
 
 ;; Run after agenda renders
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-append-emojis)
-(add-hook 'org-agenda-finalize-hook #'ps/org-conflicts--agenda-schedule-check)
+(add-hook 'org-agenda-finalize-hook #'ps/conflicts--agenda-schedule-check)
 #+end_src
 
 ** =org-journal=
@@ -1135,7 +1141,7 @@
   (define-key my-menu-bar-menu [my-cmd-avail]
               '(menu-item "Show Availability" ps/org-show-availability :help "Show free time slots from org agenda"))
   (define-key my-menu-bar-menu [my-cmd-conflicts]
-              '(menu-item "Check Conflicts" ps/org-show-conflicts :help "Show scheduling conflicts in org files"))
+              '(menu-item "Check Conflicts" ps/show-conflicts :help "Show scheduling conflicts in org files"))
 #+end_src
 
 * Session Management and Backups
