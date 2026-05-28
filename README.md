@@ -75,3 +75,19 @@ To run elisp tests locally:
 ```bash
 EMACS_BIN="/Applications/Emacs.app/Contents/MacOS/Emacs" ./scripts/org_test.sh
 ```
+
+
+## Running Emacs for Local Testing
+
+To run Emacs directly from this repository (without installing it to `~/.emacs.d`), use:
+
+```bash
+./scripts/run_emacs_dev.sh
+```
+
+This uses `--init-directory` to point Emacs at this repo, and automatically creates `local.el` on first run with org files pointing at `samples/realistic/`. Packages are downloaded into `elpa/` inside the repo on first launch.
+
+> **Note:** The script defaults to `/Applications/Emacs.app/Contents/MacOS/Emacs`. If your Emacs is installed elsewhere, override the path:
+> ```bash
+> EMACS_BIN=/path/to/emacs ./scripts/run_emacs_dev.sh
+> ```
