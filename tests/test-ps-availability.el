@@ -533,3 +533,20 @@ Returns the buffer."
             ;; Days should still be 99, not reset to defcustom
             (should (= ps/org-avail--cur-days 99)))
         (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-buttons-have-face ()
+  "Rendered header contains buttons with ps/org-avail--button-face."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (ps/org-avail--buffer-render)
+            ;; At least one button must exist in the buffer
+            (let ((btn (next-button (point-min))))
+              (should btn)
+              ;; That button must carry our custom face
+              (let ((face (button-get btn 'face)))
+                (should (or (eq face 'ps/org-avail--button-face)
+                            (and (listp face)
+                                 (memq 'ps/org-avail--button-face face)))))))
+        (kill-buffer buf)))))

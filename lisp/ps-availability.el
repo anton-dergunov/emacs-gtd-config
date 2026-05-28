@@ -37,6 +37,16 @@
   "Output layout: \"bullets\" (multi-line) or \"inline\" (one line per day)."
   :type '(choice (const "bullets") (const "inline")))
 
+;;; Button faces
+
+(defface ps/org-avail--button-face
+  '((t :inherit custom-button))
+  "Face for clickable buttons in the *Org Availability* header.")
+
+(defface ps/org-avail--button-active-face
+  '((t :inherit custom-button-pressed))
+  "Face for active/enabled toggle buttons in the *Org Availability* header.")
+
 ;;; Internal constant
 
 (defconst ps/org-avail--timestamp-re
@@ -325,55 +335,56 @@ RAW non-nil disables buffer expansion and minimum-duration filtering."
         (if (string= ps/org-avail--cur-layout "bullets") "inline" "bullets"))
   (ps/org-avail--buffer-render))
 
+(defun ps/org-avail--insert-button (label action-fn &optional active)
+  "Insert a styled button with LABEL that calls ACTION-FN when pressed.
+ACTIVE non-nil uses the pressed/active face instead of the normal button face."
+  (insert-button label
+                 'face       (if active 'ps/org-avail--button-active-face
+                               'ps/org-avail--button-face)
+                 'mouse-face 'custom-button-pressed-unraised
+                 'action     action-fn
+                 'follow-link t))
+
 (defun ps/org-avail--insert-header (buf)
   "Insert an interactive header row into BUF using current buffer-local settings."
   (with-current-buffer buf
     (insert "  Days: ")
-    (insert-button "[-]"
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (setq ps/org-avail--cur-days
-                                     (max 1 (1- ps/org-avail--cur-days)))
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
-    (insert (format " %d " ps/org-avail--cur-days))
-    (insert-button "[+]"
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (setq ps/org-avail--cur-days
-                                     (1+ ps/org-avail--cur-days))
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
-    (insert "   Weekends: ")
-    (insert-button (if ps/org-avail--cur-weekends "[on] " "[off]")
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (setq ps/org-avail--cur-weekends
-                                     (not ps/org-avail--cur-weekends))
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
-    (insert "   Time: ")
-    (insert-button (format "[%s]" ps/org-avail--cur-time-fmt)
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (setq ps/org-avail--cur-time-fmt
-                                     (if (string= ps/org-avail--cur-time-fmt "12h") "24h" "12h"))
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
-    (insert "   Layout: ")
-    (insert-button (format "[%s]" ps/org-avail--cur-layout)
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (setq ps/org-avail--cur-layout
-                                     (if (string= ps/org-avail--cur-layout "bullets") "inline" "bullets"))
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
-    (insert "   ")
-    (insert-button "[Refresh]"
-                   'action (lambda (_b)
-                             (with-current-buffer buf
-                               (ps/org-avail--buffer-render)))
-                   'follow-link t)
+    (ps/org-avail--insert-button
+     " − "
+     (lambda (_b) (with-current-buffer buf
+                    (setq ps/org-avail--cur-days (max 1 (1- ps/org-avail--cur-days)))
+                    (ps/org-avail--buffer-render))))
+    (insert (format "  %d  " ps/org-avail--cur-days))
+    (ps/org-avail--insert-button
+     " + "
+     (lambda (_b) (with-current-buffer buf
+                    (setq ps/org-avail--cur-days (1+ ps/org-avail--cur-days))
+                    (ps/org-avail--buffer-render))))
+    (insert "    Weekends: ")
+    (ps/org-avail--insert-button
+     (if ps/org-avail--cur-weekends " on  " " off ")
+     (lambda (_b) (with-current-buffer buf
+                    (setq ps/org-avail--cur-weekends (not ps/org-avail--cur-weekends))
+                    (ps/org-avail--buffer-render)))
+     ps/org-avail--cur-weekends)
+    (insert "    Time: ")
+    (ps/org-avail--insert-button
+     (format " %s " ps/org-avail--cur-time-fmt)
+     (lambda (_b) (with-current-buffer buf
+                    (setq ps/org-avail--cur-time-fmt
+                          (if (string= ps/org-avail--cur-time-fmt "12h") "24h" "12h"))
+                    (ps/org-avail--buffer-render))))
+    (insert "    Layout: ")
+    (ps/org-avail--insert-button
+     (format " %s " ps/org-avail--cur-layout)
+     (lambda (_b) (with-current-buffer buf
+                    (setq ps/org-avail--cur-layout
+                          (if (string= ps/org-avail--cur-layout "bullets") "inline" "bullets"))
+                    (ps/org-avail--buffer-render))))
+    (insert "    ")
+    (ps/org-avail--insert-button
+     " ↺ refresh "
+     (lambda (_b) (with-current-buffer buf (ps/org-avail--buffer-render))))
     (insert "\n")
     (insert (make-string 78 ?─))
     (insert "\n")))
