@@ -40,15 +40,14 @@ SCHEDULED: <2026-01-15 Thu 09:00-09:30 +1w>
   "Sample org content with Europe/London timezone.
 January dates used to avoid DST ambiguity (London = UTC+0 in winter).")
 
-(defconst ps/timezone-test--labeled-org
-  "#+TITLE: Labeled
+(defconst ps/timezone-test--ny-org
+  "#+TITLE: New York
 #+TIMEZONE: America/New_York
-#+TZ_LABEL: America New_York
 
 * Meeting
 SCHEDULED: <2026-01-15 Thu 10:00-11:00>
 "
-  "Org file with both #+TIMEZONE: and #+TZ_LABEL: headers.")
+  "Org file with America/New_York timezone.")
 
 (defconst ps/timezone-test--no-tz-org
   "#+TITLE: No timezone
@@ -120,7 +119,7 @@ SCHEDULED: <2026-01-20 Tue>
 (ert-deftest ps/timezone--read-file-timezone-new-york ()
   "read-file-timezone returns the correct zone for America/New_York."
   (ps/timezone-test--with-org-dir
-   `(("test.org" . ,ps/timezone-test--labeled-org))
+   `(("test.org" . ,ps/timezone-test--ny-org))
    (let ((tz (ps/timezone--read-file-timezone (expand-file-name "test.org" dir))))
      (should (equal tz "America/New_York")))))
 
@@ -149,7 +148,7 @@ SCHEDULED: <2026-01-20 Tue>
   "find-files returns all files with #+TIMEZONE: headers."
   (ps/timezone-test--with-org-dir
    `(("a.org" . ,ps/timezone-test--london-org)
-     ("b.org" . ,ps/timezone-test--labeled-org)
+     ("b.org" . ,ps/timezone-test--ny-org)
      ("c.org" . ,ps/timezone-test--no-tz-org))
    (let ((result (ps/timezone--find-files dir)))
      (should (= (length result) 2)))))
@@ -268,12 +267,6 @@ SCHEDULED: <2026-01-20 Tue>
   (let ((result (ps/timezone--shift-content
                  ps/timezone-test--london-org "Europe/London" "UTC")))
     (should (string-match "^#\\+TIMEZONE: UTC$" result))))
-
-(ert-deftest ps/timezone--shift-content-updates-tz-label ()
-  "#+TZ_LABEL: header is updated when present."
-  (let ((result (ps/timezone--shift-content
-                 ps/timezone-test--labeled-org "America/New_York" "UTC")))
-    (should (string-match "^#\\+TZ_LABEL: UTC$" result))))
 
 (ert-deftest ps/timezone--shift-content-shifts-timestamps ()
   "Timed timestamps are shifted; date-only timestamps are unchanged."

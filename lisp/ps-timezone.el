@@ -170,7 +170,7 @@ EXTRA is any trailing content inside the timestamp (e.g. \" +1w\") or nil."
 
 (defun ps/timezone--shift-content (content from-tz to-tz)
   "Return CONTENT with all timed timestamps shifted from FROM-TZ to TO-TZ.
-Also updates #+TIMEZONE: and #+TZ_LABEL: headers."
+Also update the #+TIMEZONE: header."
   (with-temp-buffer
     (insert content)
     ;; Shift timestamps
@@ -192,10 +192,6 @@ Also updates #+TIMEZONE: and #+TZ_LABEL: headers."
     (goto-char (point-min))
     (when (re-search-forward "^#\\+TIMEZONE:.*$" nil t)
       (replace-match (concat "#+TIMEZONE: " to-tz) t t))
-    ;; Update #+TZ_LABEL: header if present
-    (goto-char (point-min))
-    (when (re-search-forward "^#\\+TZ_LABEL:.*$" nil t)
-      (replace-match (concat "#+TZ_LABEL: " to-tz) t t))
     (buffer-string)))
 
 (defun ps/timezone--apply-all (file-tz-alist to-tz)
