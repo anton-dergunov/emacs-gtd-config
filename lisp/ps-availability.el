@@ -266,18 +266,152 @@ RAW non-nil disables buffer expansion and minimum-duration filtering."
             (push line lines)))))
     (mapconcat #'identity (nreverse lines) "\n")))
 
-(defun ps/org-show-availability ()
-  "Show availability from the org Plans directory in a dedicated buffer."
+;;; Interactive buffer mode
+
+(defvar-local ps/org-avail--cur-directory nil
+  "Org Plans directory for the current availability buffer session.")
+(defvar-local ps/org-avail--cur-days nil)
+(defvar-local ps/org-avail--cur-weekends nil)
+(defvar-local ps/org-avail--cur-time-fmt nil)
+(defvar-local ps/org-avail--cur-layout nil)
+
+(define-derived-mode ps-availability-mode special-mode "Availability"
+  "Major mode for the *Org Availability* buffer.
+\\{ps-availability-mode-map}")
+
+(let ((map ps-availability-mode-map))
+  (define-key map (kbd "g") #'ps/org-avail--buffer-refresh)
+  (define-key map (kbd "r") #'ps/org-avail--buffer-refresh)
+  (define-key map (kbd "+") #'ps/org-avail--buffer-more-days)
+  (define-key map (kbd "-") #'ps/org-avail--buffer-fewer-days)
+  (define-key map (kbd "w") #'ps/org-avail--buffer-toggle-weekends)
+  (define-key map (kbd "t") #'ps/org-avail--buffer-toggle-time-fmt)
+  (define-key map (kbd "l") #'ps/org-avail--buffer-toggle-layout))
+
+(defun ps/org-avail--buffer-refresh ()
+  "Re-render the availability buffer with current settings."
   (interactive)
-  (let ((output (ps/org-avail-generate
-                 (concat my-org-base-directory "Plans/"))))
-    (with-current-buffer (get-buffer-create "*Org Availability*")
-      (read-only-mode -1)
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--buffer-more-days ()
+  "Increase the day count by 1 and refresh."
+  (interactive)
+  (setq ps/org-avail--cur-days (1+ ps/org-avail--cur-days))
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--buffer-fewer-days ()
+  "Decrease the day count by 1 (minimum 1) and refresh."
+  (interactive)
+  (setq ps/org-avail--cur-days (max 1 (1- ps/org-avail--cur-days)))
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--buffer-toggle-weekends ()
+  "Toggle weekend inclusion and refresh."
+  (interactive)
+  (setq ps/org-avail--cur-weekends (not ps/org-avail--cur-weekends))
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--buffer-toggle-time-fmt ()
+  "Toggle between 12h and 24h time format and refresh."
+  (interactive)
+  (setq ps/org-avail--cur-time-fmt
+        (if (string= ps/org-avail--cur-time-fmt "12h") "24h" "12h"))
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--buffer-toggle-layout ()
+  "Toggle between bullets and inline layout and refresh."
+  (interactive)
+  (setq ps/org-avail--cur-layout
+        (if (string= ps/org-avail--cur-layout "bullets") "inline" "bullets"))
+  (ps/org-avail--buffer-render))
+
+(defun ps/org-avail--insert-header (buf)
+  "Insert an interactive header row into BUF using current buffer-local settings."
+  (with-current-buffer buf
+    (insert "  Days: ")
+    (insert-button "[-]"
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (setq ps/org-avail--cur-days
+                                     (max 1 (1- ps/org-avail--cur-days)))
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert (format " %d " ps/org-avail--cur-days))
+    (insert-button "[+]"
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (setq ps/org-avail--cur-days
+                                     (1+ ps/org-avail--cur-days))
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert "   Weekends: ")
+    (insert-button (if ps/org-avail--cur-weekends "[on] " "[off]")
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (setq ps/org-avail--cur-weekends
+                                     (not ps/org-avail--cur-weekends))
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert "   Time: ")
+    (insert-button (format "[%s]" ps/org-avail--cur-time-fmt)
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (setq ps/org-avail--cur-time-fmt
+                                     (if (string= ps/org-avail--cur-time-fmt "12h") "24h" "12h"))
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert "   Layout: ")
+    (insert-button (format "[%s]" ps/org-avail--cur-layout)
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (setq ps/org-avail--cur-layout
+                                     (if (string= ps/org-avail--cur-layout "bullets") "inline" "bullets"))
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert "   ")
+    (insert-button "[Refresh]"
+                   'action (lambda (_b)
+                             (with-current-buffer buf
+                               (ps/org-avail--buffer-render)))
+                   'follow-link t)
+    (insert "\n")
+    (insert (make-string 78 ?─))
+    (insert "\n")))
+
+(defun ps/org-avail--buffer-render ()
+  "Redraw the *Org Availability* buffer with current session settings."
+  (let ((buf (current-buffer)))
+    (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert output)
-      (read-only-mode 1)
-      (goto-char (point-min)))
-    (display-buffer "*Org Availability*")))
+      (ps/org-avail--insert-header buf)
+      (insert (ps/org-avail-generate
+               ps/org-avail--cur-directory
+               :days     ps/org-avail--cur-days
+               :weekends ps/org-avail--cur-weekends
+               :time-fmt ps/org-avail--cur-time-fmt
+               :layout   ps/org-avail--cur-layout))
+      (insert "\n"))
+    (goto-char (point-min))))
+
+(defun ps/org-show-availability ()
+  "Show availability from the org Plans directory in a dedicated buffer.
+Settings persist for the session; use the header buttons or keybindings
+to adjust: +/- days, w weekends, t time format, l layout, g refresh."
+  (interactive)
+  (let ((buf (get-buffer-create "*Org Availability*")))
+    (with-current-buffer buf
+      (unless (eq major-mode 'ps-availability-mode)
+        (ps-availability-mode))
+      ;; Initialize session settings from defcustoms on first call only
+      (unless ps/org-avail--cur-directory
+        (setq ps/org-avail--cur-days     ps/org-avail-days
+              ps/org-avail--cur-weekends ps/org-avail-include-weekends
+              ps/org-avail--cur-time-fmt ps/org-avail-time-format
+              ps/org-avail--cur-layout   ps/org-avail-layout))
+      (setq ps/org-avail--cur-directory
+            (concat my-org-base-directory "Plans/"))
+      (ps/org-avail--buffer-render))
+    (display-buffer buf)))
 
 ;;; CLI argument parser
 

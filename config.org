@@ -38,6 +38,18 @@
   (require 'ps-availability)
 #+end_src
 
+** Availability Settings
+#+begin_src emacs-lisp
+  (setq ps/org-avail-days             15
+        ps/org-avail-work-start       "10:00"
+        ps/org-avail-work-end         "22:00"
+        ps/org-avail-buffer-minutes   15
+        ps/org-avail-min-duration     30
+        ps/org-avail-include-weekends nil
+        ps/org-avail-time-format      "12h"
+        ps/org-avail-layout           "bullets")
+#+end_src
+
 * User Interface
 ** Basic UI Tweaks
 #+begin_src emacs-lisp
@@ -610,8 +622,9 @@
        (when (eq (process-status p) 'exit)
          (when (buffer-live-p (process-buffer p))
            (with-current-buffer (process-buffer p)
-             (let* ((raw (buffer-string))
-                    (parsed (ignore-errors (json-read-from-string raw))))
+             (let* ((lines (split-string (string-trim (buffer-string)) "\n" t "[ \t\r]*"))
+                    (last-line (car (last lines)))
+                    (parsed (ignore-errors (json-read-from-string (or last-line "")))))
                (if parsed
                    (funcall callback parsed)
                  (message "[emoji-matcher] Failed to parse output:\n%s" raw))))

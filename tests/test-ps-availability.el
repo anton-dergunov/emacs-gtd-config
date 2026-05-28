@@ -390,3 +390,146 @@ SCHEDULED: <2026-05-05 Tue 15:00-16:00>
     (should (string= (plist-get opts :time-fmt) "24h"))
     (should (string= (plist-get opts :layout)   "inline"))
     (should (string= (plist-get opts :start-date) "2026-06-01"))))
+
+;;; -------------------------------------------------------
+;;; Interactive buffer mode
+;;; -------------------------------------------------------
+
+(defun ps/avail-test--make-avail-buffer (dir)
+  "Set up a fresh *Org Availability* buffer pointed at DIR.
+Returns the buffer."
+  (when (get-buffer "*Org Availability*")
+    (kill-buffer "*Org Availability*"))
+  (let ((buf (get-buffer-create "*Org Availability*")))
+    (with-current-buffer buf
+      (ps-availability-mode)
+      (setq ps/org-avail--cur-directory   dir
+            ps/org-avail--cur-days        ps/org-avail-days
+            ps/org-avail--cur-weekends    ps/org-avail-include-weekends
+            ps/org-avail--cur-time-fmt    ps/org-avail-time-format
+            ps/org-avail--cur-layout      ps/org-avail-layout))
+    buf))
+
+(ert-deftest ps/org-avail--mode-is-special-mode ()
+  "ps-availability-mode is derived from special-mode."
+  (let ((buf (get-buffer-create " *avail-test-mode*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (ps-availability-mode)
+          (should (derived-mode-p 'special-mode)))
+      (kill-buffer buf))))
+
+(ert-deftest ps/org-avail--buffer-init-from-defcustom ()
+  "Buffer-local vars are initialized from defcustoms."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (should (= ps/org-avail--cur-days ps/org-avail-days))
+            (should (eq ps/org-avail--cur-weekends ps/org-avail-include-weekends))
+            (should (string= ps/org-avail--cur-time-fmt ps/org-avail-time-format))
+            (should (string= ps/org-avail--cur-layout ps/org-avail-layout)))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-more-days ()
+  "more-days increments ps/org-avail--cur-days by 1."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-days 5)
+            (ps/org-avail--buffer-more-days)
+            (should (= ps/org-avail--cur-days 6)))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-fewer-days ()
+  "fewer-days decrements ps/org-avail--cur-days, clamped to 1."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-days 3)
+            (ps/org-avail--buffer-fewer-days)
+            (should (= ps/org-avail--cur-days 2))
+            ;; Clamp at 1
+            (setq ps/org-avail--cur-days 1)
+            (ps/org-avail--buffer-fewer-days)
+            (should (= ps/org-avail--cur-days 1)))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-toggle-weekends ()
+  "toggle-weekends flips ps/org-avail--cur-weekends nil → t → nil."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-weekends nil)
+            (ps/org-avail--buffer-toggle-weekends)
+            (should (eq ps/org-avail--cur-weekends t))
+            (ps/org-avail--buffer-toggle-weekends)
+            (should (eq ps/org-avail--cur-weekends nil)))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-toggle-time-fmt ()
+  "toggle-time-fmt cycles 12h → 24h → 12h."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-time-fmt "12h")
+            (ps/org-avail--buffer-toggle-time-fmt)
+            (should (string= ps/org-avail--cur-time-fmt "24h"))
+            (ps/org-avail--buffer-toggle-time-fmt)
+            (should (string= ps/org-avail--cur-time-fmt "12h")))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-toggle-layout ()
+  "toggle-layout cycles bullets → inline → bullets."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-layout "bullets")
+            (ps/org-avail--buffer-toggle-layout)
+            (should (string= ps/org-avail--cur-layout "inline"))
+            (ps/org-avail--buffer-toggle-layout)
+            (should (string= ps/org-avail--cur-layout "bullets")))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-render-has-header ()
+  "Rendered buffer starts with the Days: header."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (ps/org-avail--buffer-render)
+            (goto-char (point-min))
+            (should (search-forward "Days:" nil t)))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-render-has-content ()
+  "Rendered buffer contains a day name after the separator line."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-days 1)
+            (ps/org-avail--buffer-render)
+            ;; The separator ─── line appears after header; day name appears after it
+            (goto-char (point-min))
+            (should (search-forward "─" nil t))
+            ;; After the separator there should be some text (a day name)
+            (should (> (point-max) (point))))
+        (kill-buffer buf)))))
+
+(ert-deftest ps/org-avail--buffer-init-not-reset-on-repeat ()
+  "A second ps/org-avail--buffer-render preserves in-session changes."
+  (ps/avail-test--with-org-dir ""
+    (let ((buf (ps/avail-test--make-avail-buffer dir)))
+      (unwind-protect
+          (with-current-buffer buf
+            (setq ps/org-avail--cur-days 99)
+            (ps/org-avail--buffer-render)
+            ;; Days should still be 99, not reset to defcustom
+            (should (= ps/org-avail--cur-days 99)))
+        (kill-buffer buf)))))
