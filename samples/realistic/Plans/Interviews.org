@@ -1,6 +1,5 @@
 #+TITLE: Interviews
 #+TIMEZONE: Europe/London
-#+TZ_LABEL: Europe/London
 
 * Redwood AI - Senior ML Engineer
 ** DONE Recruiter screening call

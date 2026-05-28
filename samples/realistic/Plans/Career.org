@@ -1,6 +1,5 @@
 #+TITLE: Career
 #+TIMEZONE: Europe/London
-#+TZ_LABEL: Europe/London
 
 * Career Vision
 ** TODO [#A] Define long-term specialization strategy        :career:planning:
