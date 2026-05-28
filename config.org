@@ -37,6 +37,7 @@
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (require 'ps-availability)
   (require 'ps-org-conflicts)
+  (require 'ps-timezone)
 #+end_src
 
 ** Availability Settings
@@ -1142,6 +1143,8 @@
               '(menu-item "Show Availability" ps/org-show-availability :help "Show free time slots from org agenda"))
   (define-key my-menu-bar-menu [my-cmd-conflicts]
               '(menu-item "Check Conflicts" ps/show-conflicts :help "Show scheduling conflicts in org files"))
+  (define-key my-menu-bar-menu [my-cmd-timezone]
+              '(menu-item "Shift Timezones" ps/shift-timezone :help "Shift org timestamps to a new timezone"))
 #+end_src
 
 * Session Management and Backups
