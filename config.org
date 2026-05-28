@@ -36,6 +36,7 @@
 #+begin_src emacs-lisp
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (require 'ps-availability)
+  (require 'ps-org-conflicts)
 #+end_src
 
 ** Availability Settings
@@ -656,6 +657,7 @@
 
 ;; Run after agenda renders
 (add-hook 'org-agenda-finalize-hook #'my/org-agenda-append-emojis)
+(add-hook 'org-agenda-finalize-hook #'ps/org-conflicts--agenda-schedule-check)
 #+end_src
 
 ** =org-journal=
@@ -1132,6 +1134,8 @@
               '(menu-item "Expand DONE tasks" my/org-expand-done))
   (define-key my-menu-bar-menu [my-cmd-avail]
               '(menu-item "Show Availability" ps/org-show-availability :help "Show free time slots from org agenda"))
+  (define-key my-menu-bar-menu [my-cmd-conflicts]
+              '(menu-item "Check Conflicts" ps/org-show-conflicts :help "Show scheduling conflicts in org files"))
 #+end_src
 
 * Session Management and Backups

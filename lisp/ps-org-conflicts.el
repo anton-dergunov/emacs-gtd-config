@@ -1,0 +1,431 @@
+;;; ps-org-conflicts.el --- Org scheduling conflict detection -*- lexical-binding: t; -*-
+
+(require 'cl-lib)
+(require 'calendar)
+
+;;; Customization
+
+(defcustom ps/org-conflicts-gap-minutes 15
+  "Minimum gap between consecutive tasks in minutes to consider sufficient."
+  :type 'integer)
+
+;;; Faces
+
+(defface ps/org-conflicts--button-face
+  '((t :inherit custom-button))
+  "Face for clickable buttons in the *Org Conflicts* header.")
+
+(defface ps/org-conflicts--button-active-face
+  '((t :inherit custom-button-pressed))
+  "Face for active/enabled toggle buttons in the *Org Conflicts* header.")
+
+;;; Constants
+
+(defconst ps/org-conflicts--timestamp-re
+  (concat "<\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)"
+          " [A-Za-z]+"
+          " \\([0-9]\\{2\\}:[0-9]\\{2\\}\\)-\\([0-9]\\{2\\}:[0-9]\\{2\\}\\)>")
+  "Regexp matching org timed timestamps with explicit time ranges.
+Groups: 1=date (YYYY-MM-DD), 2=start (HH:MM), 3=end (HH:MM).")
+
+(defconst ps/org-conflicts--heading-re
+  "^\\*+ +\\(.*\\)"
+  "Regexp matching org headings; group 1 is the title text.")
+
+;;; Data structure
+
+(cl-defstruct (ps/org-conflict--event
+               (:constructor ps/org-conflict--make-event))
+  "A timed org task with location, title, and time range."
+  file line title month day year start end)
+
+;;; Time/date helpers
+
+(defun ps/org-conflicts--parse-time (str)
+  "Parse HH:MM string STR to minutes since midnight."
+  (let* ((parts (split-string str ":"))
+         (h (string-to-number (car parts)))
+         (m (string-to-number (cadr parts))))
+    (+ (* h 60) m)))
+
+(defun ps/org-conflicts--parse-date (str)
+  "Parse YYYY-MM-DD string STR to (month day year) list."
+  (let* ((parts (split-string str "-"))
+         (year  (string-to-number (nth 0 parts)))
+         (month (string-to-number (nth 1 parts)))
+         (day   (string-to-number (nth 2 parts))))
+    (list month day year)))
+
+(defun ps/org-conflicts--format-time (mins)
+  "Format MINS (minutes since midnight) as HH:MM string."
+  (format "%02d:%02d" (/ mins 60) (% mins 60)))
+
+(defun ps/org-conflicts--today ()
+  "Return today as (month day year) list."
+  (let ((now (decode-time)))
+    (list (nth 4 now) (nth 3 now) (nth 5 now))))
+
+(defun ps/org-conflicts--date< (a b)
+  "Return t if date A is strictly earlier than date B.
+Dates are (month day year) lists."
+  (let ((ya (nth 2 a)) (yb (nth 2 b))
+        (ma (nth 0 a)) (mb (nth 0 b))
+        (da (nth 1 a)) (db (nth 1 b)))
+    (or (< ya yb)
+        (and (= ya yb) (< ma mb))
+        (and (= ya yb) (= ma mb) (< da db)))))
+
+(defun ps/org-conflicts--event-date (event)
+  "Return the date of EVENT as a (month day year) list."
+  (list (ps/org-conflict--event-month event)
+        (ps/org-conflict--event-day event)
+        (ps/org-conflict--event-year event)))
+
+;;; Parsing
+
+(defun ps/org-conflicts--extract-events-from-file (path)
+  "Extract timed events from the org file at PATH.
+Returns a list of `ps/org-conflict--event' structs."
+  (let ((events '())
+        (current-title nil))
+    (with-temp-buffer
+      (insert-file-contents path)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let* ((line-num (line-number-at-pos))
+               (line (buffer-substring-no-properties
+                      (point) (line-end-position))))
+          (when (string-match ps/org-conflicts--heading-re line)
+            (setq current-title (string-trim (match-string 1 line))))
+          (when (and current-title
+                     (string-match ps/org-conflicts--timestamp-re line))
+            (let* ((date-str  (match-string 1 line))
+                   (start-str (match-string 2 line))
+                   (end-str   (match-string 3 line))
+                   (date  (ps/org-conflicts--parse-date date-str))
+                   (start (ps/org-conflicts--parse-time start-str))
+                   (end   (ps/org-conflicts--parse-time end-str)))
+              (push (ps/org-conflict--make-event
+                     :file  path
+                     :line  line-num
+                     :title current-title
+                     :month (nth 0 date)
+                     :day   (nth 1 date)
+                     :year  (nth 2 date)
+                     :start start
+                     :end   end)
+                    events)))
+          (forward-line 1))))
+    (nreverse events)))
+
+(defun ps/org-conflicts--load-events (directory)
+  "Load timed events from all .org files in DIRECTORY (recursive).
+Returns a list of `ps/org-conflict--event' structs."
+  (let ((events '()))
+    (dolist (file (directory-files-recursively directory "\\.org$"))
+      (setq events (append events
+                            (ps/org-conflicts--extract-events-from-file file))))
+    events))
+
+;;; Conflict detection
+
+(defun ps/org-conflicts--group-by-day (events)
+  "Group EVENTS by date.
+Returns a sorted alist of ((month day year) . events-list)."
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (e events)
+      (let ((key (ps/org-conflicts--event-date e)))
+        (puthash key (append (gethash key table '()) (list e)) table)))
+    (let ((result '()))
+      (maphash (lambda (k v) (push (cons k v) result)) table)
+      (sort result (lambda (a b) (ps/org-conflicts--date< (car a) (car b)))))))
+
+(defun ps/org-conflicts--find-overlaps (events)
+  "Find overlapping event pairs within EVENTS.
+Returns a list of (event-a event-b) pairs.
+An overlap occurs when event-b starts before event-a ends."
+  (let* ((sorted (sort (copy-sequence events)
+                       (lambda (a b)
+                         (< (ps/org-conflict--event-start a)
+                            (ps/org-conflict--event-start b)))))
+         (n (length sorted))
+         (overlaps '()))
+    (dotimes (i n)
+      (let ((a (nth i sorted))
+            (j (1+ i)))
+        (while (and (< j n)
+                    (< (ps/org-conflict--event-start (nth j sorted))
+                       (ps/org-conflict--event-end a)))
+          (push (list a (nth j sorted)) overlaps)
+          (setq j (1+ j)))))
+    (nreverse overlaps)))
+
+(defun ps/org-conflicts--find-small-gaps (events gap-minutes)
+  "Find consecutive event pairs in EVENTS with a gap smaller than GAP-MINUTES.
+Returns a list of (event-a event-b gap-in-minutes) triples.
+Only non-negative gaps (i.e. non-overlapping pairs) are considered."
+  (let* ((sorted (sort (copy-sequence events)
+                       (lambda (a b)
+                         (< (ps/org-conflict--event-start a)
+                            (ps/org-conflict--event-start b)))))
+         (n (length sorted))
+         (gaps '()))
+    (dotimes (i (max 0 (1- n)))
+      (let* ((a (nth i sorted))
+             (b (nth (1+ i) sorted))
+             (gap (- (ps/org-conflict--event-start b)
+                     (ps/org-conflict--event-end a))))
+        (when (and (>= gap 0) (< gap gap-minutes))
+          (push (list a b gap) gaps))))
+    (nreverse gaps)))
+
+;;; Public API
+
+(defun ps/org-conflicts--find-all (directory gap-minutes include-past)
+  "Find all scheduling conflicts in DIRECTORY.
+GAP-MINUTES is the threshold below which a gap is flagged.
+INCLUDE-PAST non-nil includes events from before today.
+Returns a plist with :overlaps and :gaps, each an alist of (date . pairs)."
+  (let* ((events (ps/org-conflicts--load-events directory))
+         (events (if include-past
+                     events
+                   (let ((today (ps/org-conflicts--today)))
+                     (cl-remove-if
+                      (lambda (e)
+                        (ps/org-conflicts--date< (ps/org-conflicts--event-date e) today))
+                      events))))
+         (by-day (ps/org-conflicts--group-by-day events))
+         (all-overlaps '())
+         (all-gaps '()))
+    (dolist (entry by-day)
+      (let* ((day-key    (car entry))
+             (day-events (cdr entry))
+             (overlaps   (ps/org-conflicts--find-overlaps day-events))
+             (gaps       (ps/org-conflicts--find-small-gaps day-events gap-minutes)))
+        (when overlaps (push (cons day-key overlaps) all-overlaps))
+        (when gaps     (push (cons day-key gaps)     all-gaps))))
+    (list :overlaps (nreverse all-overlaps)
+          :gaps     (nreverse all-gaps))))
+
+(defun ps/org-conflicts--count (result)
+  "Return the total number of conflict entries in RESULT plist."
+  (let ((n 0))
+    (dolist (entry (plist-get result :overlaps)) (cl-incf n (length (cdr entry))))
+    (dolist (entry (plist-get result :gaps))     (cl-incf n (length (cdr entry))))
+    n))
+
+;;; Formatting
+
+(defun ps/org-conflicts--format-date (date)
+  "Format DATE (month day year) as YYYY-MM-DD string."
+  (format "%04d-%02d-%02d" (nth 2 date) (nth 0 date) (nth 1 date)))
+
+(defun ps/org-conflicts--format-event-label (event)
+  "Format EVENT as 'TITLE | HH:MM-HH:MM (basename:line)'."
+  (format "%s | %s-%s (%s:%d)"
+          (ps/org-conflict--event-title event)
+          (ps/org-conflicts--format-time (ps/org-conflict--event-start event))
+          (ps/org-conflicts--format-time (ps/org-conflict--event-end event))
+          (file-name-nondirectory (ps/org-conflict--event-file event))
+          (ps/org-conflict--event-line event)))
+
+;;; Interactive buffer
+
+(defvar-local ps/org-conflicts--cur-directory nil
+  "Org directory for the current *Org Conflicts* session.")
+(defvar-local ps/org-conflicts--cur-gap nil
+  "Gap threshold (minutes) for the current session.")
+(defvar-local ps/org-conflicts--cur-include-past nil
+  "Whether to include past events in the current session.")
+
+(define-derived-mode ps-conflicts-mode special-mode "Conflicts"
+  "Major mode for the *Org Conflicts* buffer.
+\\{ps-conflicts-mode-map}")
+
+(let ((map ps-conflicts-mode-map))
+  (define-key map (kbd "g")   #'ps/org-conflicts--buffer-refresh)
+  (define-key map (kbd "r")   #'ps/org-conflicts--buffer-refresh)
+  (define-key map (kbd "+")   #'ps/org-conflicts--buffer-more-gap)
+  (define-key map (kbd "-")   #'ps/org-conflicts--buffer-less-gap)
+  (define-key map (kbd "p")   #'ps/org-conflicts--buffer-toggle-past)
+  (define-key map (kbd "RET") #'ps/org-conflicts--visit-at-point))
+
+(defun ps/org-conflicts--buffer-refresh ()
+  "Re-render the conflicts buffer."
+  (interactive)
+  (ps/org-conflicts--buffer-render))
+
+(defun ps/org-conflicts--buffer-more-gap ()
+  "Increase gap threshold by 5 minutes and refresh."
+  (interactive)
+  (setq ps/org-conflicts--cur-gap (+ ps/org-conflicts--cur-gap 5))
+  (ps/org-conflicts--buffer-render))
+
+(defun ps/org-conflicts--buffer-less-gap ()
+  "Decrease gap threshold by 5 minutes (minimum 0) and refresh."
+  (interactive)
+  (setq ps/org-conflicts--cur-gap (max 0 (- ps/org-conflicts--cur-gap 5)))
+  (ps/org-conflicts--buffer-render))
+
+(defun ps/org-conflicts--buffer-toggle-past ()
+  "Toggle inclusion of past events and refresh."
+  (interactive)
+  (setq ps/org-conflicts--cur-include-past (not ps/org-conflicts--cur-include-past))
+  (ps/org-conflicts--buffer-render))
+
+(defun ps/org-conflicts--visit-at-point ()
+  "Activate the button at point, jumping to the conflict location."
+  (interactive)
+  (let ((btn (button-at (point))))
+    (when btn (button-activate btn))))
+
+(defun ps/org-conflicts--insert-button (label action &optional active)
+  "Insert a styled button with LABEL that calls ACTION when pressed.
+ACTIVE non-nil renders it in the pressed/active face."
+  (insert-button label
+                 'face       (if active
+                                 'ps/org-conflicts--button-active-face
+                               'ps/org-conflicts--button-face)
+                 'mouse-face 'custom-button-pressed-unraised
+                 'action     action
+                 'follow-link t))
+
+(defun ps/org-conflicts--insert-header (buf)
+  "Insert the interactive control header into BUF."
+  (with-current-buffer buf
+    (insert "  Gap: ")
+    (ps/org-conflicts--insert-button
+     " − "
+     (lambda (_b)
+       (with-current-buffer buf
+         (setq ps/org-conflicts--cur-gap (max 0 (- ps/org-conflicts--cur-gap 5)))
+         (ps/org-conflicts--buffer-render))))
+    (insert (format "  %d min  " ps/org-conflicts--cur-gap))
+    (ps/org-conflicts--insert-button
+     " + "
+     (lambda (_b)
+       (with-current-buffer buf
+         (setq ps/org-conflicts--cur-gap (+ ps/org-conflicts--cur-gap 5))
+         (ps/org-conflicts--buffer-render))))
+    (insert "    Include past: ")
+    (ps/org-conflicts--insert-button
+     (if ps/org-conflicts--cur-include-past " on  " " off ")
+     (lambda (_b)
+       (with-current-buffer buf
+         (setq ps/org-conflicts--cur-include-past
+               (not ps/org-conflicts--cur-include-past))
+         (ps/org-conflicts--buffer-render)))
+     ps/org-conflicts--cur-include-past)
+    (insert "    ")
+    (ps/org-conflicts--insert-button
+     " ↺ refresh "
+     (lambda (_b) (with-current-buffer buf (ps/org-conflicts--buffer-render))))
+    (insert "\n")
+    (insert (make-string 78 ?─))
+    (insert "\n")))
+
+(defun ps/org-conflicts--insert-event-button (event)
+  "Insert EVENT as a clickable button that visits its location in the org file."
+  (let ((label (ps/org-conflicts--format-event-label event))
+        (file  (ps/org-conflict--event-file event))
+        (line  (ps/org-conflict--event-line event)))
+    (insert-button label
+                   'face        'default
+                   'mouse-face  'highlight
+                   'action      (lambda (_b)
+                                  (find-file-other-window file)
+                                  (goto-char (point-min))
+                                  (forward-line (1- line)))
+                   'follow-link t)))
+
+(defun ps/org-conflicts--buffer-render ()
+  "Redraw the *Org Conflicts* buffer with current session settings."
+  (let ((buf (current-buffer))
+        (inhibit-read-only t))
+    (erase-buffer)
+    (ps/org-conflicts--insert-header buf)
+    (let* ((result   (ps/org-conflicts--find-all
+                      ps/org-conflicts--cur-directory
+                      ps/org-conflicts--cur-gap
+                      ps/org-conflicts--cur-include-past))
+           (overlaps (plist-get result :overlaps))
+           (gaps     (plist-get result :gaps)))
+      (if (and (null overlaps) (null gaps))
+          (insert "No conflicts found.\n")
+        (let* ((all-days
+                (sort (cl-remove-duplicates
+                       (append (mapcar #'car overlaps) (mapcar #'car gaps))
+                       :test #'equal)
+                      #'ps/org-conflicts--date<)))
+          (dolist (day all-days)
+            (insert (format "\n=== %s ===\n" (ps/org-conflicts--format-date day)))
+            (let ((day-overlaps (cdr (assoc day overlaps)))
+                  (day-gaps     (cdr (assoc day gaps))))
+              (when day-overlaps
+                (insert "\nOverlapping tasks:\n")
+                (dolist (pair day-overlaps)
+                  (insert "  - ")
+                  (ps/org-conflicts--insert-event-button (nth 0 pair))
+                  (insert "\n    ")
+                  (ps/org-conflicts--insert-event-button (nth 1 pair))
+                  (insert "\n")))
+              (when day-gaps
+                (insert (format "\nTasks with gap < %d min:\n"
+                                ps/org-conflicts--cur-gap))
+                (dolist (triple day-gaps)
+                  (insert (format "  - (%d min)\n" (nth 2 triple)))
+                  (insert "    ")
+                  (ps/org-conflicts--insert-event-button (nth 0 triple))
+                  (insert "\n    ")
+                  (ps/org-conflicts--insert-event-button (nth 1 triple))
+                  (insert "\n"))))))))
+    (goto-char (point-min))))
+
+(defun ps/org-show-conflicts ()
+  "Show scheduling conflicts from the org Plans directory in a dedicated buffer.
+Use +/- to adjust the gap threshold, p to toggle past events, g/r to refresh.
+Press RET or click on any task to jump to it in its org file."
+  (interactive)
+  (let ((buf (get-buffer-create "*Org Conflicts*")))
+    (with-current-buffer buf
+      (unless (eq major-mode 'ps-conflicts-mode)
+        (ps-conflicts-mode))
+      (unless ps/org-conflicts--cur-directory
+        (setq ps/org-conflicts--cur-gap          ps/org-conflicts-gap-minutes
+              ps/org-conflicts--cur-include-past nil))
+      (setq ps/org-conflicts--cur-directory
+            (concat my-org-base-directory "Plans/"))
+      (ps/org-conflicts--buffer-render))
+    (display-buffer buf)))
+
+;;; Agenda integration (async via idle timer)
+
+(defvar ps/org-conflicts--agenda-timer nil
+  "Pending idle timer for the agenda conflict check.")
+
+(defun ps/org-conflicts--agenda-check ()
+  "Check for conflicts and append a summary line at the bottom of the agenda buffer."
+  (when (and (boundp 'my-org-base-directory)
+             (buffer-live-p (get-buffer org-agenda-buffer-name)))
+    (let* ((directory (concat my-org-base-directory "Plans/"))
+           (result (ps/org-conflicts--find-all
+                    directory ps/org-conflicts-gap-minutes nil))
+           (n (ps/org-conflicts--count result)))
+      (when (> n 0)
+        (with-current-buffer (get-buffer org-agenda-buffer-name)
+          (let ((inhibit-read-only t))
+            (save-excursion
+              (goto-char (point-max))
+              (insert (format "\n⚠  %d conflict%s — GTD > Check Conflicts\n"
+                              n (if (= n 1) "" "s"))))))))))
+
+(defun ps/org-conflicts--agenda-schedule-check ()
+  "Schedule an idle-time conflict check after the agenda finishes rendering.
+Cancels any previously pending check first."
+  (when ps/org-conflicts--agenda-timer
+    (cancel-timer ps/org-conflicts--agenda-timer))
+  (setq ps/org-conflicts--agenda-timer
+        (run-with-idle-timer 1.0 nil #'ps/org-conflicts--agenda-check)))
+
+(provide 'ps-org-conflicts)
+;;; ps-org-conflicts.el ends here
