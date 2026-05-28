@@ -32,6 +32,12 @@
       (user-error "Missing required local config file: %s" local-file)))
 #+end_src
 
+** Load Local Modules
+#+begin_src emacs-lisp
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  (require 'ps-availability)
+#+end_src
+
 * User Interface
 ** Basic UI Tweaks
 #+begin_src emacs-lisp
@@ -1111,6 +1117,8 @@
               '(menu-item "Collapse DONE tasks" my/org-collapse-done))
   (define-key my-menu-bar-menu [my-cmd0]
               '(menu-item "Expand DONE tasks" my/org-expand-done))
+  (define-key my-menu-bar-menu [my-cmd-avail]
+              '(menu-item "Show Availability" ps/org-show-availability :help "Show free time slots from org agenda"))
 #+end_src
 
 * Session Management and Backups
