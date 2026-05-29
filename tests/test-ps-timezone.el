@@ -242,6 +242,26 @@ SCHEDULED: <2026-01-20 Tue>
     (should (string-match " \\+1w>" result))))
 
 ;;; -------------------------------------------------------
+;;; DST handling (summer dates)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/timezone--convert-time-dst-summer ()
+  "Europe/London in July is BST (UTC+1); London 10:00 → UTC 09:00."
+  (skip-unless (file-directory-p "/usr/share/zoneinfo/"))
+  (let ((result (ps/timezone--convert-time 2026 7 15 10 0 "Europe/London" "UTC")))
+    (should (= (nth 3 result) 9))      ; hour
+    (should (= (nth 4 result) 0))      ; minute
+    (should (= (nth 2 result) 15))))   ; same day
+
+(ert-deftest ps/timezone--shift-timestamp-dst-summer ()
+  "A July Europe/London timestamp shifts to UTC one hour earlier (BST = UTC+1).
+Contrast with the January tests where London = UTC+0 (no shift)."
+  (skip-unless (file-directory-p "/usr/share/zoneinfo/"))
+  (let ((result (ps/timezone--shift-timestamp
+                 "2026-07-15" "10:00" "11:00" nil "Europe/London" "UTC")))
+    (should (string-match "<2026-07-15 [A-Za-z]+ 09:00-10:00>" result))))
+
+;;; -------------------------------------------------------
 ;;; count-timed-timestamps
 ;;; -------------------------------------------------------
 

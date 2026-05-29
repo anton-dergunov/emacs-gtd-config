@@ -2,8 +2,13 @@
 
 (require 'ert)
 (require 'org)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-done)
+
+;; Bound dynamically by org during a TODO state change; declared special here
+;; so the test's `let' binding is dynamic.
+(defvar org-state)
 
 ;;; Test helpers
 
@@ -126,5 +131,47 @@ More text.
     (should (progn (ps/done-collapse-subtrees) t))
     (should (progn (ps/done-collapse) t))
     (should (progn (ps/done-expand) t))))
+
+;;; -------------------------------------------------------
+;;; Hook setup
+;;; -------------------------------------------------------
+
+(ert-deftest ps/done--setup-hooks-registers-all ()
+  "setup-hooks installs the five buffer-local hooks."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-setup-hooks)
+    (should (memq #'ps/done--clear-fade-overlays before-save-hook))
+    (should (memq #'ps/done-fade-subtrees after-save-hook))
+    (should (memq #'ps/done-fade-subtrees org-cycle-hook))
+    (should (memq #'ps/done--after-todo-change-refresh
+                  org-after-todo-state-change-hook))
+    (should (memq #'ps/done--refresh-after-revert after-revert-hook))))
+
+;;; -------------------------------------------------------
+;;; TODO-change refresh + timestamp strike-through
+;;; -------------------------------------------------------
+
+(ert-deftest ps/done--after-todo-change-fades ()
+  "Refreshing after a change to DONE creates a fade overlay."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* DONE" nil t))
+    (beginning-of-line)
+    (let ((org-state "DONE"))
+      (ps/done--after-todo-change-refresh))
+    (should (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
+                     (overlays-in (point-min) (point-max))))))
+
+(ert-deftest ps/done--fade-strikes-timestamp ()
+  "A timestamp inside a DONE subtree gets a strike-through fade overlay."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-fade-subtrees)
+    (should (cl-some
+             (lambda (ov)
+               (let ((face (overlay-get ov 'face)))
+                 (and (overlay-get ov 'ps-done-fade)
+                      (listp face)
+                      (plist-get face :strike-through))))
+             (overlays-in (point-min) (point-max))))))
 
 ;;; test-ps-done.el ends here

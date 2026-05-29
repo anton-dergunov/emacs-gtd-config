@@ -86,6 +86,18 @@ Clears markers afterward to prevent double-execution bugs."
         (set-marker start-marker nil)
         (set-marker end-marker nil)))))
 
+(defun ps/org--extract-title (html)
+  "Extract a page title from HTML string.
+Tries the og:title meta tag, then a name=title meta tag, then the <title>
+element, returning the first match or nil."
+  (or
+   (when (string-match "<meta[^>]*property=[\"']og:title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
+     (match-string 1 html))
+   (when (string-match "<meta[^>]*name=[\"']title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
+     (match-string 1 html))
+   (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
+     (match-string 1 html))))
+
 ;;; The interactive command (must be defined before the key binding)
 (defun ps/org-insert-link-async ()
   "Insert an Org link from URL found at point/clipboard or prompted.
@@ -127,14 +139,7 @@ Spoofs User-Agent to bypass bot detection."
                        (goto-char (point-min))
                        (when (search-forward "\n\n" nil t)
                          (let* ((html (buffer-substring-no-properties (point) (point-max)))
-                                (title
-                                 (or
-                                  (when (string-match "<meta[^>]*property=[\"']og:title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
-                                    (match-string 1 html))
-                                  (when (string-match "<meta[^>]*name=[\"']title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
-                                    (match-string 1 html))
-                                  (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
-                                    (match-string 1 html)))))
+                                (title (ps/org--extract-title html)))
                            (setq title (ps/org--clean-title title))
                            (if (and title (not (string-empty-p title)))
                                (let ((final (ps/org--shorten title)))

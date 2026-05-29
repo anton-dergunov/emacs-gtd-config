@@ -1,8 +1,12 @@
 ;;; test-ps-conflicts.el --- ERT tests for ps-conflicts -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'org-agenda)
 (add-to-list 'load-path "lisp")
 (require 'ps-conflicts)
+
+;; Declared special so the agenda-check tests' `let' bindings are dynamic.
+(defvar my-org-base-directory)
 
 ;;; Test helpers
 
@@ -636,3 +640,41 @@ Returns the buffer."
     (should (lookup-key map (kbd "-")))
     (should (lookup-key map (kbd "p")))
     (should (lookup-key map (kbd "RET")))))
+
+;;; -------------------------------------------------------
+;;; agenda integration
+;;; -------------------------------------------------------
+
+(defmacro ps/conflicts-test--with-agenda (plans-content &rest body)
+  "Set up `my-org-base-directory' with a Plans/ dir holding PLANS-CONTENT and a
+live agenda buffer, run BODY, then clean up. Binds `agenda' to the buffer."
+  (declare (indent 1))
+  `(let ((base (file-name-as-directory (make-temp-file "ps-conflicts-agenda-" t))))
+     (unwind-protect
+         (let ((plans (expand-file-name "Plans/" base)))
+           (make-directory plans t)
+           (with-temp-file (expand-file-name "test.org" plans)
+             (insert ,plans-content))
+           (let ((my-org-base-directory base)
+                 (ps/conflicts-include-past t)
+                 (ps/conflicts-gap-minutes 15)
+                 (agenda (get-buffer-create org-agenda-buffer-name)))
+             (unwind-protect
+                 (progn ,@body)
+               (kill-buffer agenda))))
+       (delete-directory base t))))
+
+(ert-deftest ps/conflicts--agenda-check-appends-warning ()
+  "agenda-check appends a conflict warning to the agenda buffer when conflicts exist."
+  (ps/conflicts-test--with-agenda ps/conflicts-test--sample-org
+    (ps/conflicts--agenda-check)
+    (with-current-buffer agenda
+      (should (string-match-p "conflict" (buffer-string))))))
+
+(ert-deftest ps/conflicts--agenda-check-silent-when-none ()
+  "agenda-check appends nothing when there are no conflicts."
+  (ps/conflicts-test--with-agenda
+      "* Only\nSCHEDULED: <2026-05-04 Mon 10:00-11:00>\n"
+    (ps/conflicts--agenda-check)
+    (with-current-buffer agenda
+      (should-not (string-match-p "conflict" (buffer-string))))))

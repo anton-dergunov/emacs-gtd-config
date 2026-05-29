@@ -87,6 +87,46 @@ Skipped when git is unavailable. Cleans up the repo afterward."
            (face (get-text-property (1- (length s)) 'face s)))
       (should (equal face '(:foreground "firebrick"))))))
 
+(ert-deftest ps/git-sync--modeline-ok-face ()
+  "An OK status (not paused) uses the gray40 face."
+  (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
+        (ps/git-sync--last-message "ok")
+        (ps/git-sync-paused nil))
+    (let* ((s (ps/git-sync--modeline))
+           (face (get-text-property (1- (length s)) 'face s)))
+      (should (equal face '(:foreground "gray40"))))))
+
+(ert-deftest ps/git-sync--modeline-default-face ()
+  "A non-OK, non-paused status uses the gray60 face."
+  (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
+        (ps/git-sync--last-message "off")
+        (ps/git-sync-paused nil))
+    (let* ((s (ps/git-sync--modeline))
+           (face (get-text-property (1- (length s)) 'face s)))
+      (should (equal face '(:foreground "gray60"))))))
+
+;;; -------------------------------------------------------
+;;; conflict handling
+;;; -------------------------------------------------------
+
+(ert-deftest ps/git-sync--handle-conflict-pauses-and-shows ()
+  "handle-conflict pauses sync, sets the error icon, and shows the output buffer."
+  (let ((ps/git-sync-paused nil)
+        (ps/git-sync--last-status nil)
+        (ps/git-sync--last-message nil))
+    (unwind-protect
+        (progn
+          (ps/git-sync--handle-conflict "CONFLICT (content): merge in foo.org")
+          (should ps/git-sync-paused)
+          (should (equal ps/git-sync--last-status ps/git-sync--icon-error))
+          (let ((buf (get-buffer "*Org Git Conflict*")))
+            (should buf)
+            (with-current-buffer buf
+              (should (string-match-p "CONFLICT (content): merge in foo.org"
+                                      (buffer-string))))))
+      (when (get-buffer "*Org Git Conflict*")
+        (kill-buffer "*Org Git Conflict*")))))
+
 ;;; -------------------------------------------------------
 ;;; resume
 ;;; -------------------------------------------------------
@@ -135,6 +175,19 @@ This is the toggle the dev script relies on to disable sync during testing."
   "root returns nil when no directory has been configured."
   (let ((ps/git-sync--directory nil))
     (should (null (ps/git-sync--root)))))
+
+(ert-deftest ps/git-sync--root-returns-toplevel ()
+  "root returns the git toplevel directory inside a real repo."
+  (ps/git-sync-test--with-repo
+    (let ((root (ps/git-sync--root)))
+      (should (stringp root))
+      (should (file-directory-p root))
+      ;; Path may be symlink-resolved (e.g. /tmp -> /private/tmp), but the
+      ;; temp-dir basename is preserved at the end of the toplevel.
+      (should (string-match-p
+               (regexp-quote (file-name-nondirectory
+                              (directory-file-name ps/git-sync--directory)))
+               root)))))
 
 ;;; -------------------------------------------------------
 ;;; start

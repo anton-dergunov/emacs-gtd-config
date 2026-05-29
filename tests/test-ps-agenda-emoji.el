@@ -76,6 +76,23 @@
     (let ((tasks (ps/agenda-emoji--extract-tasks)))
       (should-not (member "Already finished" tasks)))))
 
+(ert-deftest ps/agenda-emoji--extract-strips-trailing-tag ()
+  "A trailing :tag: is removed from the extracted task text."
+  (ps/agenda-emoji-test--with-buffer "  work:  TODO Write the report :urgent:\n"
+    (let ((tasks (ps/agenda-emoji--extract-tasks)))
+      (should (member "Write the report" tasks))
+      (should-not (member "Write the report :urgent:" tasks)))))
+
+(ert-deftest ps/agenda-emoji--extract-finds-waiting ()
+  "A WAITING task is extracted."
+  (ps/agenda-emoji-test--with-buffer "  proj:  WAITING On code review\n"
+    (should (member "On code review" (ps/agenda-emoji--extract-tasks)))))
+
+(ert-deftest ps/agenda-emoji--extract-finds-someday ()
+  "A SOMEDAY task is extracted."
+  (ps/agenda-emoji-test--with-buffer "  proj:  SOMEDAY Learn the piano\n"
+    (should (member "Learn the piano" (ps/agenda-emoji--extract-tasks)))))
+
 ;;; -------------------------------------------------------
 ;;; apply
 ;;; -------------------------------------------------------

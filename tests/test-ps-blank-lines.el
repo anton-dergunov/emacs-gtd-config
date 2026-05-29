@@ -4,6 +4,9 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-blank-lines)
 
+;; Declared special so the driver test's `let' binding is dynamic.
+(defvar org-agenda-files)
+
 (defmacro ps/blank-lines-test--with-content (content &rest body)
   "Run BODY in a temp buffer containing CONTENT (point left at start)."
   (declare (indent 1))
@@ -52,3 +55,27 @@ A header at point-min also gets a leading blank (preserved legacy behavior)."
 (ert-deftest ps/blank-lines--reinsert-is-interactive ()
   "The agenda-wide driver command is interactive."
   (should (commandp 'ps/blank-lines-reinsert)))
+
+(ert-deftest ps/blank-lines--reinsert-driver-rewrites-files ()
+  "The driver rewrites all agenda files and reports per-file + total counts."
+  (let ((dir (make-temp-file "ps-blank-driver-" t)))
+    (unwind-protect
+        (let ((fa (expand-file-name "a.org" dir))
+              (fb (expand-file-name "b.org" dir)))
+          (with-temp-file fa (insert "* A\nx\n* B\n"))
+          (with-temp-file fb (insert "* C\ny\n"))
+          (let ((org-agenda-files (list fa fb)))
+            (ps/blank-lines-reinsert))
+          (should (equal (with-temp-buffer (insert-file-contents fa) (buffer-string))
+                         "\n* A\nx\n\n* B\n"))
+          (should (equal (with-temp-buffer (insert-file-contents fb) (buffer-string))
+                         "\n* C\ny\n"))
+          (let ((report (get-buffer "*Org File Changes*")))
+            (should report)
+            (with-current-buffer report
+              (let ((s (buffer-string)))
+                (should (string-match-p "a\\.org" s))
+                (should (string-match-p "b\\.org" s))
+                (should (string-match-p "Total lines changed: 3" s))))))
+      (when (get-buffer "*Org File Changes*") (kill-buffer "*Org File Changes*"))
+      (delete-directory dir t))))

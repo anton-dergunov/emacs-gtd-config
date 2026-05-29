@@ -2,6 +2,7 @@
 
 (require 'ert)
 (require 'org)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-links)
 
@@ -64,3 +65,90 @@
           (end   (make-marker)))
       (ps/org--replace-marked-region-with start end "X")
       (should (equal (buffer-string) "untouched")))))
+
+;;; -------------------------------------------------------
+;;; extract-title
+;;; -------------------------------------------------------
+
+(ert-deftest ps/links--extract-title-og ()
+  "The og:title meta tag is preferred."
+  (should (equal (ps/org--extract-title
+                  "<meta property=\"og:title\" content=\"OG Title\"><title>Tag Title</title>")
+                 "OG Title")))
+
+(ert-deftest ps/links--extract-title-name-meta ()
+  "Falls back to the name=title meta tag when og:title is absent."
+  (should (equal (ps/org--extract-title
+                  "<meta name=\"title\" content=\"Name Title\"><title>Tag Title</title>")
+                 "Name Title")))
+
+(ert-deftest ps/links--extract-title-title-tag ()
+  "Falls back to the <title> element when no meta title is present."
+  (should (equal (ps/org--extract-title "<head><title>Just A Title</title></head>")
+                 "Just A Title")))
+
+(ert-deftest ps/links--extract-title-none ()
+  "Returns nil when no title can be found."
+  (should (null (ps/org--extract-title "<html><body>no title here</body></html>"))))
+
+;;; -------------------------------------------------------
+;;; obsidian:// URL construction
+;;; -------------------------------------------------------
+
+(ert-deftest ps/links--open-note-builds-url ()
+  "open-note browses an obsidian:// URL with the hexified path."
+  (let (captured)
+    (cl-letf (((symbol-function 'browse-url)
+               (lambda (url &rest _) (setq captured url))))
+      (ps/obsidian--open-note "My Note")
+      (should (equal captured "obsidian://open?vault=obsidian&file=My%20Note")))))
+
+;;; -------------------------------------------------------
+;;; obsidian link insertion commands
+;;; -------------------------------------------------------
+
+(ert-deftest ps/links--insert-from-clipboard ()
+  "Clipboard text becomes an [[obsidian:...]] link."
+  (cl-letf (((symbol-function 'gui-get-selection)
+             (lambda (&rest _) "Clip Title")))
+    (with-temp-buffer
+      (ps/insert-obsidian-link-from-clipboard)
+      (should (equal (buffer-string) "[[obsidian:Clip Title]]")))))
+
+(ert-deftest ps/links--insert-from-clipboard-empty-errors ()
+  "An empty clipboard signals a user-error and inserts nothing."
+  (cl-letf (((symbol-function 'gui-get-selection) (lambda (&rest _) ""))
+            ((symbol-function 'executable-find) (lambda (&rest _) nil)))
+    (with-temp-buffer
+      (should-error (ps/insert-obsidian-link-from-clipboard) :type 'user-error)
+      (should (equal (buffer-string) "")))))
+
+(ert-deftest ps/links--insert-from-prompt ()
+  "A prompted title becomes an [[obsidian:...]] link."
+  (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "Typed Title")))
+    (with-temp-buffer
+      (ps/insert-obsidian-link-prompt)
+      (should (equal (buffer-string) "[[obsidian:Typed Title]]")))))
+
+(ert-deftest ps/links--insert-from-prompt-blank-noop ()
+  "A blank/whitespace title inserts nothing."
+  (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "   ")))
+    (with-temp-buffer
+      (ps/insert-obsidian-link-prompt)
+      (should (equal (buffer-string) "")))))
+
+;;; -------------------------------------------------------
+;;; system-clipboard-url
+;;; -------------------------------------------------------
+
+(ert-deftest ps/links--system-clipboard-url-returns-url ()
+  "A clipboard holding an http(s) URL is returned."
+  (cl-letf (((symbol-function 'gui-get-selection)
+             (lambda (&rest _) "https://example.com/x")))
+    (should (equal (ps/org--system-clipboard-url) "https://example.com/x"))))
+
+(ert-deftest ps/links--system-clipboard-url-nil-for-non-url ()
+  "Non-URL clipboard contents yield nil."
+  (cl-letf (((symbol-function 'gui-get-selection) (lambda (&rest _) "just text"))
+            ((symbol-function 'executable-find) (lambda (&rest _) nil)))
+    (should (null (ps/org--system-clipboard-url)))))
