@@ -1,8 +1,8 @@
-;;; test-ps-org-conflicts.el --- ERT tests for ps-org-conflicts -*- lexical-binding: t; -*-
+;;; test-ps-conflicts.el --- ERT tests for ps-conflicts -*- lexical-binding: t; -*-
 
 (require 'ert)
 (add-to-list 'load-path "lisp")
-(require 'ps-org-conflicts)
+(require 'ps-conflicts)
 
 ;;; Test helpers
 

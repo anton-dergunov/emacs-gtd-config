@@ -35,8 +35,16 @@
 ** Load Local Modules
 #+begin_src emacs-lisp
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  (require 'ps-utils)
+  (require 'ps-links)
+  (require 'ps-done)
+  (require 'ps-git-sync)
+  (require 'ps-agenda-emoji)
+  (require 'ps-agenda-icons)
+  (require 'ps-schedule-icons)
+  (require 'ps-blank-lines)
   (require 'ps-availability)
-  (require 'ps-org-conflicts)
+  (require 'ps-conflicts)
   (require 'ps-timezone)
 #+end_src
 
@@ -56,6 +64,23 @@
 #+begin_src emacs-lisp
   (setq ps/conflicts-gap-minutes    15
         ps/conflicts-include-past   nil)
+#+end_src
+
+** Done Task Settings
+#+begin_src emacs-lisp
+  (setq ps/done-fade-color "gray75")
+#+end_src
+
+** Git Sync Settings
+#+begin_src emacs-lisp
+  (setq ps/git-sync-interval 60)
+#+end_src
+
+** Schedule Icon Settings
+#+begin_src emacs-lisp
+  (setq ps/schedule-icons-scheduled "⏱ "
+        ps/schedule-icons-deadline  "⚑ "
+        ps/schedule-icons-face      '(:foreground "#000000" :weight bold))
 #+end_src
 
 * User Interface
@@ -192,23 +217,12 @@
 #+end_src
 
 ** Add icons in agenda view
+Icon-loading logic lives in =lisp/ps-agenda-icons.el=. The =prefix-format= below is a
+layout preference and stays here. Leaving the icon directory empty/absent disables icons.
 #+begin_src emacs-lisp
-  (let ((icon-dir (concat my-org-base-directory "Icons/"))
-        (icons '()))
-    ;; Ensure the directory exists
-    (when (file-directory-p icon-dir)
-      ;; Loop through all SVG files in the directory
-      (dolist (file (directory-files icon-dir t "\\.svg$"))
-        (let ((category (file-name-base file)))
-          ;; Add the entry to the icons list
-          (push `(,category ,file nil nil :ascent center) icons))))
+  (ps/agenda-icons-apply (concat my-org-base-directory "Icons/"))
 
-    ;; Set the category icon list with the collected icons
-    (customize-set-value
-     'org-agenda-category-icon-alist
-     icons))
-
-  ;; Add the function to the agenda to display icons and make sure there is enough space for the category name (which is max 14 chars in my case)
+  ;; Reserve space for the category name (max 14 chars in my case) next to the icon.
   (setq org-agenda-prefix-format
         '((agenda . " %-3i %-15:c%?-12t% s")
           (todo . " %-3i %-15:c")
@@ -254,183 +268,16 @@
 #+end_src
 
 ** Replace SCHEDULED / DEADLINE labels with icons
+Logic lives in =lisp/ps-schedule-icons.el=. Icons and face are set in the Schedule Icon
+Settings block above.
 #+begin_src emacs-lisp
-  (defvar my/org-scheduled-icon "⏱ "
-    "Icon used to replace SCHEDULED keyword.")
-
-  (defvar my/org-deadline-icon "⚑ "
-    "Icon used to replace DEADLINE keyword.")
-
-  (defun my/org-compose-scheduled-deadline (limit)
-    "Visually replace SCHEDULED: and DEADLINE: with dark icons."
-    ;; 'while' ensures every instance in the buffer is caught
-    (while (re-search-forward "\\(SCHEDULED:\\|DEADLINE:\\)" limit t)
-      (let* ((start (match-beginning 1))
-             (end (match-end 1))
-             (label (match-string 1))
-             (icon (if (string= label "SCHEDULED:")
-                       my/org-scheduled-icon
-                     my/org-deadline-icon)))
-        ;; We apply the icon and a 'dark black' face.
-        ;; The 'Fade' overlay will override this color for DONE tasks automatically.
-        (add-text-properties start end
-                             `(display ,icon
-                                       face (:foreground "#000000" :weight bold)))))
-    nil)
-
-  (font-lock-add-keywords
-   'org-mode
-   '((my/org-compose-scheduled-deadline 0 t)))
+  (add-hook 'org-mode-hook #'ps/schedule-icons-enable)
 #+end_src
 
-** Fade DONE tasks
+** Fade and fold DONE tasks
+Logic lives in =lisp/ps-done.el=. The fade color is set in the Done Task Settings block above.
 #+begin_src emacs-lisp
-  (defvar my/org-done-fade-color "gray75"
-    "Color used to fade DONE tasks.")
-
-  (defun my/org-clear-done-fade-overlays ()
-    "Remove all DONE fade overlays."
-    (remove-overlays (point-min)
-                     (point-max)
-                     'my-org-done-fade t))
-
-  (defun my/org-fade-done-subtrees (&rest _)
-    "Fade DONE subtree contents and strip org-modern pills."
-    (interactive)
-
-    (when (derived-mode-p 'org-mode)
-
-      ;; Prevent overlay accumulation
-      (my/org-clear-done-fade-overlays)
-
-      (save-excursion
-        (save-restriction
-          (widen)
-
-          (goto-char (point-min))
-
-          (while (re-search-forward org-heading-regexp nil t)
-
-            (when (string= (org-get-todo-state) "DONE")
-
-              ;; Much safer/faster than org-element-at-point
-              (let* ((begin
-                      (save-excursion
-                        (forward-line)
-                        (point)))
-
-                     (end
-                      (save-excursion
-                        (org-end-of-subtree t t))))
-
-                (when (< begin end)
-
-                  ;; Main fade overlay
-                  (let ((ov (make-overlay begin end)))
-                    (overlay-put ov
-                                 'face
-                                 `(:foreground ,my/org-done-fade-color))
-                    (overlay-put ov 'priority 10)
-                    (overlay-put ov 'my-org-done-fade t))
-
-                  ;; Remove org-modern timestamp pills
-                  (save-excursion
-                    (goto-char begin)
-
-                    (while (re-search-forward
-                            org-ts-regexp-both
-                            end
-                            t)
-
-                      (let* ((ts-start (match-beginning 0))
-                             (ts-end   (match-end 0))
-                             (ts-text
-                              (buffer-substring-no-properties
-                               ts-start
-                               ts-end))
-
-                             (ts-ov
-                              (make-overlay ts-start ts-end)))
-
-                        (overlay-put ts-ov
-                                     'display
-                                     ts-text)
-
-                        (overlay-put ts-ov
-                                     'face
-                                     `(:foreground ,my/org-done-fade-color
-                                                    :strike-through t))
-
-                        (overlay-put ts-ov 'priority 20)
-                        (overlay-put ts-ov 'my-org-done-fade t))))))))))))
-
-  (defun my/org-refresh-after-revert ()
-    "Fully rebuild Org visuals after auto-revert."
-    (when (derived-mode-p 'org-mode)
-      ;; Remove custom overlays
-      (my/org-clear-done-fade-overlays)
-
-      ;; Remove stale Org fold overlays
-      (when (fboundp 'org-fold-remove-all-overlays)
-        (org-fold-remove-all-overlays))
-
-      ;; Re-fontify
-      (font-lock-flush)
-      (font-lock-ensure)
-
-      ;; Rebuild folds
-      (my/org-collapse-done-subtrees)
-
-      ;; Rebuild fades
-      (my/org-fade-done-subtrees)
-
-      ;; Final redraw
-      (redisplay)))
-
-  (defun my/org-after-todo-change-refresh ()
-    "Refresh visuals after TODO state changes."
-    (my/org-fade-done-subtrees)
-    (when (string= org-state "DONE")
-      (save-excursion
-        (org-back-to-heading t)
-        (my/org-fold-subtree-keep-newlines))))
-
-  (add-hook
-   'org-mode-hook
-   (lambda ()
-     ;; Clean overlays before save
-     (add-hook
-      'before-save-hook
-      #'my/org-clear-done-fade-overlays
-      nil t)
-
-     ;; Rebuild after save
-     (add-hook
-      'after-save-hook
-      #'my/org-fade-done-subtrees
-      nil t)
-
-     ;; Rebuild after cycling/folding
-     (add-hook
-      'org-cycle-hook
-      #'my/org-fade-done-subtrees
-      nil t)
-
-     ;; Rebuild after TODO state changes
-     (add-hook
-      'org-after-todo-state-change-hook
-      #'my/org-after-todo-change-refresh
-      nil t)
-
-     ;; Rebuild after auto-revert
-     (add-hook
-      'after-revert-hook
-      #'my/org-refresh-after-revert
-      nil t)
-
-     ;; Initial render
-     (my/org-collapse-done-subtrees)
-     (my/org-fade-done-subtrees)))
+  (add-hook 'org-mode-hook #'ps/done-setup-hooks)
 #+end_src
 
 ** Gray out Org Metadata
@@ -449,44 +296,12 @@
   (add-hook 'org-mode-hook #'my/org-apply-metadata-fade)
 #+end_src
 
-** Automatically collapse DONE tasks
+** Keep blank lines visible when cycling
+The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
 #+begin_src emacs-lisp
   ;; Keep blank lines visible when manually cycling with TAB (org-cycle)
   ;; https://gist.github.com/jeffkreeftmeijer/597b40f6cb087c937b5a591db7846012
   (setq org-cycle-separator-lines -1)
-
-  (defun my/org-fold-subtree-keep-newlines ()
-    "Fold the current subtree but explicitly preserve trailing empty lines."
-    (let ((beg (line-end-position))
-          (end (save-excursion
-                 (org-end-of-subtree t t)
-                 ;; Move backward over all blank lines and spaces
-                 (skip-chars-backward " \t\n")
-                 ;; Stop at the end of the last line of actual text
-                 (line-end-position))))
-      (when (< beg end)
-        (org-fold-region beg end t 'outline))))
-
-  (defun my/org-collapse-done-subtrees ()
-    "Collapse all DONE subtrees in the current buffer."
-    (interactive)
-    (org-map-entries
-     #'my/org-fold-subtree-keep-newlines
-     "TODO=\"DONE\"" 'file))
-
-  (defun my/org-expand-done ()
-    "Expand all DONE tasks."
-    (interactive)
-    (org-map-entries
-     (lambda () (org-fold-show-subtree))
-     "/DONE" 'file))
-
-  (defun my/org-collapse-done ()
-    "Collapse all DONE tasks."
-    (interactive)
-    (org-map-entries
-     #'my/org-fold-subtree-keep-newlines
-     "/DONE" 'file))
 #+end_src
 
 ** Make sure tags are visible in the agenda view
@@ -569,102 +384,12 @@
 #+end_src
 
 ** Visually enhance Org Agenda tasks with emojis for faster recognition
+Logic lives in =lisp/ps-agenda-emoji.el= (it shells out to
+=scripts/org_emoji_matcher.py=). The conflict-check agenda hook from
+=ps-conflicts= is also registered here.
 #+begin_src emacs-lisp
-(require 'json)
-
-(defvar my/emoji-matcher-path
-  (expand-file-name "scripts/org_emoji_matcher.py"
-                    user-emacs-directory)
-  "Path to the org_emoji_matcher.py script.")
-
-(defvar my/org-agenda-emoji-timer nil
-  "Idle timer used to debounce emoji updates in the agenda.")
-
-(defun my/extract-agenda-tasks ()
-  "Extract all visible TODO-like tasks from the *Org Agenda* buffer."
-  (let (tasks)
-    (save-excursion
-      (goto-char (point-min))
-      ;; Match lines that contain a TODO keyword, possibly after 'Scheduled:', 'Deadline:', etc.
-      (while (re-search-forward
-              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]*\\(?:Scheduled:\\|Deadline:\\|In[[:space:]]+[0-9]+[[:space:]]+d.:\\)?[[:space:]]*\\(TODO\\|NEXT\\|IN-PROGRESS\\|WAITING\\|SOMEDAY\\)[[:space:]]+\\(.*\\)$"
-              nil t)
-        (let ((task (match-string 2)))
-          (setq task (replace-regexp-in-string "\\s-+:[^:]+:$" "" task))
-          (push task tasks))))
-    (nreverse tasks)))
-
-(defun my/apply-emojis (emoji-map)
-  "Append emojis from EMOJI-MAP (alist) to matching tasks in *Org Agenda*."
-  (let ((inhibit-read-only t))
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward
-              "^[[:space:]]*\\(?:[^:]+:\\)?[[:space:]]*\\(?:Scheduled:\\|Deadline:\\|In[[:space:]]+[0-9]+[[:space:]]+d.:\\)?[[:space:]]*\\(TODO\\|NEXT\\|IN-PROGRESS\\|WAITING\\|SOMEDAY\\)[[:space:]]+\\(.*\\)$"
-              nil t)
-        (let* ((task (match-string 2))
-               (emojis (alist-get task emoji-map nil nil #'string=)))
-          (when emojis
-            (end-of-line)
-            (insert
-             (concat " "
-                     (mapconcat
-                      (lambda (e)
-                        (propertize e 'face '(:height 0.8)))
-                      emojis " ")))))))))
-
-(defun my/run-emoji-matcher (tasks callback)
-  "Run Python emoji matcher asynchronously, then call CALLBACK with result."
-  (let* ((buf (generate-new-buffer " *emoji-matcher-output*"))
-         (python-exec (or (executable-find "python3")
-                          (executable-find "python")
-                          "/usr/bin/python3")))
-    (make-process
-     :name "emoji-matcher-proc"
-     :buffer buf
-     :command (list python-exec my/emoji-matcher-path)
-     :noquery t
-     :connection-type 'pipe
-     :sentinel
-     (lambda (p _event)
-       (when (eq (process-status p) 'exit)
-         (when (buffer-live-p (process-buffer p))
-           (with-current-buffer (process-buffer p)
-             (let* ((lines (split-string (string-trim (buffer-string)) "\n" t "[ \t\r]*"))
-                    (last-line (car (last lines)))
-                    (parsed (ignore-errors (json-read-from-string (or last-line "")))))
-               (if parsed
-                   (funcall callback parsed)
-                 (message "[emoji-matcher] Failed to parse output:\n%s" raw))))
-           (kill-buffer (process-buffer p))))))
-    (process-send-string "emoji-matcher-proc" (concat (json-encode tasks) "\n"))
-    (process-send-eof "emoji-matcher-proc")))
-
-(defun my/org-agenda-update-emojis ()
-  "Run the Python matcher and update the agenda buffer with emojis."
-  (when (get-buffer "*Org Agenda*")
-    (with-current-buffer "*Org Agenda*"
-      (let ((tasks (my/extract-agenda-tasks)))
-        (my/run-emoji-matcher
-         tasks
-         (lambda (emoji-map)
-           (with-current-buffer "*Org Agenda*"
-             (my/apply-emojis emoji-map))))))))
-
-(defun my/org-agenda-append-emojis (&rest _)
-  "Debounce emoji update after agenda render."
-  (when my/org-agenda-emoji-timer
-    (cancel-timer my/org-agenda-emoji-timer))
-  (setq my/org-agenda-emoji-timer
-        (run-with-idle-timer
-         0.4 nil
-         (lambda ()
-           (setq my/org-agenda-emoji-timer nil)
-           (my/org-agenda-update-emojis)))))
-
-;; Run after agenda renders
-(add-hook 'org-agenda-finalize-hook #'my/org-agenda-append-emojis)
-(add-hook 'org-agenda-finalize-hook #'ps/conflicts--agenda-schedule-check)
+  (ps/agenda-emoji-setup)
+  (add-hook 'org-agenda-finalize-hook #'ps/conflicts--agenda-schedule-check)
 #+end_src
 
 ** =org-journal=
@@ -692,12 +417,12 @@
 
 ** Prevent org-mode from collapsing yanked (pasted) subtrees
 #+begin_src emacs-lisp
-(setq org-yank-folded-subtrees nil)
+  (setq org-yank-folded-subtrees nil)
 #+end_src
 
 ** Disable clock report so that it does not show in agenda
 #+begin_src emacs-lisp
-(setq org-agenda-start-with-clockreport-mode nil)
+  (setq org-agenda-start-with-clockreport-mode nil)
 #+end_src
 
 * Workflow Enhancements
@@ -771,234 +496,21 @@
 #+end_src
 
 ** Define custom org link for Obsidian to make them short
+Logic lives in =lisp/ps-links.el=. Links may be written in full or short form:
+=[[obsidian://open?vault=obsidian&file=Maps]]= or =[[obsidian:Maps]]=.
 #+begin_src emacs-lisp
-  (defun open-obsidian-note (path)
-    "Open the Obsidian note at PATH using the Obsidian URL scheme."
-    (let ((vault "obsidian"))
-      (browse-url
-       (format "obsidian://open?vault=%s&file=%s"
-               vault
-               (url-hexify-string path)))))
+  ;; Register the obsidian: link type and per-buffer font-lock composition.
+  (org-add-link-type "obsidian" #'ps/obsidian--open-note)
+  (add-hook 'org-mode-hook #'ps/org-enable-obsidian-links)
 
-  (org-add-link-type "obsidian" 'open-obsidian-note)
-
-  ;; Now the links can be defined either using the full or the short format:
-  ;; [[obsidian://open?vault=obsidian&file=Maps]]
-  ;; [[obsidian:Maps]]
-
-  (defcustom my/obsidian-link-icon "✎ "
-    "Visual replacement for the `obsidian:` prefix in Org-mode.
-  This affects only display, not the actual link text.")
-
-  (defun my/org-compose-obsidian-prefix (limit)
-    "Replace all visible `obsidian:` prefixes with icon composition."
-    (while (re-search-forward "\\(\\bobsidian:\\)" limit t)
-      (let ((start (match-beginning 1))
-            (end   (match-end 1)))
-        ;; Remove any stale composition first
-        (remove-text-properties
-         start end
-         '(composition nil))
-
-        ;; Apply fresh composition
-        (compose-region start end my/obsidian-link-icon)))
-    nil)
-
-  ;; Register rewrite rule in Org font-lock
-  (font-lock-add-keywords
-   'org-mode
-   '((my/org-compose-obsidian-prefix 0 t)))
-
-  (add-hook
-   'org-mode-hook
-   (lambda ()
-     (font-lock-flush)
-     (font-lock-ensure)))
-
-  ;; Insert Obsidian link from clipboard
-  (defun my/insert-obsidian-link-from-clipboard ()
-    "Insert [[obsidian:<title>]]. Title is taken from system clipboard."
-    (interactive)
-    (let* ((clip (string-trim (or (gui-get-selection 'CLIPBOARD)
-                                  (gui-get-selection 'PRIMARY)
-                                  (when (executable-find "pbpaste")
-                                    (with-temp-buffer (call-process "pbpaste" nil t) (buffer-string)))
-                                  ""))))
-      (if (string-empty-p clip)
-          (user-error "Clipboard is empty — cannot form Obsidian link")
-        (insert (format "[[obsidian:%s]]" clip)))))
-
-  (global-set-key (kbd "<f4>") #'my/insert-obsidian-link-from-clipboard)
-
-  ;; Insert Obsidian link by prompting
-  (defun my/insert-obsidian-link-prompt ()
-    "Ask user for Obsidian note title in minibuffer, then insert [[obsidian:<title>]]."
-    (interactive)
-    (let ((title (read-string "Obsidian note title: ")))
-      (unless (string-empty-p (string-trim title))
-        (insert (format "[[obsidian:%s]]" title)))))
-
-  (global-set-key (kbd "<f5>") #'my/insert-obsidian-link-prompt)
+  (global-set-key (kbd "<f4>") #'ps/insert-obsidian-link-from-clipboard)
+  (global-set-key (kbd "<f5>") #'ps/insert-obsidian-link-prompt)
 #+end_src
 
 ** Auto-insert org-links with fetched page title
+Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
 #+begin_src emacs-lisp
-  (require 'url)
-  (require 'subr-x)
-  (require 'xml)
-
-  (defcustom my/org-link-title-max-length 200
-    "Max title length before truncation."
-    :type 'integer)
-
-  (defun my/org--shorten (s)
-    (if (and s (> (length s) my/org-link-title-max-length))
-        (concat (substring s 0 my/org-link-title-max-length) "...")
-      s))
-
-  (defun my/org--clean-title (s)
-    "Decode ALL HTML entities (named, numeric, hex) and clean string S."
-    (when (and s (not (string-empty-p s)))
-      (let ((decoded s)
-            (limit 0))
-        ;; Use a while loop with a safety limit to prevent infinite loops
-        ;; We process the string until no more &...; entities remain
-        (while (and (string-match "&\\([^;]+\\);" decoded) (< limit 10))
-          (let* ((entity (match-string 1 decoded))
-                 (replacement
-                  (cond
-                   ;; 1. Check Named Entities (e.g., &amp;)
-                   ((assoc entity xml-entity-alist)
-                    (let ((val (cdr (assoc entity xml-entity-alist))))
-                      (if (characterp val) (string val) val)))
-
-                   ;; 2. HTML specific fallbacks
-                   ((string= entity "nbsp") " ")
-                   ((string= entity "mdash") "—")
-
-                   ;; 3. Hex entities: &#x...; (Safe length check)
-                   ((and (string-prefix-p "#x" entity) (> (length entity) 2))
-                    (condition-case nil
-                        (string (string-to-number (substring entity 2) 16))
-                      (error nil)))
-
-                   ;; 4. Numeric entities: &#...; (Safe length check)
-                   ((and (string-prefix-p "#" entity) (> (length entity) 1))
-                    (condition-case nil
-                        (string (string-to-number (substring entity 1)))
-                      (error nil))))))
-
-            (setq decoded (if replacement
-                              (replace-match replacement t t decoded)
-                            ;; If we can't decode it, replace '&' with a temp char
-                            ;; so we don't match this specific broken entity again
-                            (replace-match "AMP_INTERNAL" t t decoded)))
-            (setq limit (1+ limit))))
-
-        ;; Final cleanup: Restore any un-decodable amps and strip non-printables
-        (let* ((final-s (replace-regexp-in-string "AMP_INTERNAL" "&" decoded))
-               (cleaned (replace-regexp-in-string
-                         "[^\u0009\u000A\u000D\u0020-\u007E\u00A0-\uD7FF\uE000-\uFFFD]"
-                         "" final-s)))
-          (string-trim cleaned)))))
-
-  (defun my/org--system-clipboard-url ()
-    "Try to return a URL from GUI selection or pbpaste, or nil."
-    (or
-     (when (fboundp 'gui-get-selection)
-       (let ((sel (or (gui-get-selection 'CLIPBOARD)
-                      (gui-get-selection 'PRIMARY))))
-         (and sel (string-trim sel) (when (string-match-p "^https?://" sel) sel))))
-     (when (executable-find "pbpaste")
-       (let ((s (string-trim (with-temp-buffer
-                               (call-process "pbpaste" nil t)
-                               (buffer-string)))))
-         (and (not (string-empty-p s)) (when (string-match-p "^https?://" s) s))))))
-
-  (defun my/org--replace-marked-region-with (start-marker end-marker text)
-    "Replace region between START-MARKER and END-MARKER with TEXT.
-  Clears markers afterward to prevent double-execution bugs."
-    (when (and (marker-position start-marker) (marker-position end-marker))
-      (let ((inhibit-read-only t))
-        (save-excursion
-          (goto-char (marker-position start-marker))
-          (delete-region (marker-position start-marker) (marker-position end-marker))
-          (insert text)
-          ;; Nullify markers to prevent the url.el double-callback bug
-          (set-marker start-marker nil)
-          (set-marker end-marker nil)))))
-
-  ;;; The interactive command (must be defined before the key binding)
-  (defun my/org-insert-link-async ()
-    "Insert an Org link from URL found at point/clipboard or prompted.
-    Spoofs User-Agent to bypass bot detection."
-    (interactive)
-    (let* ((url-at-point-bounds (bounds-of-thing-at-point 'url))
-           (url-at-point (when url-at-point-bounds
-                           (buffer-substring-no-properties (car url-at-point-bounds)
-                                                           (cdr url-at-point-bounds))))
-           (maybe-url (or url-at-point
-                          (my/org--system-clipboard-url)
-                          (read-string "URL: ")))
-           (url-user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
-      (unless (and maybe-url (string-match-p "^https?://" maybe-url))
-        (user-error "No valid URL found or provided"))
-
-      ;; If there was a URL at point, delete it
-      (when url-at-point-bounds
-        (delete-region (car url-at-point-bounds) (cdr url-at-point-bounds)))
-
-      ;; Insert placeholder and set markers
-      (let ((start-marker (set-marker (make-marker) (point))))
-        (insert (format "[[%s][Fetching title...]]" maybe-url))
-        (let ((end-marker (set-marker (make-marker) (point)))
-              (orig-buf (current-buffer)))
-          (condition-case err
-              (url-retrieve
-               maybe-url
-               (lambda (status &rest _)
-                 (let ((error-desc (plist-get status :error)))
-                   (unwind-protect
-                       (if error-desc
-                           (progn
-                             (when (buffer-live-p orig-buf)
-                               (with-current-buffer orig-buf
-                                 ;; Fallback to RAW URL
-                                 (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
-                             (message "[org-link] Failed to fetch %s: %s" maybe-url error-desc))
-                         (goto-char (point-min))
-                         (when (search-forward "\n\n" nil t)
-                           (let* ((html (buffer-substring-no-properties (point) (point-max)))
-                                  (title
-                                   (or
-                                    (when (string-match "<meta[^>]*property=[\"']og:title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
-                                      (match-string 1 html))
-                                    (when (string-match "<meta[^>]*name=[\"']title[\"'][^>]*content=[\"']\\([^\"']+\\)[\"']" html)
-                                      (match-string 1 html))
-                                    (when (string-match "<title[^>]*>\\([^<]+\\)</title>" html)
-                                      (match-string 1 html)))))
-                             (setq title (my/org--clean-title title))
-                             (if (and title (not (string-empty-p title)))
-                                 (let ((final (my/org--shorten title)))
-                                   (when (buffer-live-p orig-buf)
-                                     (with-current-buffer orig-buf
-                                       (my/org--replace-marked-region-with start-marker end-marker (format "[[%s][%s]]" maybe-url final)))))
-                               ;; Fallback to RAW URL
-                               (when (buffer-live-p orig-buf)
-                                 (with-current-buffer orig-buf
-                                   (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
-                               (message "[org-link] No title found for %s" maybe-url)))))
-                     (when (buffer-live-p (current-buffer))
-                       (kill-buffer (current-buffer)))))))
-            (error
-             (when (buffer-live-p orig-buf)
-               (with-current-buffer orig-buf
-                 ;; Fallback to RAW URL
-                 (my/org--replace-marked-region-with start-marker end-marker maybe-url)))
-             (message "[org-link] Error fetching %s: %s" maybe-url (error-message-string err))))))))
-
-  ;; Now that the command is defined, bind it to F6
-  (global-set-key (kbd "<f6>") #'my/org-insert-link-async)
+  (global-set-key (kbd "<f6>") #'ps/org-insert-link-async)
 #+end_src
 
 * File and Directory Management
@@ -1045,44 +557,9 @@
 
 * Menu Bar and Keybindings
 ** F7 to Reinsert Empty Lines
+Logic lives in =lisp/ps-blank-lines.el=.
 #+begin_src emacs-lisp
-  (defun reinsert-empty-lines-in-org-files ()
-    "Reinsert empty lines before first-level headers in all files listed in `org-agenda-files`."
-    (interactive)
-    (let ((org-files org-agenda-files)
-          (modified-files '())
-          (total-changes 0))  ;; Track total lines changed across all files
-      (dolist (file org-files)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (goto-char (point-min))
-          (let ((changes 0))  ;; Counter for the current file
-            ;; Insert two newlines before each level-1 header
-            (while (re-search-forward "^\\* " nil t)
-              (unless (save-excursion
-                        (forward-line -1)
-                        (looking-at-p "^\\s-*$"))  ;; Check if the previous line is empty
-                (save-excursion
-                  ;; Move point two characters back, to insert before the "* " header
-                  (goto-char (- (point) 2))
-                  (insert "\n"))
-                (setq changes (1+ changes))))  ;; Increment change counter
-            ;; If changes were made, write the file and record it
-            (when (> changes 0)
-              (write-region (point-min) (point-max) file)
-              (push (cons (file-name-nondirectory file) changes) modified-files)
-              (setq total-changes (+ total-changes changes))))))
-      ;; Show results in a new buffer
-      (let ((output-buffer (get-buffer-create "*Org File Changes*")))
-        (with-current-buffer output-buffer
-          (erase-buffer)
-          (insert (format "Modified files and line changes:\n\n"))
-          (dolist (file-change modified-files)
-            (insert (format "File: %s, Lines changed: %d\n" (car file-change) (cdr file-change))))
-          (insert (format "\nTotal lines changed: %d" total-changes)))
-        (display-buffer output-buffer))))
-
-  (global-set-key [f7] 'reinsert-empty-lines-in-org-files)
+  (global-set-key [f7] #'ps/blank-lines-reinsert)
 #+end_src
 
 ** F8 to Show Neotree
@@ -1128,17 +605,17 @@
   (define-key my-menu-bar-menu [my-cmd6]
               '(menu-item "Show Agenda" my-show-agenda :help "Show Agenda"))
   (define-key my-menu-bar-menu [my-cmd5]
-              '(menu-item "Reinsert Empty Lines" reinsert-empty-lines-in-org-files :help "Reinsert Empty Lines"))
+              '(menu-item "Reinsert Empty Lines" ps/blank-lines-reinsert :help "Reinsert Empty Lines"))
   (define-key my-menu-bar-menu [my-cmd4]
-              '(menu-item "Insert URL (auto-title)" my/org-insert-link-async :help "Insert URL (auto-title)"))
+              '(menu-item "Insert URL (auto-title)" ps/org-insert-link-async :help "Insert URL (auto-title)"))
   (define-key my-menu-bar-menu [my-cmd3]
-              '(menu-item "Insert Obsidian Link (prompt)" my/insert-obsidian-link-prompt :help "Insert [[obsidian:Title]] by typing title"))
+              '(menu-item "Insert Obsidian Link (prompt)" ps/insert-obsidian-link-prompt :help "Insert [[obsidian:Title]] by typing title"))
   (define-key my-menu-bar-menu [my-cmd2]
-              '(menu-item "Insert Obsidian Link (clipboard)" my/insert-obsidian-link-from-clipboard :help "Insert [[obsidian:Title]] using clipboard"))
+              '(menu-item "Insert Obsidian Link (clipboard)" ps/insert-obsidian-link-from-clipboard :help "Insert [[obsidian:Title]] using clipboard"))
   (define-key my-menu-bar-menu [my-cmd1]
-              '(menu-item "Collapse DONE tasks" my/org-collapse-done))
+              '(menu-item "Collapse DONE tasks" ps/done-collapse))
   (define-key my-menu-bar-menu [my-cmd0]
-              '(menu-item "Expand DONE tasks" my/org-expand-done))
+              '(menu-item "Expand DONE tasks" ps/done-expand))
   (define-key my-menu-bar-menu [my-cmd-avail]
               '(menu-item "Show Availability" ps/org-show-availability :help "Show free time slots from org agenda"))
   (define-key my-menu-bar-menu [my-cmd-conflicts]
@@ -1193,218 +670,11 @@
 #+end_src
 
 ** Automatic Git Sync for Org Files
+Logic lives in =lisp/ps-git-sync.el=. The interval is set in the Git Sync
+Settings block above. =ps/git-sync-resume= clears the paused state after you
+resolve a merge conflict.
 #+begin_src emacs-lisp
-  (require 'subr-x)
-
-  ;; ------------------------------------------------------------
-  ;; Icons
-  ;; ------------------------------------------------------------
-
-  (defvar my/org-git-icon-ok "⇅")
-  (defvar my/org-git-icon-syncing "↻")
-  (defvar my/org-git-icon-offline "◌")
-  (defvar my/org-git-icon-error "×")
-
-  ;; ------------------------------------------------------------
-  ;; Configuration
-  ;; ------------------------------------------------------------
-
-  (defvar my/org-git-sync-interval 60)
-
-  (defvar my/org-git-sync-timer nil)
-  (defvar my/org-git-sync-running nil)
-  (defvar my/org-git-sync-paused nil)
-
-  (defvar my/org-git-sync-last-status
-    my/org-git-icon-offline)
-
-  (defvar my/org-git-sync-last-message "")
-
-  ;; ------------------------------------------------------------
-  ;; Modeline
-  ;; ------------------------------------------------------------
-
-  (defun my/org-git-sync-modeline ()
-    (propertize
-     (format " %s" my/org-git-sync-last-status)
-     'help-echo my/org-git-sync-last-message
-     'face
-     (cond
-      (my/org-git-sync-paused
-       '(:foreground "firebrick"))
-      ((equal my/org-git-sync-last-status
-              my/org-git-icon-ok)
-       '(:foreground "gray40"))
-      (t
-       '(:foreground "gray60")))))
-
-  (unless (member '(:eval (my/org-git-sync-modeline))
-                  global-mode-string)
-    (setq global-mode-string
-          (append global-mode-string
-                  '((:eval (my/org-git-sync-modeline))))))
-
-  ;; ------------------------------------------------------------
-  ;; Git helpers
-  ;; ------------------------------------------------------------
-
-  (defun my/org-git-root ()
-    (when (and (boundp 'my-org-base-directory)
-               (file-directory-p my-org-base-directory))
-      (let ((default-directory my-org-base-directory))
-        (string-trim
-         (shell-command-to-string
-          "git rev-parse --show-toplevel 2>/dev/null")))))
-
-  (defun my/org-git-inside-repo-p ()
-    (let ((root (my/org-git-root)))
-      (and root
-           (not (string-empty-p root)))))
-
-  (defun my/org-git-set-status (icon message)
-    (setq my/org-git-sync-last-status icon)
-    (setq my/org-git-sync-last-message message)
-    (force-mode-line-update t))
-
-  ;; ------------------------------------------------------------
-  ;; Conflict handling
-  ;; ------------------------------------------------------------
-
-  (defun my/org-git-handle-conflict (output)
-    (setq my/org-git-sync-paused t)
-
-    (my/org-git-set-status
-     my/org-git-icon-error
-     "Git sync paused due to conflict")
-
-    (with-current-buffer
-        (get-buffer-create "*Org Git Conflict*")
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert output)
-        (goto-char (point-min))
-        (special-mode))
-      (display-buffer (current-buffer))))
-
-  ;; ------------------------------------------------------------
-  ;; Main sync
-  ;; ------------------------------------------------------------
-
-  (defun my/org-git-sync ()
-    (when (and
-           (not my/org-git-sync-running)
-           (not my/org-git-sync-paused)
-           (my/org-git-inside-repo-p))
-
-      (setq my/org-git-sync-running t)
-
-      (my/org-git-set-status
-       my/org-git-icon-syncing
-       "Git sync in progress")
-
-      (org-save-all-org-buffers)
-
-      (let* ((default-directory my-org-base-directory)
-             (host system-name)
-             (timestamp
-              (format-time-string "%Y-%m-%d %H:%M:%S"))
-             (commit-message
-              (format "Auto backup: %s (%s)"
-                      timestamp
-                      host))
-
-             (cmd
-              (format
-               (concat
-                "git pull && "
-                "git add -A && "
-                "if ! git diff --cached --quiet; then "
-                "git commit -m %S; "
-                "fi && "
-                "git push")
-               commit-message))
-
-             (buffer
-              (generate-new-buffer
-               " *org-git-sync*")))
-
-        (make-process
-         :name "org-git-sync"
-         :buffer buffer
-         :command (list "sh" "-c" cmd)
-         :noquery t
-
-         :sentinel
-         (lambda (proc _event)
-
-           (when (memq (process-status proc)
-                       '(exit signal))
-
-             (setq my/org-git-sync-running nil)
-
-             (let ((output
-                    (with-current-buffer
-                        (process-buffer proc)
-                      (buffer-string))))
-
-               (if (= (process-exit-status proc) 0)
-
-                   ;; Success
-                   (my/org-git-set-status
-                    my/org-git-icon-ok
-                    (format "Git sync OK (%s)"
-                            (format-time-string "%H:%M:%S")))
-
-                 ;; Failure
-                 (if (string-match-p
-                      (regexp-opt
-                       '("CONFLICT"
-                         "Automatic merge failed"))
-                      output)
-
-                     ;; serious issue
-                     (my/org-git-handle-conflict output)
-
-                   ;; transient issue
-                   (progn
-                     (my/org-git-set-status
-                      my/org-git-icon-offline
-                      "Temporary git sync issue")
-
-                     (message
-                      "[org-git] temporary issue: %s"
-                      (string-trim output))))))
-
-             (kill-buffer (process-buffer proc))))))))
-
-  ;; ------------------------------------------------------------
-  ;; Start timer
-  ;; ------------------------------------------------------------
-
-  (when (my/org-git-inside-repo-p)
-
-    (when my/org-git-sync-timer
-      (cancel-timer my/org-git-sync-timer))
-
-    (setq my/org-git-sync-timer
-          (run-with-timer
-           10
-           my/org-git-sync-interval
-           #'my/org-git-sync)))
-
-  ;; ------------------------------------------------------------
-  ;; Manual resume
-  ;; ------------------------------------------------------------
-
-  (defun my/org-git-sync-resume ()
-    (interactive)
-
-    (setq my/org-git-sync-paused nil)
-
-    (my/org-git-set-status
-     my/org-git-icon-offline
-     "Git sync resumed"))
-
+  (ps/git-sync-start my-org-base-directory)
 #+end_src
 
 ** Save and Restore Sessions

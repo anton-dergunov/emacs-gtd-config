@@ -1,0 +1,130 @@
+;;; test-ps-done.el --- ERT tests for ps-done -*- lexical-binding: t; -*-
+
+(require 'ert)
+(require 'org)
+(add-to-list 'load-path "lisp")
+(require 'ps-done)
+
+;;; Test helpers
+
+(defconst ps/done-test--sample-org
+  "* TODO Active task
+Some body text.
+
+* DONE Finished task
+SCHEDULED: <2026-05-04 Mon>
+Done body line one.
+Done body line two.
+
+* TODO Another active
+More text.
+"
+  "Sample org content with one DONE subtree and two TODO subtrees.")
+
+(defmacro ps/done-test--with-org-buffer (content &rest body)
+  "Evaluate BODY in a temp `org-mode' buffer containing CONTENT."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (let ((org-mode-hook nil))      ; avoid user hooks during tests
+       (org-mode))
+     (insert ,content)
+     (goto-char (point-min))
+     ,@body))
+
+;;; -------------------------------------------------------
+;;; Public API exists
+;;; -------------------------------------------------------
+
+(ert-deftest ps/done--api-functions-defined ()
+  "All public commands and the setup function are defined."
+  (should (fboundp 'ps/done-collapse-subtrees))
+  (should (fboundp 'ps/done-collapse))
+  (should (fboundp 'ps/done-expand))
+  (should (fboundp 'ps/done-fade-subtrees))
+  (should (fboundp 'ps/done-setup-hooks)))
+
+(ert-deftest ps/done--commands-are-interactive ()
+  "The user-facing commands are interactive."
+  (should (commandp 'ps/done-collapse-subtrees))
+  (should (commandp 'ps/done-collapse))
+  (should (commandp 'ps/done-expand))
+  (should (commandp 'ps/done-fade-subtrees)))
+
+(ert-deftest ps/done--fade-color-defcustom ()
+  "The fade color defcustom has the documented default."
+  (should (equal ps/done-fade-color "gray75")))
+
+;;; -------------------------------------------------------
+;;; Fade overlays
+;;; -------------------------------------------------------
+
+(ert-deftest ps/done--fade-creates-overlay-on-done ()
+  "Fading a buffer with a DONE task creates at least one fade overlay."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-fade-subtrees)
+    (should (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
+                     (overlays-in (point-min) (point-max))))))
+
+(ert-deftest ps/done--clear-removes-overlays ()
+  "Clearing removes all fade overlays previously created."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-fade-subtrees)
+    (ps/done--clear-fade-overlays)
+    (should-not (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest ps/done--no-fade-without-done ()
+  "A buffer with no DONE tasks gets no fade overlays."
+  (ps/done-test--with-org-buffer "* TODO Only active\nbody\n"
+    (ps/done-fade-subtrees)
+    (should-not (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
+                         (overlays-in (point-min) (point-max))))))
+
+(ert-deftest ps/done--fade-idempotent ()
+  "Running fade twice does not accumulate duplicate overlays."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-fade-subtrees)
+    (let ((n1 (length (cl-remove-if-not
+                       (lambda (ov) (overlay-get ov 'ps-done-fade))
+                       (overlays-in (point-min) (point-max))))))
+      (ps/done-fade-subtrees)
+      (let ((n2 (length (cl-remove-if-not
+                         (lambda (ov) (overlay-get ov 'ps-done-fade))
+                         (overlays-in (point-min) (point-max))))))
+        (should (= n1 n2))))))
+
+;;; -------------------------------------------------------
+;;; Folding
+;;; -------------------------------------------------------
+
+(ert-deftest ps/done--fold-helper-folds-body ()
+  "The fold helper, called on a heading, folds that subtree's body."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* DONE" nil t))
+    (beginning-of-line)
+    (ps/done--fold-subtree-keep-newlines)
+    (forward-line 2)                ; into the DONE body
+    (should (org-fold-folded-p (point)))))
+
+(ert-deftest ps/done--fold-helper-preserves-trailing-blank ()
+  "The fold helper leaves the trailing blank line before the next heading visible."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* DONE" nil t))
+    (beginning-of-line)
+    (ps/done--fold-subtree-keep-newlines)
+    ;; The blank line just before the next heading must not be folded.
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* TODO Another active" nil t))
+    (forward-line -1)               ; the blank line before it
+    (should-not (org-fold-folded-p (point)))))
+
+(ert-deftest ps/done--collapse-and-expand-run-clean ()
+  "The collapse/expand map-entries wrappers execute without error."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (should (progn (ps/done-collapse-subtrees) t))
+    (should (progn (ps/done-collapse) t))
+    (should (progn (ps/done-expand) t))))
+
+;;; test-ps-done.el ends here

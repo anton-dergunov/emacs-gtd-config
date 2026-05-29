@@ -1,4 +1,4 @@
-;;; ps-org-conflicts.el --- Org scheduling conflict detection -*- lexical-binding: t; -*-
+;;; ps-conflicts.el --- Org scheduling conflict detection -*- lexical-binding: t; -*-
 
 (require 'cl-lib)
 (require 'calendar)
@@ -432,5 +432,5 @@ Cancels any previously pending check first."
   (setq ps/conflicts--agenda-timer
         (run-with-idle-timer 1.0 nil #'ps/conflicts--agenda-check)))
 
-(provide 'ps-org-conflicts)
-;;; ps-org-conflicts.el ends here
+(provide 'ps-conflicts)
+;;; ps-conflicts.el ends here

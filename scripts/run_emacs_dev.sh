@@ -20,5 +20,5 @@ EOF
 fi
 
 exec "$EMACS_BIN" --init-directory "$REPO_DIR" \
-  --eval "(setq my/org-git-sync-paused t)" \
+  --eval "(setq ps/git-sync-paused t)" \
   "$@"

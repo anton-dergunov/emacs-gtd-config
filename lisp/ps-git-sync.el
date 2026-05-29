@@ -1,0 +1,209 @@
+;;; ps-git-sync.el --- Background git auto-sync for org files -*- lexical-binding: t; -*-
+
+(require 'subr-x)
+
+;;; Customization
+
+(defcustom ps/git-sync-interval 60
+  "Seconds between automatic git sync attempts."
+  :type 'integer)
+
+;;; Icons
+
+(defvar ps/git-sync--icon-ok "⇅")
+(defvar ps/git-sync--icon-syncing "↻")
+(defvar ps/git-sync--icon-offline "◌")
+(defvar ps/git-sync--icon-error "×")
+
+;;; State
+
+(defvar ps/git-sync--directory nil
+  "Working directory (a git repo) the sync runs in. Set by `ps/git-sync-start'.")
+(defvar ps/git-sync--timer nil)
+(defvar ps/git-sync--running nil)
+
+(defvar ps/git-sync-paused nil
+  "When non-nil, automatic git sync is suspended.
+This is a public toggle: set it to t to disable syncing (e.g. from the
+command line during development with `--eval \"(setq ps/git-sync-paused t)\"').
+It is also set automatically by `ps/git-sync--handle-conflict' on a merge
+conflict, and cleared by `ps/git-sync-resume'.")
+(defvar ps/git-sync--last-status ps/git-sync--icon-offline)
+(defvar ps/git-sync--last-message "")
+
+;;; Modeline
+
+(defun ps/git-sync--modeline ()
+  "Return the propertized git-sync status indicator for the mode line."
+  (propertize
+   (format " %s" ps/git-sync--last-status)
+   'help-echo ps/git-sync--last-message
+   'face
+   (cond
+    (ps/git-sync-paused
+     '(:foreground "firebrick"))
+    ((equal ps/git-sync--last-status ps/git-sync--icon-ok)
+     '(:foreground "gray40"))
+    (t
+     '(:foreground "gray60")))))
+
+;;; Git helpers
+
+(defun ps/git-sync--root ()
+  "Return the git toplevel for `ps/git-sync--directory', or nil."
+  (when (and ps/git-sync--directory
+             (file-directory-p ps/git-sync--directory))
+    (let ((default-directory ps/git-sync--directory))
+      (string-trim
+       (shell-command-to-string
+        "git rev-parse --show-toplevel 2>/dev/null")))))
+
+(defun ps/git-sync--inside-repo-p ()
+  "Return non-nil if `ps/git-sync--directory' is inside a git repo."
+  (let ((root (ps/git-sync--root)))
+    (and root
+         (not (string-empty-p root)))))
+
+(defun ps/git-sync--set-status (icon message)
+  "Set the modeline ICON and help-echo MESSAGE, then refresh the mode line."
+  (setq ps/git-sync--last-status icon)
+  (setq ps/git-sync--last-message message)
+  (force-mode-line-update t))
+
+;;; Conflict handling
+
+(defun ps/git-sync--handle-conflict (output)
+  "Pause syncing and show git OUTPUT in a dedicated conflict buffer."
+  (setq ps/git-sync-paused t)
+
+  (ps/git-sync--set-status
+   ps/git-sync--icon-error
+   "Git sync paused due to conflict")
+
+  (with-current-buffer
+      (get-buffer-create "*Org Git Conflict*")
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert output)
+      (goto-char (point-min))
+      (special-mode))
+    (display-buffer (current-buffer))))
+
+;;; Main sync
+
+(defun ps/git-sync--run ()
+  "Pull, commit any changes, and push in `ps/git-sync--directory' asynchronously."
+  (when (and
+         (not ps/git-sync--running)
+         (not ps/git-sync-paused)
+         (ps/git-sync--inside-repo-p))
+
+    (setq ps/git-sync--running t)
+
+    (ps/git-sync--set-status
+     ps/git-sync--icon-syncing
+     "Git sync in progress")
+
+    (org-save-all-org-buffers)
+
+    (let* ((default-directory ps/git-sync--directory)
+           (host system-name)
+           (timestamp
+            (format-time-string "%Y-%m-%d %H:%M:%S"))
+           (commit-message
+            (format "Auto backup: %s (%s)"
+                    timestamp
+                    host))
+
+           (cmd
+            (format
+             (concat
+              "git pull && "
+              "git add -A && "
+              "if ! git diff --cached --quiet; then "
+              "git commit -m %S; "
+              "fi && "
+              "git push")
+             commit-message))
+
+           (buffer
+            (generate-new-buffer
+             " *org-git-sync*")))
+
+      (make-process
+       :name "org-git-sync"
+       :buffer buffer
+       :command (list "sh" "-c" cmd)
+       :noquery t
+
+       :sentinel
+       (lambda (proc _event)
+
+         (when (memq (process-status proc)
+                     '(exit signal))
+
+           (setq ps/git-sync--running nil)
+
+           (let ((output
+                  (with-current-buffer
+                      (process-buffer proc)
+                    (buffer-string))))
+
+             (if (= (process-exit-status proc) 0)
+
+                 ;; Success
+                 (ps/git-sync--set-status
+                  ps/git-sync--icon-ok
+                  (format "Git sync OK (%s)"
+                          (format-time-string "%H:%M:%S")))
+
+               ;; Failure
+               (if (string-match-p
+                    (regexp-opt
+                     '("CONFLICT"
+                       "Automatic merge failed"))
+                    output)
+
+                   ;; serious issue
+                   (ps/git-sync--handle-conflict output)
+
+                 ;; transient issue
+                 (progn
+                   (ps/git-sync--set-status
+                    ps/git-sync--icon-offline
+                    "Temporary git sync issue")
+
+                   (message
+                    "[org-git] temporary issue: %s"
+                    (string-trim output))))))
+
+           (kill-buffer (process-buffer proc))))))))
+
+;;; Public API
+
+(defun ps/git-sync-start (directory)
+  "Begin background git sync in DIRECTORY (a path inside a git repo).
+Registers the mode-line indicator and starts the periodic timer."
+  (setq ps/git-sync--directory directory)
+  (when (ps/git-sync--inside-repo-p)
+    ;; Register the mode-line indicator once.
+    (unless (member '(:eval (ps/git-sync--modeline)) global-mode-string)
+      (setq global-mode-string
+            (append global-mode-string
+                    '((:eval (ps/git-sync--modeline))))))
+    ;; (Re)start the timer.
+    (when ps/git-sync--timer
+      (cancel-timer ps/git-sync--timer))
+    (setq ps/git-sync--timer
+          (run-with-timer 10 ps/git-sync-interval #'ps/git-sync--run))))
+
+(defun ps/git-sync-resume ()
+  "Clear the paused state after a conflict was resolved."
+  (interactive)
+  (setq ps/git-sync-paused nil)
+  (ps/git-sync--set-status
+   ps/git-sync--icon-offline
+   "Git sync resumed"))
+
+(provide 'ps-git-sync)
+;;; ps-git-sync.el ends here
