@@ -205,5 +205,14 @@ Registers the mode-line indicator and starts the periodic timer."
    ps/git-sync--icon-offline
    "Git sync resumed"))
 
+(defun ps/git-sync-toggle ()
+  "Toggle automatic git sync on/off by flipping `ps/git-sync-paused'."
+  (interactive)
+  (setq ps/git-sync-paused (not ps/git-sync-paused))
+  (ps/git-sync--set-status
+   (if ps/git-sync-paused ps/git-sync--icon-offline ps/git-sync--icon-ok)
+   (if ps/git-sync-paused "Git sync disabled" "Git sync enabled"))
+  (message "Git sync %s" (if ps/git-sync-paused "disabled" "enabled")))
+
 (provide 'ps-git-sync)
 ;;; ps-git-sync.el ends here

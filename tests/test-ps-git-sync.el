@@ -144,6 +144,22 @@ Skipped when git is unavailable. Cleans up the repo afterward."
   "resume is an interactive command."
   (should (commandp 'ps/git-sync-resume)))
 
+(ert-deftest ps/git-sync--toggle-flips-paused-and-icon ()
+  "toggle flips the paused flag and updates the status icon both ways."
+  (let ((ps/git-sync-paused nil)
+        (ps/git-sync--last-status nil)
+        (ps/git-sync--last-message nil))
+    (ps/git-sync-toggle)
+    (should ps/git-sync-paused)
+    (should (equal ps/git-sync--last-status ps/git-sync--icon-offline))
+    (ps/git-sync-toggle)
+    (should-not ps/git-sync-paused)
+    (should (equal ps/git-sync--last-status ps/git-sync--icon-ok))))
+
+(ert-deftest ps/git-sync--toggle-is-interactive ()
+  "toggle is an interactive command."
+  (should (commandp 'ps/git-sync-toggle)))
+
 ;;; -------------------------------------------------------
 ;;; paused gates the sync
 ;;; -------------------------------------------------------
