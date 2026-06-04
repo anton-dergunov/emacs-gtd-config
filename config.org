@@ -14,6 +14,12 @@ file needs. Do not move it.
   ;; -*- lexical-binding: t; -*-
   ;; Code above enables lexical scoping so lambdas can capture variables (needed for async code)
 
+  ;; Disable the org-element cache before anything else.  Without this,
+  ;; Org can hit "Invalid search bound (wrong side of point)" while
+  ;; parsing this very file at startup — before the Org Mode section
+  ;; gets to set it later.
+  (setq org-element-use-cache nil)
+
   (require 'package)
 
   ;; Initialize package sources if needed
@@ -245,11 +251,6 @@ delete) the solarized-* settings.
 
 *** Agenda misc tweaks
 #+begin_src emacs-lisp
-  ;; Fix displaying "???" in agenda view columns
-  ;; https://www.reddit.com/r/emacs/comments/s9hl74/mystery_question_marks_on_my_agenda/
-  ;; https://emacs.stackexchange.com/questions/42006/trouble-with-org-mode-cache-find-error
-  (setq org-element-use-cache nil)
-
   ;; Allow Emacs Lisp code blocks to be executed without confirmation
   (setq org-confirm-babel-evaluate
         (lambda (lang body)
@@ -669,11 +670,16 @@ Logic lives in =lisp/ps-blank-lines.el=.
   (global-set-key (kbd "C-x |") 'ps/window-split-toggle)
 #+end_src
 
-** Productivity menu
+** Productivity menu + prefix keys
 Built with =easy-menu-define= (built-in =easymenu=). Items are grouped into
 submenus; the "Git Sync Enabled" entry is a toggle whose tick reflects
 =ps/git-sync-paused=. We also drop the stock =Options= and =Tools= menus —
 =M-x customize= and =M-x= cover anything they offered.
+
+Every menu action is also reachable from the keyboard under the =C-c p=
+("Productivity") prefix — Emacs reserves =C-c LETTER= bindings for the user
+so they are guaranteed not to clash with built-ins. Existing F-keys (F4–F10) stay bound for
+muscle memory; remove them later if you outgrow them.
 #+begin_src emacs-lisp
   (require 'easymenu)
 
@@ -681,50 +687,96 @@ submenus; the "Git Sync Enabled" entry is a toggle whose tick reflects
   (define-key global-map [menu-bar options] nil)
   (define-key global-map [menu-bar tools]   nil)
 
+  ;; Tiny wrapper around the agenda custom command "c" so we can bind/menu it.
+  (defun ps/show-super-agenda ()
+    "Open the Super Agenda custom command (the one normally launched by =C-c a c=)."
+    (interactive)
+    (org-agenda nil "c"))
+
+  ;; Productivity prefix keymap (mnemonic suffixes under C-c p).
+  (defvar ps/productivity-keymap (make-sparse-keymap)
+    "Prefix keymap for project commands, bound at `C-c p'.")
+  (global-set-key (kbd "C-c p") ps/productivity-keymap)
+  (let ((m ps/productivity-keymap))
+    ;; Plan & review
+    (define-key m (kbd "a") #'ps/show-super-agenda)         ; a → "agenda"
+    (define-key m (kbd "A") #'org-agenda)                   ; A → full chooser
+    (define-key m (kbd "n") #'ps/show-agenda)               ; n → NEXT
+    (define-key m (kbd "v") #'ps/org-show-availability)     ; v → aVailability
+    (define-key m (kbd "x") #'ps/show-conflicts)            ; x → conflicts/clashes
+    ;; Capture & notes
+    (define-key m (kbd "k") #'org-capture)                  ; k → kapture
+    (define-key m (kbd "j") #'org-journal-new-entry)        ; j → journal
+    (define-key m (kbd "l") #'org-store-link)               ; l → link
+    ;; Insert links
+    (define-key m (kbd "u") #'ps/org-insert-link-async)     ; u → URL (auto-title)
+    (define-key m (kbd "o") #'ps/insert-obsidian-link-from-clipboard) ; o → obsidian (clipboard)
+    (define-key m (kbd "O") #'ps/insert-obsidian-link-prompt)         ; O → obsidian (prompt)
+    ;; Edit org
+    (define-key m (kbd "d") #'ps/done-collapse)             ; d → DONE collapse
+    (define-key m (kbd "D") #'ps/done-expand)               ; D → DONE expand
+    (define-key m (kbd "r") #'ps/blank-lines-reinsert)      ; r → reinsert blanks
+    (define-key m (kbd "t") #'ps/shift-timezone)            ; t → timezone
+    ;; Sync & VC
+    (define-key m (kbd "s") #'ps/git-sync-toggle)           ; s → sync toggle
+    (define-key m (kbd "S") #'ps/git-sync-resume)           ; S → resume Sync
+    ;; Layout & navigation
+    (define-key m (kbd "1") #'delete-other-windows)         ; 1 → focus current buffer
+    (define-key m (kbd "|") #'ps/window-split-toggle)       ; | → swap split direction
+    (define-key m (kbd "f") #'recentf-open-files)           ; f → recent Files
+    (define-key m (kbd "i") #'imenu)                        ; i → imenu
+    ;; Config
+    (define-key m (kbd "C") #'ps/open-config-file))         ; C → Config
+
   (easy-menu-define ps/productivity-menu global-map
     "Productivity tools menu (Org planning, links, sync, etc.)."
     '("Productivity"
       ("Plan & Review"
-       ["Show NEXT Tasks"     ps/show-agenda           t]
-       ["Full Agenda…"        org-agenda               t]
-       ["Show Availability"   ps/org-show-availability t]
-       ["Check Conflicts"     ps/show-conflicts        t])
+       ["Super Agenda"        ps/show-super-agenda     :keys "C-c a c"]
+       ["Show NEXT Tasks"     ps/show-agenda           :keys "C-c p n"]
+       ["Full Agenda…"        org-agenda               :keys "C-c a"]
+       ["Show Availability"   ps/org-show-availability :keys "C-c p v"]
+       ["Check Conflicts"     ps/show-conflicts        :keys "C-c p x"])
       ("Capture & Notes"
-       ["Capture…"            org-capture              t]
-       ["New Journal Entry"   org-journal-new-entry    t]
-       ["Store Link"          org-store-link           t]
+       ["Capture…"            org-capture              :keys "C-c p k"]
+       ["New Journal Entry"   org-journal-new-entry    :keys "C-c p j"]
+       ["Store Link"          org-store-link           :keys "C-c p l"]
        ["Open Plans Folder"
         (lambda () (interactive)
           (dired (concat my-org-base-directory "Plans/")))
         t])
       ("Insert Links"
-       ["URL with Auto-title"        ps/org-insert-link-async                 :keys "F6"]
-       ["Obsidian Link — clipboard"  ps/insert-obsidian-link-from-clipboard   :keys "F4"]
-       ["Obsidian Link — prompt"     ps/insert-obsidian-link-prompt           :keys "F5"])
+       ["URL with Auto-title"        ps/org-insert-link-async                 :keys "C-c p u   /   F6"]
+       ["Obsidian Link — clipboard"  ps/insert-obsidian-link-from-clipboard   :keys "C-c p o   /   F4"]
+       ["Obsidian Link — prompt"     ps/insert-obsidian-link-prompt           :keys "C-c p O   /   F5"])
       ("Edit Org"
-       ["Collapse DONE Tasks"   ps/done-collapse           t]
-       ["Expand DONE Tasks"     ps/done-expand             t]
+       ["Collapse DONE Tasks"   ps/done-collapse           :keys "C-c p d"]
+       ["Expand DONE Tasks"     ps/done-expand             :keys "C-c p D"]
        ["Refresh DONE Fading"   ps/done-fade-subtrees      t]
-       ["Reinsert Blank Lines"  ps/blank-lines-reinsert    :keys "F7"]
-       ["Shift Timezones…"      ps/shift-timezone          t])
+       ["Reinsert Blank Lines"  ps/blank-lines-reinsert    :keys "C-c p r   /   F7"]
+       ["Shift Timezones…"      ps/shift-timezone          :keys "C-c p t"])
       ("Sync & Version Control"
        ["Git Sync Enabled" ps/git-sync-toggle
-        :style toggle :selected (not (and (boundp 'ps/git-sync-paused) ps/git-sync-paused))]
-       ["Resume Git Sync"   ps/git-sync-resume t]
+        :style toggle
+        :selected (not (and (boundp 'ps/git-sync-paused) ps/git-sync-paused))
+        :keys "C-c p s"]
+       ["Resume Git Sync"   ps/git-sync-resume :keys "C-c p S"]
        ["Magit Status"      magit-status       :keys "C-x g"])
       ("Layout & Navigation"
+       ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
+       ["Toggle Window Split (H/V)" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
        ["Toggle Neotree"            neotree-toggle           :keys "F8"]
-       ["Toggle Window Split (H/V)" ps/window-split-toggle   :keys "C-x |"]
-       ["Recent Files…"             recentf-open-files       t]
-       ["Imenu (jump to heading)"   imenu                    t])
+       ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
+       ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
-       ["Open Config File"        ps/open-config-file        :keys "F10"]
+       ["Open Config File"        ps/open-config-file        :keys "C-c p C   /   F10"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])))
 
-  ;; Pin the menu to the right (before Help). The symbol matches the menu name.
+  ;; Pin the menu just before Help. Final-items is rendered in list order, so
+  ;; prepending puts us to the left of help-menu (which stays last).
   (setq menu-bar-final-items
-        (append menu-bar-final-items '(productivity)))
+        (cons 'productivity (delq 'productivity menu-bar-final-items)))
 #+end_src
 
 * Session & Backups
@@ -774,3 +826,4 @@ conflict.
   ;; - https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Cleaning.org
   ;; - no-littering package: https://github.com/emacscollective/no-littering
 #+end_src
+
