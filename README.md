@@ -96,7 +96,8 @@ theme-relative equivalents so it looks right on light *and* dark backgrounds.
 
 > Generate these locally with `scripts/screenshot_all_themes.sh` (or
 > `scripts/screenshot_theme.sh <theme>`), which captures the agenda under each
-> theme into `screenshots/`.
+> theme into `screenshots/`. macOS-only: it uses the `screencapture` tool, so
+> the terminal running it must have Screen Recording permission.
 
 <!-- After generating, reference them here, e.g.:
 | Solarized Light | Wombat (dark) |

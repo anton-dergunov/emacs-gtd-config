@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Capture a screenshot of the agenda under a given color theme, for the README
 # gallery. Temporarily points local.el at the requested theme + sample org files
-# (restored on exit), launches a GUI Emacs, and exports the frame to a PNG.
+# (restored on exit), launches a GUI Emacs, and captures the frame to a PNG via
+# the macOS `screencapture' tool (see scripts/screenshot.el). macOS-only; the
+# terminal running this needs Screen Recording permission.
 #
 # Usage:   scripts/screenshot_theme.sh THEME [OUT.png]
 # Example: scripts/screenshot_theme.sh wombat

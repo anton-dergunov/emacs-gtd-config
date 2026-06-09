@@ -1,36 +1,34 @@
 ;;; screenshot.el --- Capture a PNG of the running frame -*- lexical-binding: t; -*-
 
 ;; Loaded by scripts/screenshot_theme.sh AFTER the normal config has finished
-;; loading.  It opens the Super Agenda, waits for a redisplay, then exports the
+;; loading.  It opens the Super Agenda, waits for a redisplay, then captures the
 ;; current graphical frame to the file named in the PS_SCREENSHOT_OUT env var
-;; using `x-export-frames' (PNG when the Emacs build has cairo, else SVG).
+;; using the macOS `screencapture' tool against the frame's outer edges
+;; (`frame-edges'), so the whole Emacs window including the title bar is saved.
 ;;
-;; This needs a graphical frame, so the launching script must NOT use -nw.
+;; This is macOS-only and needs a graphical frame, so the launching script must
+;; NOT use -nw.  The controlling terminal must have Screen Recording permission,
+;; otherwise `screencapture' produces a blank/desktop-only image.
 
 (defun ps/screenshot--capture ()
-  "Export the selected frame to PS_SCREENSHOT_OUT and quit Emacs."
-  (let* ((out (getenv "PS_SCREENSHOT_OUT"))
-         (png (ignore-errors (x-export-frames nil 'png))))
-    (cond
-     ((and out png)
-      (let ((coding-system-for-write 'binary))
-        (with-temp-file out (insert png)))
-      (message "Screenshot written: %s" out)
-      (kill-emacs 0))
-     (out
-      ;; PNG unavailable (no cairo) — fall back to SVG next to the target.
-      (let ((svg (ignore-errors (x-export-frames nil 'svg)))
-            (alt (concat (file-name-sans-extension out) ".svg")))
-        (if svg
-            (progn
-              (with-temp-file alt (insert svg))
-              (message "PNG unavailable; wrote SVG: %s" alt)
-              (kill-emacs 0))
-          (message "Frame export unavailable in this Emacs build")
-          (kill-emacs 1))))
-     (t
+  "Capture the selected frame to PS_SCREENSHOT_OUT via `screencapture'."
+  (let ((out (getenv "PS_SCREENSHOT_OUT")))
+    (unless out
       (message "PS_SCREENSHOT_OUT is not set")
-      (kill-emacs 1)))))
+      (kill-emacs 1))
+    ;; Make sure the frame is frontmost and fully drawn before the capture.
+    (raise-frame)
+    (select-frame-set-input-focus (selected-frame))
+    (redisplay t)
+    (pcase-let ((`(,left ,top ,right ,bottom) (frame-edges nil 'outer-edges)))
+      (let* ((region (format "%d,%d,%d,%d" left top (- right left) (- bottom top)))
+             (status (call-process "screencapture" nil nil nil
+                                   "-x" "-o" (concat "-R" region) out)))
+        (if (and (eq status 0) (file-exists-p out))
+            (progn (message "Screenshot written: %s" out)
+                   (kill-emacs 0))
+          (message "screencapture failed (status %S) for %s" status out)
+          (kill-emacs 1))))))
 
 (setq ps/git-sync-paused t)
 (set-frame-size (selected-frame) 120 40)
