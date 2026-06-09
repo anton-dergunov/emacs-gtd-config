@@ -59,6 +59,18 @@ More text.
   "The fade color defcustom has the documented default."
   (should (equal ps/done-fade-color "gray75")))
 
+(ert-deftest ps/done--fade-color-resolves-literal ()
+  "A literal color string is returned unchanged."
+  (let ((ps/done-fade-color "gray75"))
+    (should (equal (ps/done--fade-color) "gray75"))))
+
+(ert-deftest ps/done--fade-color-auto-derives-from-theme ()
+  "The `auto' symbol resolves to a concrete color string (shadow or fallback)."
+  (let ((ps/done-fade-color 'auto))
+    (let ((resolved (ps/done--fade-color)))
+      (should (stringp resolved))
+      (should-not (eq resolved 'auto)))))
+
 ;;; -------------------------------------------------------
 ;;; Fade overlays
 ;;; -------------------------------------------------------

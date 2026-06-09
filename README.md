@@ -61,6 +61,50 @@ The main configuration file is [config.org](config.org).
 6. **Run Emacs and enjoy** your setup.
 
 
+## Changing the Color Theme
+
+Everybody has strong opinions about colors, so switching the whole look is a
+one-line change. Open `config.org`, find the **Settings → Appearance** section,
+and set `ps/color-theme`:
+
+```elisp
+(defvar ps/color-theme 'solarized-light  ; <- change this
+  "Color theme loaded by `Editor & UI / Color theme'.")
+```
+
+Recommended values (external-package themes are **installed automatically** on
+first load):
+
+| Kind | Source | Examples |
+|------|--------|----------|
+| Light | built-in | `leuven` `tsdh-light` `tango` `whiteboard` `dichromacy` |
+| Dark | built-in | `wombat` `tango-dark` `deeper-blue` `misterioso` `tsdh-dark` |
+| Solarized | package | `solarized-light` (default) `solarized-dark` |
+| ef-themes | package | `ef-light` `ef-day` `ef-dark` `ef-winter` `ef-autumn` |
+| modus | built-in | `modus-operandi` `modus-vivendi` |
+| doom | package | `doom-one` `doom-nord` `doom-solarized-light` `doom-gruvbox` |
+
+The config's own color tweaks (faded DONE tasks, timestamp pills, metadata, the
+SCHEDULED/DEADLINE icons) adapt to the chosen theme automatically — the original
+hand-tuned grays are kept for Solarized, and every other theme gets
+theme-relative equivalents so it looks right on light *and* dark backgrounds.
+
+**Audition a theme without editing the file:** `M-x ps/preview-theme` (or
+`C-c p T`) loads any theme instantly. Set `ps/color-theme` to keep it.
+
+### Gallery
+
+> Generate these locally with `scripts/screenshot_all_themes.sh` (or
+> `scripts/screenshot_theme.sh <theme>`), which captures the agenda under each
+> theme into `screenshots/`.
+
+<!-- After generating, reference them here, e.g.:
+| Solarized Light | Wombat (dark) |
+|-----------------|---------------|
+| ![solarized-light](screenshots/solarized-light.png) | ![wombat](screenshots/wombat.png) |
+-->
+
+
 ## Running Unit Tests
 
 To run python tests locally:

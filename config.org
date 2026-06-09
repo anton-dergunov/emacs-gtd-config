@@ -70,11 +70,28 @@ so editing one number/colour/path is all you need — there is no need to touch 
 sections below.
 
 ** Appearance
-The Solarized-specific tuning lives in =Editor & UI / Color theme= below; if you
-switch =ps/color-theme= to a non-solarized theme, revisit that block too.
+Set =ps/color-theme= to any installed or built-in theme; external theme packages
+(solarized, doom, ef, modus) are auto-installed on first load. The Solarized
+hand-tuning in =Editor & UI / Color theme= and the colour tweaks throughout this
+config are applied verbatim only for =solarized-*= themes; every other theme gets
+theme-relative equivalents automatically, so switching is a one-line change.
 #+begin_src emacs-lisp
+  ;; Pick your look here. Recommended values (auto-installed if from a package):
+  ;;   Light (built-in):  leuven  tsdh-light  tango  whiteboard  dichromacy
+  ;;   Dark  (built-in):  wombat  tango-dark  deeper-blue  misterioso  tsdh-dark
+  ;;   Solarized (pkg):   solarized-light  solarized-dark            ; default
+  ;;   ef-themes (pkg):   ef-light  ef-day  ef-dark  ef-winter  ef-autumn
+  ;;   modus  (built-in): modus-operandi  modus-vivendi
+  ;;   doom   (pkg):      doom-one  doom-nord  doom-solarized-light  doom-gruvbox
+  ;; Audition one without editing this file:  M-x ps/preview-theme
   (defvar ps/color-theme 'solarized-light
     "Color theme loaded by `Editor & UI / Color theme'.")
+
+  (defvar ps/color-theme-solarized-p
+    (string-prefix-p "solarized-" (symbol-name ps/color-theme))
+    "Non-nil when `ps/color-theme' is a Solarized variant.
+Colour tweaks across this config keep their original hand-tuned values when
+this is non-nil, and fall back to theme-relative faces otherwise.")
 
   (defvar ps/main-font
     (cond
@@ -104,8 +121,10 @@ switch =ps/color-theme= to a non-solarized theme, revisit that block too.
 #+end_src
 
 ** Done tasks (ps-done.el)
+Solarized keeps the original light gray; other themes derive a dim colour from the
+active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 #+begin_src emacs-lisp
-  (setq ps/done-fade-color "gray75")
+  (setq ps/done-fade-color (if ps/color-theme-solarized-p "gray75" 'auto))
 #+end_src
 
 ** Git sync (ps-git-sync.el)
@@ -117,7 +136,12 @@ switch =ps/color-theme= to a non-solarized theme, revisit that block too.
 #+begin_src emacs-lisp
   (setq ps/schedule-icons-scheduled "⏱ "
         ps/schedule-icons-deadline  "⚑ "
-        ps/schedule-icons-face      '(:foreground "#000000" :weight bold))
+        ;; Solarized keeps the original black; other themes use the normal text
+        ;; colour so the icons stay visible on dark backgrounds too.
+        ps/schedule-icons-face
+        (if ps/color-theme-solarized-p
+            '(:foreground "#000000" :weight bold)
+          '(:inherit default :weight bold)))
 #+end_src
 
 ** Links (ps-links.el + ps-utils.el)
@@ -187,42 +211,67 @@ Applies =ps/main-font= from the Settings block above.
 #+end_src
 
 ** Color theme
-Loads =ps/color-theme= from Settings. The =setq= block below tunes Solarized
-specifically; if you change the theme to something else, you can ignore (or
-delete) the solarized-* settings.
+Loads =ps/color-theme= from Settings, auto-installing the package that provides it
+when needed. The Solarized-specific tuning below only runs for =solarized-*=
+themes; any other theme loads cleanly without it.
 #+begin_src emacs-lisp
-  (use-package solarized-theme
-    :config
-    (setq
-     ;; Make the fringe stand out from the background
-     solarized-distinct-fringe-background nil
+  ;; Theme-name prefix -> package that provides it. Built-in themes need no entry.
+  (defvar ps/color-theme-packages
+    '(("solarized-" . solarized-theme)
+      ("doom-"      . doom-themes)
+      ("ef-"        . ef-themes)
+      ("modus-"     . modus-themes))
+    "Alist of (THEME-NAME-PREFIX . PACKAGE) for auto-installing theme packages.")
 
-     ;; Don't change the font for some headings and titles
-     solarized-use-variable-pitch nil
+  (defun ps/load-color-theme (theme)
+    "Install (if needed) and load THEME, applying Solarized tuning when relevant."
+    (let* ((name (symbol-name theme))
+           (pkg (cdr (seq-find (lambda (c) (string-prefix-p (car c) name))
+                               ps/color-theme-packages))))
+      ;; Pull in the providing package unless THEME is already available.
+      (when (and pkg (not (memq theme (custom-available-themes))))
+        (unless (package-installed-p pkg)
+          (unless package-archive-contents (package-refresh-contents))
+          (package-install pkg))
+        (require pkg nil t))
+      ;; Solarized-only tuning (these variables don't exist for other themes).
+      (when (string-prefix-p "solarized-" name)
+        (setq
+         solarized-distinct-fringe-background nil  ; fringe blends with background
+         solarized-use-variable-pitch nil          ; keep one font for headings/titles
+         solarized-high-contrast-mode-line nil     ; low-contrast modeline
+         solarized-use-less-bold t                 ; less bolding
+         solarized-use-more-italic t               ; more italics
+         solarized-emphasize-indicators nil        ; muted git-gutter/flycheck indicators
+         solarized-scale-org-headlines nil         ; don't resize org headlines
+         ;; Avoid all font-size changes
+         solarized-height-minus-1 1.0
+         solarized-height-plus-1 1.0
+         solarized-height-plus-2 1.0
+         solarized-height-plus-3 1.0
+         solarized-height-plus-4 1.0))
+      (load-theme theme t)))
 
-     ;; Make the modeline high contrast
-     solarized-high-contrast-mode-line nil
+  (ps/load-color-theme ps/color-theme)
+#+end_src
 
-     ;; Use less bolding
-     solarized-use-less-bold t
-
-     ;; Use more italics
-     solarized-use-more-italic t
-
-     ;; Use less colors for indicators such as git:gutter, flycheck and similar
-     solarized-emphasize-indicators nil
-
-     ;; Don't change size of org-mode headlines (but keep other size-changes)
-     solarized-scale-org-headlines nil
-
-     ;; Avoid all font-size changes
-     solarized-height-minus-1 1.0
-     solarized-height-plus-1 1.0
-     solarized-height-plus-2 1.0
-     solarized-height-plus-3 1.0
-     solarized-height-plus-4 1.0)
-
-    (load-theme ps/color-theme t))
+** Live theme preview
+=M-x ps/preview-theme= (also =C-c p T=) loads a theme immediately so you can
+audition it; set =ps/color-theme= in Settings to make a choice permanent. Note
+that the per-theme colour tweaks elsewhere in this config are only recomputed on
+restart, so a previewed theme may show the Solarized greys until you restart.
+#+begin_src emacs-lisp
+  (defun ps/preview-theme (theme)
+    "Load THEME now for preview, disabling any currently enabled themes first.
+THEME may be a symbol from an as-yet-uninstalled package; it is auto-installed.
+This does not persist — edit `ps/color-theme' in Settings to keep a theme."
+    (interactive
+     (list (intern (completing-read
+                    "Preview theme: "
+                    (mapcar #'symbol-name (custom-available-themes))))))
+    (mapc #'disable-theme custom-enabled-themes)
+    (ps/load-color-theme theme)
+    (message "Previewing %s — set ps/color-theme in config.org to keep it" theme))
 #+end_src
 
 * Org Mode
@@ -347,34 +396,35 @@ Logic lives in =lisp/ps-agenda-emoji.el= (it shells out to
     :hook ((org-mode . org-modern-mode)
            (org-agenda-finalize . org-modern-agenda))
     :config
-    ;; Set larger font for timestamp
-    (set-face-attribute 'org-modern-date-active nil
-                        :height 1.2
-                        :foreground "gray30"
-                        :background "gray90")
+    ;; Enlarge the timestamp pills for every theme...
+    (dolist (face '(org-modern-date-active org-modern-time-active
+                    org-modern-date-inactive org-modern-time-inactive))
+      (set-face-attribute face nil :height 1.2))
 
-    (set-face-attribute 'org-modern-time-active nil
-                        :height 1.2
-                        :foreground "gray30"
-                        :background "gray80")
-
-    (set-face-attribute 'org-modern-date-inactive nil
-                        :height 1.2
-                        :foreground "gray75"
-                        :background "gray90")
-
-    (set-face-attribute 'org-modern-time-inactive nil
-                        :height 1.2
-                        :foreground "gray75"
-                        :background "gray80")
+    ;; ...but keep the original hand-picked greys only for Solarized; other
+    ;; themes use org-modern's own theme-aware pill colours.
+    (when ps/color-theme-solarized-p
+      (set-face-attribute 'org-modern-date-active nil
+                          :foreground "gray30" :background "gray90")
+      (set-face-attribute 'org-modern-time-active nil
+                          :foreground "gray30" :background "gray80")
+      (set-face-attribute 'org-modern-date-inactive nil
+                          :foreground "gray75" :background "gray90")
+      (set-face-attribute 'org-modern-time-inactive nil
+                          :foreground "gray75" :background "gray80"))
 
     ;; Disable modern bullets
     (setq org-modern-star nil)
 
-    ;; Monochrome TODO keywords
-    (custom-set-faces
-     '(org-todo ((t (:foreground "gainsboro" :background "gray20"))))
-     '(org-headline-done ((t (:foreground "gray75" :strike-through t))))))
+    ;; TODO keyword + struck-through DONE headline. Solarized keeps the original
+    ;; monochrome badge; other themes let the theme colour the TODO keyword and
+    ;; derive the dim DONE colour from the `shadow' face.
+    (if ps/color-theme-solarized-p
+        (custom-set-faces
+         '(org-todo ((t (:foreground "gainsboro" :background "gray20"))))
+         '(org-headline-done ((t (:foreground "gray75" :strike-through t)))))
+      (custom-set-faces
+       '(org-headline-done ((t (:inherit shadow :strike-through t)))))))
 #+end_src
 
 *** Replace SCHEDULED / DEADLINE labels with icons
@@ -393,15 +443,19 @@ Settings block above.
 
 *** Gray out org metadata (=#+TITLE:= etc.)
 #+begin_src emacs-lisp
-  ;; Apply gray color directly to Org's native metadata faces
+  ;; Apply a faded color to Org's native metadata faces. Solarized keeps the
+  ;; original light gray; other themes derive a dim colour from `shadow'.
   (defun ps/org-apply-metadata-fade ()
-    "Apply gray color to all #+ metadata lines natively."
-    ;; Changes faces like `#+TIMEZONE:` and `#+PROPERTY:`
-    (set-face-attribute 'org-meta-line nil :foreground "gray85")
-    ;; Changes the `#+TITLE:` label specifically
-    (set-face-attribute 'org-document-info-keyword nil :foreground "gray85")
-    ;; Changes the actual value (e.g., "Interviews") next to TITLE
-    (set-face-attribute 'org-document-info nil :foreground "gray85"))
+    "Fade all #+ metadata lines natively."
+    (let ((color (if ps/color-theme-solarized-p
+                     "gray85"
+                   (face-foreground 'shadow nil t))))
+      ;; Changes faces like `#+TIMEZONE:` and `#+PROPERTY:`
+      (set-face-attribute 'org-meta-line nil :foreground color)
+      ;; Changes the `#+TITLE:` label specifically
+      (set-face-attribute 'org-document-info-keyword nil :foreground color)
+      ;; Changes the actual value (e.g., "Interviews") next to TITLE
+      (set-face-attribute 'org-document-info nil :foreground color)))
 
   ;; Run it on mode start
   (add-hook 'org-mode-hook #'ps/org-apply-metadata-fade)
@@ -726,7 +780,8 @@ muscle memory; remove them later if you outgrow them.
     (define-key m (kbd "f") #'recentf-open-files)           ; f → recent Files
     (define-key m (kbd "i") #'imenu)                        ; i → imenu
     ;; Config
-    (define-key m (kbd "C") #'ps/open-config-file))         ; C → Config
+    (define-key m (kbd "C") #'ps/open-config-file)          ; C → Config
+    (define-key m (kbd "T") #'ps/preview-theme))            ; T → Theme preview
 
   (easy-menu-define ps/productivity-menu global-map
     "Productivity tools menu (Org planning, links, sync, etc.)."
@@ -770,6 +825,7 @@ muscle memory; remove them later if you outgrow them.
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
        ["Open Config File"        ps/open-config-file        :keys "C-c p C   /   F10"]
+       ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])))
 

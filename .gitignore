@@ -11,6 +11,10 @@
 !scripts/
 !scripts/*.py
 !scripts/*.sh
+!scripts/*.el
+
+!screenshots/
+!screenshots/**
 
 !tests/
 !tests/*.py

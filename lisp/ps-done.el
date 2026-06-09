@@ -8,8 +8,20 @@
 ;;; Customization
 
 (defcustom ps/done-fade-color "gray75"
-  "Color used to fade DONE tasks and their timestamps."
-  :type 'string)
+  "Color used to fade DONE tasks and their timestamps.
+May be a color name/hex string, or the symbol `auto' to derive a
+theme-appropriate dim color from the `shadow' face (so DONE fading
+looks right on both light and dark themes)."
+  :type '(choice (string :tag "Color")
+                 (const :tag "Derive from theme (shadow face)" auto)))
+
+(defun ps/done--fade-color ()
+  "Resolve `ps/done-fade-color' to a concrete color string.
+When it is the symbol `auto', use the `shadow' face foreground of the
+active theme, falling back to \"gray50\" if that is unavailable."
+  (if (eq ps/done-fade-color 'auto)
+      (or (face-foreground 'shadow nil t) "gray50")
+    ps/done-fade-color))
 
 ;;; Folding helpers
 
@@ -63,6 +75,7 @@
     ;; Prevent overlay accumulation
     (ps/done--clear-fade-overlays)
 
+    (let ((fade-color (ps/done--fade-color)))
     (save-excursion
       (save-restriction
         (widen)
@@ -89,7 +102,7 @@
                 (let ((ov (make-overlay begin end)))
                   (overlay-put ov
                                'face
-                               `(:foreground ,ps/done-fade-color))
+                               `(:foreground ,fade-color))
                   (overlay-put ov 'priority 10)
                   (overlay-put ov 'ps-done-fade t))
 
@@ -118,11 +131,11 @@
 
                       (overlay-put ts-ov
                                    'face
-                                   `(:foreground ,ps/done-fade-color
+                                   `(:foreground ,fade-color
                                                   :strike-through t))
 
                       (overlay-put ts-ov 'priority 20)
-                      (overlay-put ts-ov 'ps-done-fade t))))))))))))
+                      (overlay-put ts-ov 'ps-done-fade t)))))))))))))
 
 (defun ps/done--refresh-after-revert ()
   "Fully rebuild Org visuals after auto-revert."
