@@ -11,14 +11,18 @@
 #          scripts/screenshot_theme.sh solarized-light docs/img/solarized.png
 #
 # Env:
-#   EMACS_BIN       Emacs binary (passed through to run_emacs_dev.sh)
-#   PS_SAMPLE_DIR   sample org dir relative to repo (default: samples/realistic/)
+#   EMACS_BIN             Emacs binary (passed through to run_emacs_dev.sh)
+#   PS_SAMPLE_DIR         sample org dir relative to repo (default: samples/realistic/)
+#   PS_SCREENSHOT_FAKE_DATE
+#                         "now" Emacs/Org should believe in for this session
+#                         (default: a date chosen to match samples/realistic/)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 SAMPLE_DIR="${PS_SAMPLE_DIR:-samples/realistic/}"
+PS_SCREENSHOT_FAKE_DATE="${PS_SCREENSHOT_FAKE_DATE:-2026-05-21 10:00}"
 
 THEME="${1:?Usage: screenshot_theme.sh THEME [OUT.png]}"
 OUT="${2:-$REPO_DIR/screenshots/$THEME.png}"
@@ -44,4 +48,5 @@ cat > "$LOCAL_EL" <<EOF
 EOF
 
 echo "Capturing $THEME -> $OUT"
-PS_SCREENSHOT_OUT="$OUT" "$SCRIPT_DIR/run_emacs_dev.sh" -l "$SCRIPT_DIR/screenshot.el"
+PS_SCREENSHOT_OUT="$OUT" PS_SCREENSHOT_FAKE_DATE="$PS_SCREENSHOT_FAKE_DATE" \
+  "$SCRIPT_DIR/run_emacs_dev.sh" -l "$SCRIPT_DIR/screenshot.el"
