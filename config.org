@@ -62,6 +62,8 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-availability)
   (require 'ps-conflicts)
   (require 'ps-timezone)
+  (require 'ps-file-tree)
+  (require 'ps-file-tree-icons)
 #+end_src
 
 * Settings
@@ -122,6 +124,20 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 #+begin_src emacs-lisp
   (setq ps/conflicts-gap-minutes    15
         ps/conflicts-include-past   nil)
+#+end_src
+
+** File Tree (ps-file-tree.el / ps-file-tree-icons.el)
+Files/dirs whose name matches any regexp here are hidden from the file tree
+(=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Icons are
+loaded from =icons/stock/= and =icons/custom/= and matched to
+=<Category>.org= files, the same as the agenda category icons.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-ignored-files
+        '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
+
+  (setq ps/file-tree-icon-dirs
+        (list (expand-file-name "icons/stock" user-emacs-directory)
+              (expand-file-name "icons/custom" user-emacs-directory)))
 #+end_src
 
 ** Done tasks (ps-done.el)
@@ -204,12 +220,6 @@ Path to the Python script invoked from the agenda finalize hook.
                   shell-mode-hook
                   eshell-mode-hook))
     (add-hook mode (lambda () (display-line-numbers-mode 0))))
-
-  ;; Disable line numbers for neotree
-  (with-eval-after-load 'neotree
-    (add-hook 'neo-after-create-hook
-              (lambda (&rest _)
-                (display-line-numbers-mode 0))))
 #+end_src
 
 ** Font
@@ -673,33 +683,52 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
     (setq dired-use-ls-dired nil))
 #+end_src
 
-** =neotree= file explorer
+** =treemacs= file tree
+A tree-style sidebar for browsing the Org GTD tree.
+The ignore list and category icons live in =lisp/ps-file-tree.el= and
+=lisp/ps-file-tree-icons.el=.
 #+begin_src emacs-lisp
-  (setq neo-autorefresh nil)
-
-  (use-package neotree
+  (use-package treemacs
+    :defer t
+    :commands (treemacs treemacs-select-window)
     :config
-    (neotree-dir my-org-base-directory))
+    (ps/file-tree-setup-ignore)
+    (ps/file-tree-icons-apply ps/file-tree-icon-dirs)
 
-  (defun ps/neotree-customize (&optional _)
-    (setq left-margin-width 1) ;; add extra 1 space for left margin
-    (set-window-buffer nil (current-buffer))) ;; refresh buffer display
+    ;; Never follow the current buffer/file - the tree stays where it is.
+    (treemacs-follow-mode -1)
+    (treemacs-tag-follow-mode -1)
 
-  (add-hook 'neo-after-create-hook 'ps/neotree-customize)
+    ;; Runs after projects are rendered, unlike `treemacs-mode-hook'. Deferred
+    ;; via a zero-second timer so it runs after `treemacs--init' finishes its
+    ;; own rendering, rather than recursing into it.
+    (add-hook 'treemacs-post-buffer-init-hook
+      (lambda () (run-with-timer 0.1 nil #'ps/file-tree-expand-all)))
+    (add-hook 'treemacs-mode-hook (lambda () (setq header-line-format nil)))
+    (add-hook 'treemacs-mode-hook (lambda () (display-line-numbers-mode 0)))
 
-  ;; Ensure refresh after startup (if neotree is opened early)
+    ;; Non-intrusive expand/collapse-all, local to the tree buffer.
+    (define-key treemacs-mode-map (kbd "M-+") #'ps/file-tree-expand-all)
+    (define-key treemacs-mode-map (kbd "M--") #'ps/file-tree-collapse-all)
+
+    ;; Keep the file tree visible across agenda window reorganization
+    ;; (org-agenda's default window setup would otherwise close it).
+    (with-eval-after-load 'org-agenda
+      (define-advice org-agenda (:around (orig-fn &rest args) ps/file-tree-preserve)
+        "Keep the file tree visible across agenda window reorganization."
+        (let ((open (ps/file-tree-window-exists-p)))
+          (when open (ps/file-tree-hide))
+          (apply orig-fn args)
+          (when open (ps/file-tree-show))))))
+
+  ;; Open the file tree at `my-org-base-directory' on startup, fully expanded.
   (add-hook 'emacs-startup-hook
     (lambda ()
-      (run-at-time "0.1 sec" nil #'ps/neotree-customize)))
-
-  (with-eval-after-load 'neotree
-    ;; Avoid redisplay races during auto-revert
-    (advice-add
-     'neo-buffer--get-filename-current-line
-     :around
-     (lambda (orig-fun &rest args)
-       (ignore-errors
-         (apply orig-fun args)))))
+      (require 'treemacs)
+      (let* ((path (treemacs-canonical-path my-org-base-directory))
+             (name (treemacs--filename path)))
+        (treemacs-do-add-project-to-workspace path name))
+      (save-selected-window (treemacs-select-window))))
 #+end_src
 
 * Keybindings & Menu
@@ -709,18 +738,22 @@ Logic lives in =lisp/ps-blank-lines.el=.
   (global-set-key [f7] #'ps/blank-lines-reinsert)
 #+end_src
 
-** F8 — toggle neotree
+** F8 — toggle file tree
 #+begin_src emacs-lisp
-  (global-set-key [f8] 'neotree-toggle)
+  (global-set-key [f8] #'ps/file-tree-toggle)
 #+end_src
 
 ** F9 — show agenda
 #+begin_src emacs-lisp
-  ;; Show the agenda with the "NEXT" tasks and delete other windows
+  ;; Show the agenda with the "NEXT" tasks and delete other windows, keeping
+  ;; the file tree visible (delete-other-windows would otherwise close it).
   (defun ps/show-agenda ()
     (interactive)
-    (org-todo-list "NEXT")
-    (delete-other-windows))
+    (let ((open (ps/file-tree-window-exists-p)))
+      (when open (ps/file-tree-hide))
+      (org-todo-list "NEXT")
+      (delete-other-windows)
+      (when open (ps/file-tree-show))))
 
   (global-set-key [f9] 'ps/show-agenda)
 #+end_src
@@ -741,10 +774,10 @@ Logic lives in =lisp/ps-blank-lines.el=.
   (defun ps/window-split-toggle ()
     "Toggle between horizontal and vertical split with exactly two windows, preserving buffer order."
     (interactive)
-    ;; Check if NeoTree is open
-    (let ((neo-open (neo-global--window-exists-p)))
-      (when neo-open
-        (neotree-hide))  ;; Hide NeoTree temporarily
+    ;; Check if the file tree is open
+    (let ((tree-open (ps/file-tree-window-exists-p)))
+      (when tree-open
+        (ps/file-tree-hide))  ;; Hide it temporarily
 
       ;; Check if there are exactly two windows
       (if (/= (length (window-list)) 2)
@@ -761,9 +794,9 @@ Logic lives in =lisp/ps-blank-lines.el=.
             (set-window-buffer win1 buf1)
             (set-window-buffer new-win buf2))))
 
-      ;; Reopen NeoTree if it was open before
-      (when neo-open
-        (neotree-show))))
+      ;; Reopen the file tree if it was open before
+      (when tree-open
+        (ps/file-tree-show))))
 
   (global-set-key (kbd "C-x |") 'ps/window-split-toggle)
 #+end_src
@@ -864,7 +897,7 @@ muscle memory; remove them later if you outgrow them.
       ("Layout & Navigation"
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
        ["Toggle Window Split (H/V)" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
-       ["Toggle Neotree"            neotree-toggle           :keys "F8"]
+       ["Toggle File Tree"          ps/file-tree-toggle      :keys "F8"]
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
