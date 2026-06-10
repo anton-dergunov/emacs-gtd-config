@@ -1,10 +1,13 @@
 ;;; ps-file-tree-icons.el --- Category icons for the file tree -*- lexical-binding: t; -*-
 
-;; Provided by treemacs; declared here so this file loads (and its pure
+;; Provided by treemacs/ht; declared here so this file loads (and its pure
 ;; functions are testable) without treemacs installed.
 (declare-function treemacs-create-theme "treemacs-themes")
 (declare-function treemacs-load-theme "treemacs-themes")
-(declare-function treemacs-create-icon "treemacs-icons")
+(declare-function treemacs-theme->gui-icons "treemacs-themes")
+(declare-function treemacs-theme->tui-icons "treemacs-themes")
+(declare-function ht-set! "ht")
+(defvar treemacs--current-theme)
 
 (defun ps/file-tree-icons--build-alist (icon-dir)
   "Build a list of (CATEGORY . FILE) for SVGs in ICON-DIR.
@@ -25,14 +28,14 @@ or has no SVGs."
     (nreverse merged)))
 
 (defun ps/file-tree-icons--register (category file)
-  "Register FILE as the file-tree icon for CATEGORY.org files."
-  (eval
-   `(treemacs-create-icon
-     :icons-dir ,(file-name-directory file)
-     :file ,(file-name-nondirectory file)
-     :extensions (,(concat category ".org"))
-     :fallback "")
-   t))
+  "Register FILE as the file-tree icon for CATEGORY.org files.
+Unlike `treemacs-create-icon', this preserves FILE's natural size and
+aspect ratio instead of stretching it to a square."
+  (let ((ext (downcase (concat category ".org")))
+        (gui-icon (propertize " " 'display
+                               (create-image file nil nil :ascent 'center))))
+    (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) ext gui-icon)
+    (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) ext "")))
 
 (defun ps/file-tree-icons-apply (icon-dirs)
   "Register a treemacs theme mapping <Category>.org files to category SVGs.

@@ -11,6 +11,7 @@
 (declare-function treemacs-toggle-node "treemacs-interface")
 (declare-function treemacs-collapse-all-projects "treemacs-interface")
 (declare-function treemacs-button-get "treemacs-core-utils")
+(declare-function treemacs-with-writable-buffer "treemacs-core-utils")
 
 ;;; Customization
 
@@ -82,12 +83,38 @@ forward without restarting."
   (let ((buf (treemacs-get-local-buffer)))
     (when buf
       (with-current-buffer buf
-        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)))))
+        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)
+        (ps/file-tree-hide-root)))))
 
 (defun ps/file-tree-collapse-all ()
   "Recursively collapse every directory in the file tree."
   (interactive)
-  (treemacs-collapse-all-projects))
+  (treemacs-collapse-all-projects)
+  (ps/file-tree-hide-root))
+
+;;; Hide root row
+
+(defun ps/file-tree-hide-root ()
+  "Hide the project root line and its trailing blank separator.
+Re-applies an `invisible' text property to the root node's line each time
+it's called, since toggling the root re-renders that line and would
+otherwise drop the property."
+  (let ((buf (treemacs-get-local-buffer)))
+    (when buf
+      (with-current-buffer buf
+        (add-to-invisibility-spec 'ps-file-tree-root)
+        (treemacs-with-writable-buffer
+         (save-excursion
+           (let ((pos (next-button (point-min) t)))
+             (while pos
+               (when (memq (treemacs-button-get pos :state)
+                           '(root-node-open root-node-closed))
+                 (let ((beg (line-beginning-position))
+                       (end (1+ (line-end-position))))
+                   (when (eq (char-after end) ?\n)
+                     (setq end (1+ end)))
+                   (put-text-property beg end 'invisible 'ps-file-tree-root)))
+               (setq pos (next-button pos))))))))))
 
 (provide 'ps-file-tree)
 ;;; ps-file-tree.el ends here
