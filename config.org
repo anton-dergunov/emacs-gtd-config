@@ -702,11 +702,6 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (treemacs-follow-mode -1)
     (treemacs-tag-follow-mode -1)
 
-    ;; Runs after projects are rendered, unlike `treemacs-mode-hook'. Deferred
-    ;; via a zero-second timer so it runs after `treemacs--init' finishes its
-    ;; own rendering, rather than recursing into it.
-    (add-hook 'treemacs-post-buffer-init-hook
-      (lambda () (run-with-timer 0.1 nil #'ps/file-tree-expand-all)))
     (add-hook 'treemacs-mode-hook (lambda () (setq header-line-format nil)))
     (add-hook 'treemacs-mode-hook (lambda () (display-line-numbers-mode 0)))
     (add-hook 'treemacs-mode-hook
@@ -730,14 +725,18 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
           (apply orig-fn args)
           (when open (ps/file-tree-show))))))
 
-  ;; Open the file tree at `my-org-base-directory' on startup, fully expanded.
+  ;; Open the file tree at `my-org-base-directory' on startup, one project per
+  ;; immediate subdirectory, fully expanded. treemacs expands directories
+  ;; asynchronously (git-status/flatten-dirs subprocesses), so re-run the
+  ;; idempotent setup a few times to ride out late-arriving updates.
   (add-hook 'emacs-startup-hook
     (lambda ()
       (require 'treemacs)
-      (let* ((path (treemacs-canonical-path my-org-base-directory))
-             (name (treemacs--filename path)))
-        (treemacs-do-add-project-to-workspace path name))
-      (save-selected-window (treemacs-select-window))))
+      (save-selected-window
+        (treemacs-select-window)
+        (let ((base (treemacs-canonical-path my-org-base-directory)))
+          (dolist (delay '(0 0.3 0.8 1.5 3))
+            (run-with-timer delay nil #'ps/file-tree-init base))))))
 #+end_src
 
 * Keybindings & Menu

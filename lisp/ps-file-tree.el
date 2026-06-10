@@ -11,7 +11,13 @@
 (declare-function treemacs-toggle-node "treemacs-interface")
 (declare-function treemacs-collapse-all-projects "treemacs-interface")
 (declare-function treemacs-button-get "treemacs-core-utils")
-(declare-function treemacs-with-writable-buffer "treemacs-core-utils")
+(declare-function treemacs-do-add-project-to-workspace "treemacs-workspaces")
+(declare-function treemacs-do-remove-project-from-workspace "treemacs-workspaces")
+(declare-function treemacs-current-workspace "treemacs-workspaces")
+(declare-function treemacs-workspace->projects "treemacs-workspaces")
+(declare-function treemacs-project->path "treemacs-workspaces")
+(declare-function treemacs-canonical-path "treemacs-core-utils")
+(declare-function treemacs--filename "treemacs-core-utils")
 
 ;;; Customization
 
@@ -83,38 +89,53 @@ forward without restarting."
   (let ((buf (treemacs-get-local-buffer)))
     (when buf
       (with-current-buffer buf
-        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)
-        (ps/file-tree-hide-root)))))
+        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)))))
 
 (defun ps/file-tree-collapse-all ()
   "Recursively collapse every directory in the file tree."
   (interactive)
-  (treemacs-collapse-all-projects)
-  (ps/file-tree-hide-root))
+  (treemacs-collapse-all-projects))
 
-;;; Hide root row
+;;; Multi-root project setup
 
-(defun ps/file-tree-hide-root ()
-  "Hide the project root line and its trailing blank separator.
-Re-applies an `invisible' text property to the root node's line each time
-it's called, since toggling the root re-renders that line and would
-otherwise drop the property."
-  (let ((buf (treemacs-get-local-buffer)))
-    (when buf
-      (with-current-buffer buf
-        (add-to-invisibility-spec 'ps-file-tree-root)
-        (treemacs-with-writable-buffer
-         (save-excursion
-           (let ((pos (next-button (point-min) t)))
-             (while pos
-               (when (memq (treemacs-button-get pos :state)
-                           '(root-node-open root-node-closed))
-                 (let ((beg (line-beginning-position))
-                       (end (1+ (line-end-position))))
-                   (when (eq (char-after end) ?\n)
-                     (setq end (1+ end)))
-                   (put-text-property beg end 'invisible 'ps-file-tree-root)))
-               (setq pos (next-button pos))))))))))
+(defun ps/file-tree--list-subdirs (base-dir)
+  "Return (NAME . PATH) for each visible immediate subdirectory of BASE-DIR.
+Hidden via `ps/file-tree--ignored-p', sorted by name."
+  (let (dirs)
+    (when (file-directory-p base-dir)
+      (dolist (entry (directory-files base-dir t))
+        (let ((name (file-name-nondirectory entry)))
+          (when (and (file-directory-p entry)
+                     (not (member name '("." "..")))
+                     (not (ps/file-tree--ignored-p name entry)))
+            (push (cons name entry) dirs)))))
+    (sort dirs (lambda (a b) (string< (car a) (car b))))))
+
+(defun ps/file-tree-set-projects (base-dir)
+  "Make the workspace contain exactly one project per subdirectory of BASE-DIR.
+Removes any existing projects whose path is not one of BASE-DIR's immediate
+subdirectories, and adds projects for any that are missing."
+  (let* ((desired (ps/file-tree--list-subdirs base-dir))
+         (desired-paths (mapcar (lambda (d) (treemacs-canonical-path (cdr d))) desired))
+         (existing (treemacs-workspace->projects (treemacs-current-workspace))))
+    (dolist (project existing)
+      (unless (member (treemacs-project->path project) desired-paths)
+        (treemacs-do-remove-project-from-workspace project t nil)))
+    (let ((existing-paths
+           (mapcar #'treemacs-project->path
+                   (treemacs-workspace->projects (treemacs-current-workspace)))))
+      (dolist (dir desired)
+        (let ((path (treemacs-canonical-path (cdr dir))))
+          (unless (member path existing-paths)
+            (treemacs-do-add-project-to-workspace path (car dir))))))))
+
+(defun ps/file-tree-init (base-dir)
+  "Set up the file tree projects for BASE-DIR and expand everything.
+Idempotent — safe to call repeatedly (e.g. from staggered timers) while
+treemacs's async directory rendering settles."
+  (when (treemacs-get-local-buffer)
+    (ps/file-tree-set-projects base-dir)
+    (ps/file-tree-expand-all)))
 
 (provide 'ps-file-tree)
 ;;; ps-file-tree.el ends here
