@@ -136,3 +136,17 @@ This uses `--init-directory` to point Emacs at this repo, and automatically crea
 > ```bash
 > EMACS_BIN=/path/to/emacs ./scripts/run_emacs_dev.sh
 > ```
+
+### Trying other Emacs builds
+
+Pass `--emacs <variant>` to run against a different Emacs build installed side-by-side:
+
+```bash
+./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app (default)
+./scripts/run_emacs_dev.sh --emacs plus     # emacs-plus@30 (Homebrew formula)
+./scripts/run_emacs_dev.sh --emacs latest   # latest emacsformacosx.com build (~/Applications/Emacs-latest)
+```
+
+### Sandboxed runs
+
+Pass `--sandbox` to copy the repo (excluding `.git`) to a temp directory under `/tmp` and run from there. This avoids any risk of `ps-git-sync` committing to this repo's git history during testing. The temp directory is removed when Emacs exits. Combine with `--emacs`, e.g. `./scripts/run_emacs_dev.sh --emacs plus --sandbox`.

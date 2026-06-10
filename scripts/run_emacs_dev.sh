@@ -3,14 +3,58 @@
 # Uses --init-directory (Emacs 29+) so user-emacs-directory points here.
 # On first run, packages are downloaded into elpa/ inside this repo.
 # local.el in the repo root points org files at samples/realistic/.
+#
+# Pass --emacs <variant> to pick which Emacs build to run (default: default):
+#   default - /Applications/Emacs.app (override with EMACS_BIN)
+#   plus    - emacs-plus@30 (Homebrew formula)
+#   latest  - official latest build from emacsformacosx.com,
+#             installed to ~/Applications/Emacs-latest
+#
+# Pass --sandbox to copy the repo (without .git) to a temp dir under /tmp and
+# run from there instead. Useful for testing without risking commits to this
+# repo's git history. The temp dir is removed when Emacs exits.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
-LOCAL_EL="$REPO_DIR/local.el"
 
+EMACS_VARIANT="default"
+SANDBOX=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --emacs)
+      EMACS_VARIANT="$2"
+      shift 2
+      ;;
+    --sandbox)
+      SANDBOX=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+case "$EMACS_VARIANT" in
+  default)
+    EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
+    ;;
+  plus)
+    EMACS_BIN="$(brew --prefix)/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs"
+    ;;
+  latest)
+    EMACS_BIN="$HOME/Applications/Emacs-latest/Emacs.app/Contents/MacOS/Emacs"
+    ;;
+  *)
+    echo "Unknown --emacs variant: $EMACS_VARIANT (expected default|plus|latest)" >&2
+    exit 1
+    ;;
+esac
+
+LOCAL_EL="$REPO_DIR/local.el"
 if [ ! -f "$LOCAL_EL" ]; then
   echo "Creating $LOCAL_EL pointing to samples/realistic/"
   cat > "$LOCAL_EL" <<'EOF'
@@ -19,6 +63,30 @@ if [ ! -f "$LOCAL_EL" ]; then
 EOF
 fi
 
-exec "$EMACS_BIN" --init-directory "$REPO_DIR" \
-  --eval "(setq ps/git-sync-paused t)" \
-  "$@"
+# If --sandbox, copy the repo (without .git) to a temp dir under /tmp and run
+# from there instead. elpa/ is symlinked rather than copied so packages don't
+# need re-downloading.
+if $SANDBOX; then
+  SANDBOX_DIR="$(mktemp -d /tmp/emacs-sandbox-XXXXXX)"
+  echo "Sandbox: $SANDBOX_DIR (removed on exit; no .git, so auto-sync can't commit here)"
+  rsync -a --exclude='.git' --exclude='elpa' "$REPO_DIR/" "$SANDBOX_DIR/"
+  [ -d "$REPO_DIR/elpa" ] && ln -s "$REPO_DIR/elpa" "$SANDBOX_DIR/elpa"
+  INIT_DIR="$SANDBOX_DIR"
+else
+  INIT_DIR="$REPO_DIR"
+fi
+
+# Belt-and-suspenders: PS_GIT_SYNC_DISABLE (checked in config.org) prevents
+# the sync timer from ever starting; ps/git-sync-paused is a runtime fallback.
+export PS_GIT_SYNC_DISABLE=1
+
+if $SANDBOX; then
+  "$EMACS_BIN" --init-directory "$INIT_DIR" \
+    --eval "(setq ps/git-sync-paused t)" \
+    "$@"
+  rm -rf "$SANDBOX_DIR"
+else
+  exec "$EMACS_BIN" --init-directory "$INIT_DIR" \
+    --eval "(setq ps/git-sync-paused t)" \
+    "$@"
+fi

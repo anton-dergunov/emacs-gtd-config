@@ -170,6 +170,10 @@ Path to the Python script invoked from the agenda finalize hook.
 
   ;; Disable the toolbar
   (tool-bar-mode -1)
+
+  ;; Disable scroll bars for all buffers
+  (scroll-bar-mode -1)
+  (horizontal-scroll-bar-mode -1)
 #+end_src
 
 ** Indentation: always use spaces
@@ -389,6 +393,19 @@ Logic lives in =lisp/ps-agenda-emoji.el= (it shells out to
 #+end_src
 
 ** Appearance
+*** Emacs 30 compatibility shims
+=internal--without-restriction= was removed from some Emacs 30 builds, but
+org-modern's compiled code still calls it as a function, passing a thunk
+(and optionally a label). Provide that function, not a macro: a macro's
+function cell can't satisfy a runtime function call.
+#+begin_src emacs-lisp
+  (unless (fboundp 'internal--without-restriction)
+    (defun internal--without-restriction (thunk &optional _label)
+      (save-restriction
+        (widen)
+        (funcall thunk))))
+#+end_src
+
 *** Improve appearance using org-modern
 #+begin_src emacs-lisp
   (use-package org-modern
@@ -847,8 +864,14 @@ muscle memory; remove them later if you outgrow them.
 Logic lives in =lisp/ps-git-sync.el=. The interval is set in =* Settings / Git sync=
 above. =ps/git-sync-resume= clears the paused state after you resolve a merge
 conflict.
+
+Set the =PS_GIT_SYNC_DISABLE= environment variable (done by
+=scripts/run_emacs_dev.sh=) to skip starting the sync timer entirely. This is
+more robust than relying on =ps/git-sync-paused=, which can be cleared during
+a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
 #+begin_src emacs-lisp
-  (ps/git-sync-start my-org-base-directory)
+  (unless (getenv "PS_GIT_SYNC_DISABLE")
+    (ps/git-sync-start my-org-base-directory))
 #+end_src
 
 ** Save and restore sessions
