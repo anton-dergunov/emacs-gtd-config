@@ -32,6 +32,21 @@ A file or directory is hidden if its name matches any regexp here."
   :type '(repeat regexp)
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-use-custom-icons t
+  "Whether to use custom category icons in the file tree.
+When non-nil (the default), the custom \"ps-file-tree\" icon theme
+(`ps/file-tree-icons-apply') is loaded, mapping `<Category>.org' files to
+SVGs in `ps/file-tree-icon-dirs'. When nil, treemacs's built-in \"Default\"
+theme (generic file/folder icons) is used instead."
+  :type 'boolean
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-name-spacing 0.5
+  "Width (in characters) of the gap between a tree icon and its label.
+May be fractional, e.g. 0.5 for half a character width."
+  :type 'number
+  :group 'ps-file-tree)
+
 ;;; Ignore predicate
 
 (defun ps/file-tree--ignored-p (filename _absolute-path)
@@ -44,6 +59,32 @@ Matched against `ps/file-tree-ignored-files'."
 (defun ps/file-tree-setup-ignore ()
   "Register `ps/file-tree--ignored-p' with treemacs."
   (add-to-list 'treemacs-ignored-file-predicates #'ps/file-tree--ignored-p))
+
+;;; Display-name transformers
+
+(defun ps/file-tree--strip-org-extension (name)
+  "Return NAME with a trailing \".org\" extension removed, case-insensitively.
+Leaves NAME unchanged if it doesn't end in \".org\" or is exactly \".org\"."
+  (if (and (> (length name) (length ".org"))
+           (string-match-p "\\.org\\'" (downcase name)))
+      (substring name 0 (- (length name) (length ".org")))
+    name))
+
+(defun ps/file-tree--spacer ()
+  "Return a propertized space `ps/file-tree-name-spacing' characters wide."
+  (propertize " " 'display (list 'space :width ps/file-tree-name-spacing)))
+
+(defun ps/file-tree-transform-file-name (name)
+  "Transform NAME for display: strip \".org\" and add leading spacing.
+Suitable for `treemacs-file-name-transformer'. Does not affect the
+underlying path used to open the file."
+  (concat (ps/file-tree--spacer)
+          (ps/file-tree--strip-org-extension name)))
+
+(defun ps/file-tree-transform-dir-name (name)
+  "Transform NAME for display: add leading spacing.
+Suitable for `treemacs-directory-name-transformer'."
+  (concat (ps/file-tree--spacer) name))
 
 ;;; Show / hide / toggle
 

@@ -1,5 +1,7 @@
 ;;; ps-file-tree-icons.el --- Category icons for the file tree -*- lexical-binding: t; -*-
 
+(require 'ps-file-tree)
+
 ;; Provided by treemacs/ht; declared here so this file loads (and its pure
 ;; functions are testable) without treemacs installed.
 (declare-function treemacs-create-theme "treemacs-themes")
@@ -52,9 +54,11 @@ aspect ratio instead of stretching it to a square."
 (defun ps/file-tree-icons--register-root-icons (merged)
   "Set the icon shown before every top-level project root label.
 Uses `FolderOpen'/`FolderClosed' from MERGED for `root-open'/`root-closed',
-the same for every project. Falls back to no icon if not present."
+the same for every project. Falls back to no icon if not present.
+Appends the standard icon-to-label spacer after each icon."
   (dolist (pair '((root-open . "FolderOpen") (root-closed . "FolderClosed")))
-    (let ((image (or (ps/file-tree-icons--image-for merged (cdr pair)) "")))
+    (let* ((icon (ps/file-tree-icons--image-for merged (cdr pair)))
+           (image (if icon (concat icon (ps/file-tree--spacer)) "")))
       (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) (car pair) image)
       (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) (car pair) ""))))
 

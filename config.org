@@ -130,7 +130,9 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 Files/dirs whose name matches any regexp here are hidden from the file tree
 (=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Icons are
 loaded from =icons/stock/= and =icons/custom/= and matched to
-=<Category>.org= files, the same as the agenda category icons.
+=<Category>.org= files, the same as the agenda category icons. Set
+=ps/file-tree-use-custom-icons= to =nil= to use treemacs's generic icons
+instead.
 #+begin_src emacs-lisp
   (setq ps/file-tree-ignored-files
         '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
@@ -138,6 +140,9 @@ loaded from =icons/stock/= and =icons/custom/= and matched to
   (setq ps/file-tree-icon-dirs
         (list (expand-file-name "icons/stock" user-emacs-directory)
               (expand-file-name "icons/custom" user-emacs-directory)))
+
+  (setq ps/file-tree-use-custom-icons t)
+  (setq ps/file-tree-name-spacing 0.5)
 #+end_src
 
 ** Done tasks (ps-done.el)
@@ -693,7 +698,9 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     :commands (treemacs treemacs-select-window)
     :config
     (ps/file-tree-setup-ignore)
-    (ps/file-tree-icons-apply ps/file-tree-icon-dirs my-org-base-directory)
+    (if ps/file-tree-use-custom-icons
+        (ps/file-tree-icons-apply ps/file-tree-icon-dirs my-org-base-directory)
+      (treemacs-load-theme "Default"))
 
     ;; Root project labels (Areas/Current/Vision) should look like ordinary
     ;; file-tree entries (not underlined or oversized like the default
@@ -704,17 +711,35 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
       :weight 'bold
       :underline nil)
 
+    ;; Narrower than treemacs's 35-column default.
+    (setq treemacs-width 25)
+
     ;; Allow the tree window to be resized like any other window.
     (setq treemacs-width-is-initially-locked nil)
+
+    ;; More compressed indentation per level (default is 2).
+    (setq treemacs-indentation 1)
+
+    ;; Hide the .org extension and add breathing room after icons.
+    (setq treemacs-file-name-transformer #'ps/file-tree-transform-file-name)
+    (setq treemacs-directory-name-transformer #'ps/file-tree-transform-dir-name)
 
     ;; Never follow the current buffer/file - the tree stays where it is.
     (treemacs-follow-mode -1)
     (treemacs-tag-follow-mode -1)
 
-    (add-hook 'treemacs-mode-hook (lambda () (setq header-line-format nil)))
+    ;; Add a small gap above the first tree line without a visible separator.
+    (add-hook 'treemacs-mode-hook
+      (lambda ()
+        (setq header-line-format (propertize " " 'display '(space :height (3))))
+        (face-remap-add-relative 'header-line
+          :box nil :underline nil :overline nil :background 'unspecified :inherit nil)))
     (add-hook 'treemacs-mode-hook (lambda () (display-line-numbers-mode 0)))
     (add-hook 'treemacs-mode-hook
       (lambda () (setq-local frame-title-format "File Tree")))
+
+    ;; Restore some vertical breathing room between entries.
+    (add-hook 'treemacs-mode-hook (lambda () (setq-local line-spacing 2)))
 
     ;; Single click opens files / toggles folders, alongside the default
     ;; double-click bindings; TAB still shows an org file's structure.

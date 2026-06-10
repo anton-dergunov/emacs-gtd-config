@@ -77,4 +77,43 @@ others as empty files."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
     (should (null (ps/file-tree--list-subdirs "/no/such/dir/at/all")))))
 
+;;; -------------------------------------------------------
+;;; ps/file-tree-transform-file-name / ps/file-tree-transform-dir-name
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree-transform-file-name-strips-org-extension ()
+  "A trailing .org extension is stripped from the displayed name."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-file-name "Career.org") " Career"))))
+
+(ert-deftest ps/file-tree-transform-file-name-strips-org-case-insensitively ()
+  "A trailing .ORG / .Org extension is also stripped."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-file-name "Career.ORG") " Career"))
+    (should (equal (ps/file-tree-transform-file-name "Career.Org") " Career"))))
+
+(ert-deftest ps/file-tree-transform-file-name-leaves-non-org-files-alone ()
+  "Files not ending in .org keep their extension, just gain leading spacing."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-file-name "notes.txt") " notes.txt"))
+    (should (equal (ps/file-tree-transform-file-name "Career.org.bak") " Career.org.bak"))))
+
+(ert-deftest ps/file-tree-transform-file-name-bare-dot-org-unchanged ()
+  "A file literally named \".org\" is left unchanged (edge case)."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-file-name ".org") " .org"))))
+
+(ert-deftest ps/file-tree-transform-file-name-respects-spacing-customization ()
+  "Custom `ps/file-tree-name-spacing' controls the gap width.
+The gap is a propertized space with a `display' property controlling its width."
+  (let ((ps/file-tree-name-spacing 1.5))
+    (should (equal (get-text-property 0 'display (ps/file-tree-transform-file-name "Career.org"))
+                   '(space :width 1.5)))))
+
+(ert-deftest ps/file-tree-transform-dir-name-adds-spacing-only ()
+  "Directory names gain leading spacing without any extension stripping."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-dir-name "Areas") " Areas"))
+    (should (equal (ps/file-tree-transform-dir-name "Career.org") " Career.org"))))
+
 ;;; test-ps-file-tree.el ends here
