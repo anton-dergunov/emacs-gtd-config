@@ -104,11 +104,10 @@ others as empty files."
     (should (equal (ps/file-tree-transform-file-name ".org") " .org"))))
 
 (ert-deftest ps/file-tree-transform-file-name-respects-spacing-customization ()
-  "Custom `ps/file-tree-name-spacing' controls the gap width.
-The gap is a propertized space with a `display' property controlling its width."
-  (let ((ps/file-tree-name-spacing 1.5))
+  "Custom `ps/file-tree-name-spacing' controls the gap width via display property."
+  (let ((ps/file-tree-name-spacing 0.75))
     (should (equal (get-text-property 0 'display (ps/file-tree-transform-file-name "Career.org"))
-                   '(space :width 1.5)))))
+                   '(space :width 0.75)))))
 
 (ert-deftest ps/file-tree-transform-dir-name-adds-spacing-only ()
   "Directory names gain leading spacing without any extension stripping."
