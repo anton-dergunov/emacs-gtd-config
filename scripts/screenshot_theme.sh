@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # Capture a screenshot of the agenda under a given color theme, for the README
 # gallery. Temporarily points local.el at the requested theme + sample org files
-# (restored on exit), launches a GUI Emacs, and captures the frame to a PNG via
-# the macOS `screencapture' tool (see scripts/screenshot.el). macOS-only; the
-# terminal running this needs Screen Recording permission.
+# (restored on exit), then runs scripts/run_emacs_dev.sh -- which disables git
+# sync -- to launch a GUI Emacs and capture the frame to a PNG via the macOS
+# `screencapture' tool (see scripts/screenshot.el). macOS-only; the terminal
+# running this needs Screen Recording and Accessibility/Automation permission.
 #
 # Usage:   scripts/screenshot_theme.sh THEME [OUT.png]
 # Example: scripts/screenshot_theme.sh wombat
 #          scripts/screenshot_theme.sh solarized-light docs/img/solarized.png
 #
 # Env:
-#   EMACS_BIN       Emacs binary (default: /Applications/Emacs.app/...)
+#   EMACS_BIN       Emacs binary (passed through to run_emacs_dev.sh)
 #   PS_SAMPLE_DIR   sample org dir relative to repo (default: samples/realistic/)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
 SAMPLE_DIR="${PS_SAMPLE_DIR:-samples/realistic/}"
 
 THEME="${1:?Usage: screenshot_theme.sh THEME [OUT.png]}"
@@ -44,5 +44,4 @@ cat > "$LOCAL_EL" <<EOF
 EOF
 
 echo "Capturing $THEME -> $OUT"
-PS_SCREENSHOT_OUT="$OUT" "$EMACS_BIN" --init-directory "$REPO_DIR" \
-  -l "$SCRIPT_DIR/screenshot.el"
+PS_SCREENSHOT_OUT="$OUT" "$SCRIPT_DIR/run_emacs_dev.sh" -l "$SCRIPT_DIR/screenshot.el"
