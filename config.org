@@ -693,7 +693,16 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     :commands (treemacs treemacs-select-window)
     :config
     (ps/file-tree-setup-ignore)
-    (ps/file-tree-icons-apply ps/file-tree-icon-dirs)
+    (ps/file-tree-icons-apply ps/file-tree-icon-dirs my-org-base-directory)
+
+    ;; Root project labels (Areas/Current/Vision) should look like ordinary
+    ;; file-tree entries (not underlined or oversized like the default
+    ;; hyperlink-style root face), but bold to stand out as section headers.
+    (set-face-attribute 'treemacs-root-face nil
+      :inherit 'treemacs-file-face
+      :height 1.0
+      :weight 'bold
+      :underline nil)
 
     ;; Allow the tree window to be resized like any other window.
     (setq treemacs-width-is-initially-locked nil)

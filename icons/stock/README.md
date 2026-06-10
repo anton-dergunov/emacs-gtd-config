@@ -1,6 +1,17 @@
 This directory holds the icons shipped with this config, used by
-`lisp/ps-agenda-icons.el` for agenda category icons. Each `.svg` is matched
+`lisp/ps-agenda-icons.el` for agenda category icons and by
+`lisp/ps-file-tree-icons.el` for the file tree. Most `.svg` files are matched
 to an `Areas/<Category>.org` file by name (e.g. `Career.svg` ↔ `Career.org`).
+
+A few names are reserved for structural purposes in the file tree, rather
+than `<Category>.org` matching:
+
+- `FolderOpen.svg` / `FolderClosed.svg` — icon shown before every top-level
+  project root label (`Areas`, `Current`, `Vision`, ...).
+- `Current.svg` — icon used for every file inside the `Current` directory.
+- `Vision.svg` — icon used for every file inside the `Vision` directory.
+- `File.svg` — fallback icon for files inside `Areas` that don't match any
+  `<Category>.org` icon.
 
 The icons originate from the [Google Material Design Icons collection](https://fonts.google.com/icons) under Apache 2.0.
 
