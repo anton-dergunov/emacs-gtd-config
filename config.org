@@ -77,12 +77,16 @@ config are applied verbatim only for =solarized-*= themes; every other theme get
 theme-relative equivalents automatically, so switching is a one-line change.
 #+begin_src emacs-lisp
   ;; Pick your look here. Recommended values (auto-installed if from a package):
-  ;;   Light (built-in):  leuven  tsdh-light  tango  whiteboard  dichromacy
-  ;;   Dark  (built-in):  wombat  tango-dark  deeper-blue  misterioso  tsdh-dark
-  ;;   Solarized (pkg):   solarized-light  solarized-dark            ; default
-  ;;   ef-themes (pkg):   ef-light  ef-day  ef-dark  ef-winter  ef-autumn
-  ;;   modus  (built-in): modus-operandi  modus-vivendi
-  ;;   doom   (pkg):      doom-one  doom-nord  doom-solarized-light  doom-gruvbox
+  ;;   Solarized (pkg):   solarized-light (default)  solarized-dark
+  ;;   modus (built-in):  modus-operandi  modus-vivendi
+  ;;   ef-themes (pkg):   ef-day  ef-light  ef-elea-dark  ef-winter  ef-autumn
+  ;;   standard (pkg):    standard-light  standard-dark
+  ;;   doric (pkg):       doric-light  doric-dark
+  ;;   doom (pkg):        doom-one  doom-one-light  doom-nord  doom-dracula  doom-gruvbox
+  ;;   Catppuccin (pkg):  batppuccin-latte  batppuccin-mocha  batppuccin-macchiato  batppuccin-frappe
+  ;;   Tokyo Night (pkg): tokyo-night  tokyo-night-storm  tokyo-night-moon  tokyo-night-day
+  ;;   Gruvbox (pkg):     gruvbox-dark-medium  gruvbox-light-medium
+  ;;   Nord (pkg):        nord
   ;; Audition one without editing this file:  M-x ps/preview-theme
   (defvar ps/color-theme 'solarized-light
     "Color theme loaded by `Editor & UI / Color theme'.")
@@ -219,12 +223,19 @@ Loads =ps/color-theme= from Settings, auto-installing the package that provides 
 when needed. The Solarized-specific tuning below only runs for =solarized-*=
 themes; any other theme loads cleanly without it.
 #+begin_src emacs-lisp
-  ;; Theme-name prefix -> package that provides it. Built-in themes need no entry.
+  ;; Theme-name prefix -> package that provides it. Built-in themes (e.g. modus-*
+  ;; on Emacs 28+) install only if not already available, so listing them is harmless.
   (defvar ps/color-theme-packages
-    '(("solarized-" . solarized-theme)
-      ("doom-"      . doom-themes)
-      ("ef-"        . ef-themes)
-      ("modus-"     . modus-themes))
+    '(("modus-"      . modus-themes)     ; accessible "default" style (built-in 28+)
+      ("ef-"         . ef-themes)        ; colorful + legible (GNU ELPA)
+      ("standard-"   . standard-themes)  ; faithful-to-default-Emacs, refined (GNU ELPA)
+      ("doric-"      . doric-themes)     ; minimalist (GNU ELPA)
+      ("doom-"       . doom-themes)      ; the popular megapack (MELPA)
+      ("batppuccin-" . batppuccin)       ; Catppuccin, as 4 proper themes (MELPA)
+      ("tokyo-night" . tokyo-night)      ; Tokyo Night, 4 variants (MELPA)
+      ("gruvbox"     . gruvbox-theme)    ; retro groove (NonGNU ELPA / MELPA)
+      ("nord"        . nord-theme)       ; arctic palette (MELPA)
+      ("solarized-"  . solarized-theme)) ; default theme, kept for back-compat
     "Alist of (THEME-NAME-PREFIX . PACKAGE) for auto-installing theme packages.")
 
   (defun ps/load-color-theme (theme)
@@ -235,7 +246,10 @@ themes; any other theme loads cleanly without it.
       ;; Pull in the providing package unless THEME is already available.
       (when (and pkg (not (memq theme (custom-available-themes))))
         (unless (package-installed-p pkg)
-          (unless package-archive-contents (package-refresh-contents))
+          ;; Always refresh: the cached archive contents may predate this
+          ;; package's addition to MELPA/GNU ELPA, or reference a since-pruned
+          ;; tarball version, both of which surface as "package unavailable".
+          (package-refresh-contents)
           (package-install pkg))
         (require pkg nil t))
       ;; Solarized-only tuning (these variables don't exist for other themes).
@@ -257,6 +271,14 @@ themes; any other theme loads cleanly without it.
       (load-theme theme t)))
 
   (ps/load-color-theme ps/color-theme)
+
+  ;; On the very first frame, Emacs may not yet know the display supports 256+
+  ;; colors, so a theme's GUI-specific `default' face spec (e.g. doom themes'
+  ;; `min-colors 256' background) can fail to apply, leaving the frame's
+  ;; previous/default background behind. Reloading once the initial frame is
+  ;; fully set up fixes the background without affecting already-correct themes.
+  (add-hook 'window-setup-hook
+            (lambda () (load-theme ps/color-theme t)))
 #+end_src
 
 ** Live theme preview

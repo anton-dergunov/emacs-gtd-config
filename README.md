@@ -77,12 +77,16 @@ first load):
 
 | Kind | Source | Examples |
 |------|--------|----------|
-| Light | built-in | `leuven` `tsdh-light` `tango` `whiteboard` `dichromacy` |
-| Dark | built-in | `wombat` `tango-dark` `deeper-blue` `misterioso` `tsdh-dark` |
 | Solarized | package | `solarized-light` (default) `solarized-dark` |
-| ef-themes | package | `ef-light` `ef-day` `ef-dark` `ef-winter` `ef-autumn` |
-| modus | built-in | `modus-operandi` `modus-vivendi` |
-| doom | package | `doom-one` `doom-nord` `doom-solarized-light` `doom-gruvbox` |
+| modus | built-in (28+) | `modus-operandi` `modus-vivendi` |
+| ef-themes | package | `ef-day` `ef-elea-dark` `ef-winter` `ef-autumn` |
+| standard | package | `standard-light` `standard-dark` |
+| doric | package | `doric-light` `doric-dark` |
+| doom | package | `doom-one` `doom-one-light` `doom-nord` `doom-dracula` `doom-gruvbox` |
+| Catppuccin | package | `batppuccin-latte` `batppuccin-mocha` `batppuccin-macchiato` `batppuccin-frappe` |
+| Tokyo Night | package | `tokyo-night` `tokyo-night-storm` `tokyo-night-moon` `tokyo-night-day` |
+| Gruvbox | package | `gruvbox-dark-medium` `gruvbox-light-medium` |
+| Nord | package | `nord` |
 
 The config's own color tweaks (faded DONE tasks, timestamp pills, metadata, the
 SCHEDULED/DEADLINE icons) adapt to the chosen theme automatically — the original
@@ -99,11 +103,76 @@ theme-relative equivalents so it looks right on light *and* dark backgrounds.
 > theme into `screenshots/`. macOS-only: it uses the `screencapture` tool, so
 > the terminal running it must have Screen Recording permission.
 
-<!-- After generating, reference them here, e.g.:
-| Solarized Light | Wombat (dark) |
-|-----------------|---------------|
-| ![solarized-light](screenshots/solarized-light.png) | ![wombat](screenshots/wombat.png) |
--->
+The agenda under the default theme, **Solarized Light**:
+
+<p align="center">
+  <img src="screenshots/solarized-light.png" alt="Solarized Light (default)" width="820">
+</p>
+
+<details>
+  <summary><b>Solarized Dark</b></summary>
+  <p align="center"><img src="screenshots/solarized-dark.png" alt="Solarized Dark" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Modus Operandi</b> — light, accessible</summary>
+  <p align="center"><img src="screenshots/modus-operandi.png" alt="Modus Operandi" width="820"></p>
+</details>
+
+<details>
+  <summary><b>ef-day</b> — light, warm</summary>
+  <p align="center"><img src="screenshots/ef-day.png" alt="ef-day" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Doom One Light</b></summary>
+  <p align="center"><img src="screenshots/doom-one-light.png" alt="Doom One Light" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Catppuccin Latte</b> — light, pastel</summary>
+  <p align="center"><img src="screenshots/batppuccin-latte.png" alt="Catppuccin Latte" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Modus Vivendi</b> — dark, accessible</summary>
+  <p align="center"><img src="screenshots/modus-vivendi.png" alt="Modus Vivendi" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Doom One</b> — dark, the modern classic</summary>
+  <p align="center"><img src="screenshots/doom-one.png" alt="Doom One" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Tokyo Night</b> — dark</summary>
+  <p align="center"><img src="screenshots/tokyo-night.png" alt="Tokyo Night" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Catppuccin Mocha</b> — dark, pastel</summary>
+  <p align="center"><img src="screenshots/batppuccin-mocha.png" alt="Catppuccin Mocha" width="820"></p>
+</details>
+
+<details>
+  <summary><b>ef-elea-dark</b> — dark</summary>
+  <p align="center"><img src="screenshots/ef-elea-dark.png" alt="ef-elea-dark" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Gruvbox Dark</b></summary>
+  <p align="center"><img src="screenshots/gruvbox-dark-medium.png" alt="Gruvbox Dark" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Doom Nord</b></summary>
+  <p align="center"><img src="screenshots/doom-nord.png" alt="Doom Nord" width="820"></p>
+</details>
+
+<details>
+  <summary><b>Doom Dracula</b></summary>
+  <p align="center"><img src="screenshots/doom-dracula.png" alt="Doom Dracula" width="820"></p>
+</details>
 
 
 ## Running Unit Tests

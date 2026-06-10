@@ -13,11 +13,22 @@ if [ "$#" -gt 0 ]; then
   THEMES=("$@")
 else
   THEMES=(
-    solarized-light solarized-dark
-    leuven wombat tango-dark
-    modus-operandi modus-vivendi
-    ef-day ef-winter
+    # Light
+    solarized-light
+    modus-operandi
+    ef-day
+    doom-one-light
+    batppuccin-latte
+    # Dark
+    solarized-dark
+    modus-vivendi
     doom-one
+    tokyo-night
+    batppuccin-mocha
+    ef-elea-dark
+    gruvbox-dark-medium
+    doom-nord
+    doom-dracula
   )
 fi
 
