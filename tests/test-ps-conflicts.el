@@ -645,16 +645,16 @@ Returns the buffer."
 ;;; agenda integration
 ;;; -------------------------------------------------------
 
-(defmacro ps/conflicts-test--with-agenda (plans-content &rest body)
-  "Set up `my-org-base-directory' with a Plans/ dir holding PLANS-CONTENT and a
+(defmacro ps/conflicts-test--with-agenda (areas-content &rest body)
+  "Set up `my-org-base-directory' with an Areas/ dir holding AREAS-CONTENT and a
 live agenda buffer, run BODY, then clean up. Binds `agenda' to the buffer."
   (declare (indent 1))
   `(let ((base (file-name-as-directory (make-temp-file "ps-conflicts-agenda-" t))))
      (unwind-protect
-         (let ((plans (expand-file-name "Plans/" base)))
-           (make-directory plans t)
-           (with-temp-file (expand-file-name "test.org" plans)
-             (insert ,plans-content))
+         (let ((areas (expand-file-name "Areas/" base)))
+           (make-directory areas t)
+           (with-temp-file (expand-file-name "test.org" areas)
+             (insert ,areas-content))
            (let ((my-org-base-directory base)
                  (ps/conflicts-include-past t)
                  (ps/conflicts-gap-minutes 15)

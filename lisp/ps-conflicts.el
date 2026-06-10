@@ -387,7 +387,7 @@ ACTIVE non-nil renders it in the pressed/active face."
     (goto-char (point-min))))
 
 (defun ps/show-conflicts ()
-  "Show scheduling conflicts from the org Plans directory in a dedicated buffer.
+  "Show scheduling conflicts from the org Areas directory in a dedicated buffer.
 Use +/- to adjust the gap threshold, p to toggle past events, g/r to refresh.
 Press RET or click on any task to jump to it in its org file."
   (interactive)
@@ -399,7 +399,7 @@ Press RET or click on any task to jump to it in its org file."
         (setq ps/conflicts--cur-gap          ps/conflicts-gap-minutes
               ps/conflicts--cur-include-past ps/conflicts-include-past))
       (setq ps/conflicts--cur-directory
-            (concat my-org-base-directory "Plans/"))
+            (concat my-org-base-directory "Areas/"))
       (ps/conflicts--buffer-render))
     (display-buffer buf)))
 
@@ -412,7 +412,7 @@ Press RET or click on any task to jump to it in its org file."
   "Check for conflicts and append a summary line at the bottom of the agenda buffer."
   (when (and (boundp 'my-org-base-directory)
              (buffer-live-p (get-buffer org-agenda-buffer-name)))
-    (let* ((directory (concat my-org-base-directory "Plans/"))
+    (let* ((directory (concat my-org-base-directory "Areas/"))
            (result (ps/conflicts--find-all
                     directory ps/conflicts-gap-minutes ps/conflicts-include-past))
            (n (ps/conflicts--count result)))

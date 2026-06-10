@@ -279,7 +279,7 @@ RAW non-nil disables buffer expansion and minimum-duration filtering."
 ;;; Interactive buffer mode
 
 (defvar-local ps/org-avail--cur-directory nil
-  "Org Plans directory for the current availability buffer session.")
+  "Org Areas directory for the current availability buffer session.")
 (defvar-local ps/org-avail--cur-days nil)
 (defvar-local ps/org-avail--cur-weekends nil)
 (defvar-local ps/org-avail--cur-time-fmt nil)
@@ -405,7 +405,7 @@ ACTIVE non-nil uses the pressed/active face instead of the normal button face."
     (goto-char (point-min))))
 
 (defun ps/org-show-availability ()
-  "Show availability from the org Plans directory in a dedicated buffer.
+  "Show availability from the org Areas directory in a dedicated buffer.
 Settings persist for the session; use the header buttons or keybindings
 to adjust: +/- days, w weekends, t time format, l layout, g refresh."
   (interactive)
@@ -420,7 +420,7 @@ to adjust: +/- days, w weekends, t time format, l layout, g refresh."
               ps/org-avail--cur-time-fmt ps/org-avail-time-format
               ps/org-avail--cur-layout   ps/org-avail-layout))
       (setq ps/org-avail--cur-directory
-            (concat my-org-base-directory "Plans/"))
+            (concat my-org-base-directory "Areas/"))
       (ps/org-avail--buffer-render))
     (display-buffer buf)))
 
