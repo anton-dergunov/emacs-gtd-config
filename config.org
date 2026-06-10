@@ -735,12 +735,30 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; Restore some vertical breathing room between entries.
     (add-hook 'treemacs-mode-hook (lambda () (setq-local line-spacing 2)))
 
+    ;; treemacs toggles a node on button *press* (down-mouse-1) when its icon
+    ;; is clicked; our release handler toggles again, causing an icon click to
+    ;; expand-then-collapse. Suppress the press action so the release handler
+    ;; does a single, consistent toggle.
+    (define-key treemacs-mode-map [down-mouse-1] #'ignore)
+
     ;; Click a label to open it on the right (file, or org heading position
     ;; for tag nodes). Click an icon, or shift-click a label, to
     ;; expand/collapse — a no-op on leaf nodes. TAB still shows an org file's
     ;; structure.
     (define-key treemacs-mode-map [mouse-1] #'ps/file-tree-click)
     (define-key treemacs-mode-map [S-mouse-1] #'ps/file-tree-shift-click)
+
+    ;; The right-click "Open" action (`treemacs-visit-node-no-split') errors
+    ;; with "stringp, nil" on an org heading that has sub-headings. Route org
+    ;; heading (tag) nodes through our own open logic, which jumps to the
+    ;; heading position; everything else behaves as before.
+    (define-advice treemacs-visit-node-no-split
+        (:around (orig-fn &rest args) ps/file-tree-open-org-heading)
+      (let ((btn (treemacs-current-button)))
+        (if (and btn (memq (treemacs-button-get btn :state)
+                           '(tag-node-open tag-node-closed tag-node)))
+            (ps/file-tree--click-label)
+          (apply orig-fn args))))
 
     ;; Non-intrusive expand/collapse-all, local to the tree buffer.
     (define-key treemacs-mode-map (kbd "M-+") #'ps/file-tree-expand-all)
