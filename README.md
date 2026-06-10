@@ -61,6 +61,49 @@ The main configuration file is [config.org](config.org).
 6. **Run Emacs and enjoy** your setup.
 
 
+## Directory Structure
+
+`my-org-base-directory` (set in `local.el`) is the root for your org files.
+The agenda scans `Areas/` recursively for `.org` files; `Vision/` and
+`Current/` are for your own use and are not scanned automatically.
+
+```
+<my-org-base-directory>/
+├── Areas/      org files scanned recursively for the agenda
+│                 (e.g. Career.org, Health.org, Financial.org, ...)
+├── Vision/     long-term vision docs
+└── Current/    current focus / weekly review docs
+```
+
+See `samples/realistic/` for a working example of this layout.
+
+
+## Agenda Category Icons
+
+Category icons in the agenda (next to each task) come from two directories
+inside this repo (i.e. `~/.emacs.d`):
+
+- **`icons/stock/`** — the icon set shipped with this config, one `.svg` per
+  stock `Areas/<Category>.org` file (e.g. `Career.svg`). Tracked in git.
+- **`icons/custom/`** — your own additions or overrides. Gitignored by
+  default, so your personal icons never enter this repo's git history unless
+  you explicitly `git add -f` them.
+
+Both directories are matched by filename to category names (e.g.
+`Career.svg` ↔ the `Career` category). Leaving both directories empty/absent
+disables agenda icons.
+
+To add an icon for a new category, or override a stock one:
+
+1. Download the icon (default size=24) from the
+   [Material Design Icons collection](https://fonts.google.com/icons).
+2. Save it as `icons/custom/<Category>.svg`.
+3. Run `python scripts/fix_icon_svg.py` (with no arguments it normalizes
+   every `.svg` under `icons/stock/` and `icons/custom/`; pass a file path to
+   fix just that one) to set the expected `height`, `viewBox`, `width`, and
+   `fill` attributes.
+
+
 ## Changing the Color Theme
 
 Everybody has strong opinions about colors, so switching the whole look is a
@@ -75,18 +118,18 @@ and set `ps/color-theme`:
 Recommended values (external-package themes are **installed automatically** on
 first load):
 
-| Kind | Source | Examples |
-|------|--------|----------|
-| Solarized | package | `solarized-light` (default) `solarized-dark` |
-| modus | built-in (28+) | `modus-operandi` `modus-vivendi` |
-| ef-themes | package | `ef-day` `ef-elea-dark` `ef-winter` `ef-autumn` |
-| standard | package | `standard-light` `standard-dark` |
-| doric | package | `doric-light` `doric-dark` |
-| doom | package | `doom-one` `doom-one-light` `doom-nord` `doom-dracula` `doom-gruvbox` |
-| Catppuccin | package | `batppuccin-latte` `batppuccin-mocha` `batppuccin-macchiato` `batppuccin-frappe` |
-| Tokyo Night | package | `tokyo-night` `tokyo-night-storm` `tokyo-night-moon` `tokyo-night-day` |
-| Gruvbox | package | `gruvbox-dark-medium` `gruvbox-light-medium` |
-| Nord | package | `nord` |
+| Kind        | Source         | Examples                                                                         |
+| ----------- | -------------- | -------------------------------------------------------------------------------- |
+| Solarized   | package        | `solarized-light` (default) `solarized-dark`                                     |
+| modus       | built-in (28+) | `modus-operandi` `modus-vivendi`                                                 |
+| ef-themes   | package        | `ef-day` `ef-elea-dark` `ef-winter` `ef-autumn`                                  |
+| standard    | package        | `standard-light` `standard-dark`                                                 |
+| doric       | package        | `doric-light` `doric-dark`                                                       |
+| doom        | package        | `doom-one` `doom-one-light` `doom-nord` `doom-dracula` `doom-gruvbox`            |
+| Catppuccin  | package        | `batppuccin-latte` `batppuccin-mocha` `batppuccin-macchiato` `batppuccin-frappe` |
+| Tokyo Night | package        | `tokyo-night` `tokyo-night-storm` `tokyo-night-moon` `tokyo-night-day`           |
+| Gruvbox     | package        | `gruvbox-dark-medium` `gruvbox-light-medium`                                     |
+| Nord        | package        | `nord`                                                                           |
 
 The config's own color tweaks (faded DONE tasks, timestamp pills, metadata, the
 SCHEDULED/DEADLINE icons) adapt to the chosen theme automatically — the original

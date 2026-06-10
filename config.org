@@ -320,7 +320,7 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
   ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
   (setq org-agenda-files
         (directory-files-recursively
-         (concat my-org-base-directory "Plans/")
+         (concat my-org-base-directory "Areas/")
          "\\.org$"))
 #+end_src
 
@@ -337,10 +337,15 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
 
 *** Category icons (ps-agenda-icons.el)
 Icon-loading logic lives in =lisp/ps-agenda-icons.el=. The =prefix-format= below
-is a layout preference and stays here. Leaving the icon directory empty/absent
-disables icons.
+is a layout preference and stays here. Icons are loaded from =icons/stock/=
+(shipped with this config) and =icons/custom/= (your own additions or
+overrides, gitignored by default); if the same category exists in both, the
+one in =icons/custom/= wins. Leaving both directories empty/absent disables
+icons.
 #+begin_src emacs-lisp
-  (ps/agenda-icons-apply (concat my-org-base-directory "Icons/"))
+  (ps/agenda-icons-apply
+   (list (expand-file-name "icons/stock" user-emacs-directory)
+         (expand-file-name "icons/custom" user-emacs-directory)))
 
   ;; Reserve space for the category name (max 14 chars in my case) next to the icon.
   (setq org-agenda-prefix-format
@@ -658,7 +663,7 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
 * Files & Navigation
 ** Default directory
 #+begin_src emacs-lisp
-  (setq default-directory (concat my-org-base-directory "Plans/"))
+  (setq default-directory (concat my-org-base-directory "Areas/"))
 #+end_src
 
 ** Workaround for unsupported =ls --dired= on macOS
@@ -835,9 +840,9 @@ muscle memory; remove them later if you outgrow them.
        ["Capture…"            org-capture              :keys "C-c p k"]
        ["New Journal Entry"   org-journal-new-entry    :keys "C-c p j"]
        ["Store Link"          org-store-link           :keys "C-c p l"]
-       ["Open Plans Folder"
+       ["Open Areas Folder"
         (lambda () (interactive)
-          (dired (concat my-org-base-directory "Plans/")))
+          (dired (concat my-org-base-directory "Areas/")))
         t])
       ("Insert Links"
        ["URL with Auto-title"        ps/org-insert-link-async                 :keys "C-c p u   /   F6"]

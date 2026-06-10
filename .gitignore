@@ -8,6 +8,10 @@
 !lisp/
 !lisp/*.el
 
+!icons/
+!icons/stock/
+!icons/stock/**
+
 !scripts/
 !scripts/*.py
 !scripts/*.sh

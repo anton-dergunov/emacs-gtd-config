@@ -1,4 +1,4 @@
-# File: Plans/Languages.org
+# File: Areas/Languages.org
 
 #+TITLE: Languages
 

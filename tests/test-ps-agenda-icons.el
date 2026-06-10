@@ -70,7 +70,7 @@ Each file is created empty.  Cleans up afterward."
                       (default-value 'org-agenda-category-icon-alist))))
       (unwind-protect
           (progn
-            (ps/agenda-icons-apply dir)
+            (ps/agenda-icons-apply (list dir))
             (should (= (length (default-value 'org-agenda-category-icon-alist)) 2))
             (should (equal (default-value 'org-agenda-category-icon-alist)
                            (ps/agenda-icons--build-alist dir))))
@@ -79,17 +79,50 @@ Each file is created empty.  Cleans up afterward."
           (makunbound 'org-agenda-category-icon-alist))))))
 
 (ert-deftest ps/agenda-icons--apply-missing-dir-noop ()
-  "apply does not touch the variable when the directory is missing."
+  "apply does not touch the variable when all directories are missing."
   (let ((bound (boundp 'org-agenda-category-icon-alist))
         (saved (and (boundp 'org-agenda-category-icon-alist)
                     (default-value 'org-agenda-category-icon-alist))))
     (unwind-protect
         (progn
           (set-default 'org-agenda-category-icon-alist 'sentinel)
-          (ps/agenda-icons-apply "/no/such/dir/at/all")
+          (ps/agenda-icons-apply (list "/no/such/dir/at/all"))
           (should (eq (default-value 'org-agenda-category-icon-alist) 'sentinel)))
       (if bound
           (set-default 'org-agenda-category-icon-alist saved)
         (makunbound 'org-agenda-category-icon-alist)))))
+
+(ert-deftest ps/agenda-icons--apply-skips-missing-dir ()
+  "apply still finds icons in later dirs when an earlier one is missing."
+  (ps/agenda-icons-test--with-icon-dir '("Work.svg")
+    (let ((bound (boundp 'org-agenda-category-icon-alist))
+          (saved (and (boundp 'org-agenda-category-icon-alist)
+                      (default-value 'org-agenda-category-icon-alist))))
+      (unwind-protect
+          (progn
+            (ps/agenda-icons-apply (list "/no/such/dir/at/all" dir))
+            (should (= (length (default-value 'org-agenda-category-icon-alist)) 1)))
+        (if bound
+            (set-default 'org-agenda-category-icon-alist saved)
+          (makunbound 'org-agenda-category-icon-alist))))))
+
+(ert-deftest ps/agenda-icons--apply-later-dir-overrides-earlier ()
+  "When the same category exists in multiple dirs, the last dir wins."
+  (ps/agenda-icons-test--with-icon-dir '("Work.svg")
+    (let ((stock-dir dir))
+      (ps/agenda-icons-test--with-icon-dir '("Work.svg")
+        (let ((custom-dir dir)
+              (bound (boundp 'org-agenda-category-icon-alist))
+              (saved (and (boundp 'org-agenda-category-icon-alist)
+                          (default-value 'org-agenda-category-icon-alist))))
+          (unwind-protect
+              (progn
+                (ps/agenda-icons-apply (list stock-dir custom-dir))
+                (let ((alist (default-value 'org-agenda-category-icon-alist)))
+                  (should (= (length alist) 1))
+                  (should (string-prefix-p custom-dir (nth 1 (assoc "Work" alist))))))
+            (if bound
+                (set-default 'org-agenda-category-icon-alist saved)
+              (makunbound 'org-agenda-category-icon-alist))))))))
 
 ;;; test-ps-agenda-icons.el ends here
