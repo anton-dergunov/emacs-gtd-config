@@ -11,6 +11,7 @@
 (declare-function treemacs-toggle-node "treemacs-interface")
 (declare-function treemacs-collapse-all-projects "treemacs-interface")
 (declare-function treemacs-button-get "treemacs-core-utils")
+(declare-function treemacs-current-button "treemacs-core-utils")
 (declare-function treemacs-do-add-project-to-workspace "treemacs-workspaces")
 (declare-function treemacs-do-remove-project-from-workspace "treemacs-workspaces")
 (declare-function treemacs-current-workspace "treemacs-workspaces")
@@ -18,6 +19,8 @@
 (declare-function treemacs-project->path "treemacs-workspaces")
 (declare-function treemacs-canonical-path "treemacs-core-utils")
 (declare-function treemacs--filename "treemacs-core-utils")
+(declare-function org-find-exact-headline-in-buffer "org")
+(require 'subr-x)
 
 ;;; Customization
 
@@ -177,6 +180,88 @@ treemacs's async directory rendering settles."
   (when (treemacs-get-local-buffer)
     (ps/file-tree-set-projects base-dir)
     (ps/file-tree-expand-all)))
+
+;;; Mouse click handlers
+
+(defun ps/file-tree--expandable-state-p (state)
+  "Return non-nil if STATE supports expand/collapse via `treemacs-toggle-node'."
+  (memq state '(root-node-open  root-node-closed
+                 dir-node-open   dir-node-closed
+                 file-node-open  file-node-closed
+                 tag-node-open   tag-node-closed)))
+
+(defun ps/file-tree--toggle-expandable ()
+  "Toggle expand/collapse of the node at point, if it has children.
+No-op for leaf nodes or when there is no node at point."
+  (when-let* ((btn (treemacs-current-button))
+              (state (treemacs-button-get btn :state))
+              ((ps/file-tree--expandable-state-p state)))
+    (treemacs-toggle-node)))
+
+(defun ps/file-tree--node-target (btn)
+  "Return (FILE . POS) describing what label-click on BTN should open.
+FILE is the path to visit; POS, if non-nil, is a buffer position to jump
+to after visiting FILE (used for org headings). Returns nil for nodes
+with nothing to open (project roots, plain directories)."
+  (pcase (treemacs-button-get btn :state)
+    ((or 'file-node-open 'file-node-closed)
+     (cons (treemacs-button-get btn :path) nil))
+    ((or 'tag-node-open 'tag-node-closed 'tag-node)
+     (let ((file (car (treemacs-button-get btn :path)))
+           (heading (treemacs-button-get btn :key)))
+       (cons file (when (and file heading)
+                     (org-find-exact-headline-in-buffer
+                      heading (find-file-noselect file))))))
+    (_ nil)))
+
+(defun ps/file-tree--click-label ()
+  "Handle a label click on the node at point.
+Files and org headings (leaf or intermediate) open on the right. Project
+roots and plain directories toggle expand/collapse, as before."
+  (when-let* ((btn (treemacs-current-button))
+              (state (treemacs-button-get btn :state)))
+    (if (memq state '(root-node-open root-node-closed
+                      dir-node-open  dir-node-closed))
+        (treemacs-toggle-node)
+      (when-let* ((target (ps/file-tree--node-target btn))
+                  (file (car target)))
+        (let ((pos (cdr target)))
+          (if-let* ((win (get-buffer-window (get-file-buffer file))))
+              (select-window win)
+            (other-window 1))
+          (find-file file)
+          (when pos
+            (goto-char pos)
+            (when (eq major-mode 'org-mode)
+              (if (fboundp 'org-fold-show-context)
+                  (org-fold-show-context)
+                (org-show-context)))))))))
+
+;;;###autoload
+(defun ps/file-tree-click (event)
+  "Open or toggle the clicked file-tree node, depending on click target.
+Clicking a node's icon toggles expand/collapse (no-op for leaf nodes).
+Clicking a file's or org heading's label opens it on the right; clicking
+a project root's or directory's label toggles expand/collapse."
+  (interactive "e")
+  (when (eq (car event) 'mouse-1)
+    (let ((posn (event-start event)))
+      (select-window (posn-window posn))
+      (goto-char (posn-point posn))
+      (if (posn-image posn)
+          (ps/file-tree--toggle-expandable)
+        (ps/file-tree--click-label)))))
+
+;;;###autoload
+(defun ps/file-tree-shift-click (event)
+  "Toggle expand/collapse of the shift-clicked file-tree node.
+No-op for leaf nodes."
+  (interactive "e")
+  (when (eq (car event) 'S-mouse-1)
+    (let ((posn (event-start event)))
+      (select-window (posn-window posn))
+      (goto-char (posn-point posn))
+      (ps/file-tree--toggle-expandable))))
 
 (provide 'ps-file-tree)
 ;;; ps-file-tree.el ends here

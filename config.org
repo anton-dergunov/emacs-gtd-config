@@ -735,9 +735,12 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; Restore some vertical breathing room between entries.
     (add-hook 'treemacs-mode-hook (lambda () (setq-local line-spacing 2)))
 
-    ;; Single click opens files / toggles folders, alongside the default
-    ;; double-click bindings; TAB still shows an org file's structure.
-    (define-key treemacs-mode-map [mouse-1] #'treemacs-single-click-expand-action)
+    ;; Click a label to open it on the right (file, or org heading position
+    ;; for tag nodes). Click an icon, or shift-click a label, to
+    ;; expand/collapse — a no-op on leaf nodes. TAB still shows an org file's
+    ;; structure.
+    (define-key treemacs-mode-map [mouse-1] #'ps/file-tree-click)
+    (define-key treemacs-mode-map [S-mouse-1] #'ps/file-tree-shift-click)
 
     ;; Non-intrusive expand/collapse-all, local to the tree buffer.
     (define-key treemacs-mode-map (kbd "M-+") #'ps/file-tree-expand-all)

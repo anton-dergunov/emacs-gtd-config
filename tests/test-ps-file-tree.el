@@ -115,4 +115,22 @@ others as empty files."
     (should (equal (ps/file-tree-transform-dir-name "Areas") " Areas"))
     (should (equal (ps/file-tree-transform-dir-name "Career.org") " Career.org"))))
 
+;;; -------------------------------------------------------
+;;; ps/file-tree--expandable-state-p
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree--expandable-state-p-accepts-open-close-states ()
+  "Returns t for all open/closed node states that support expand/collapse."
+  (dolist (state '(root-node-open  root-node-closed
+                    dir-node-open   dir-node-closed
+                    file-node-open  file-node-closed
+                    tag-node-open   tag-node-closed))
+    (should (ps/file-tree--expandable-state-p state))))
+
+(ert-deftest ps/file-tree--expandable-state-p-rejects-leaf-and-nil ()
+  "Returns nil for leaf nodes and nil state."
+  (should-not (ps/file-tree--expandable-state-p 'tag-node))
+  (should-not (ps/file-tree--expandable-state-p nil))
+  (should-not (ps/file-tree--expandable-state-p 'unknown-state)))
+
 ;;; test-ps-file-tree.el ends here
