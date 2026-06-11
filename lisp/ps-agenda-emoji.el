@@ -19,6 +19,11 @@
 
 ;;; Customization
 
+(defcustom ps/agenda-emoji-enabled t
+  "When non-nil, decorate agenda tasks with semantic emojis."
+  :type 'boolean
+  :group 'ps-agenda-emoji)
+
 (defcustom ps/agenda-emoji-matcher-path
   (expand-file-name "scripts/org_emoji_matcher.py" user-emacs-directory)
   "Path to the org_emoji_matcher.py script."
@@ -237,15 +242,16 @@ CALLBACK receives a hash table mapping each task title to its emoji list."
                  (ps/agenda-emoji--apply (ps/agenda-emoji--cache-load)))))))))))
 
 (defun ps/agenda-emoji--append (&rest _)
-  "Debounce an emoji update after the agenda renders."
-  (when ps/agenda-emoji--timer
-    (cancel-timer ps/agenda-emoji--timer))
-  (setq ps/agenda-emoji--timer
-        (run-with-idle-timer
-         0.4 nil
-         (lambda ()
-           (setq ps/agenda-emoji--timer nil)
-           (ps/agenda-emoji--update)))))
+  "Debounce an emoji update after the agenda renders, when enabled."
+  (when ps/agenda-emoji-enabled
+    (when ps/agenda-emoji--timer
+      (cancel-timer ps/agenda-emoji--timer))
+    (setq ps/agenda-emoji--timer
+          (run-with-idle-timer
+           0.4 nil
+           (lambda ()
+             (setq ps/agenda-emoji--timer nil)
+             (ps/agenda-emoji--update))))))
 
 ;;; Public API
 

@@ -47,6 +47,13 @@ line text, sidestepping the need for a live org-agenda buffer."
     (ps/agenda-emoji-setup)
     (should (memq 'ps/agenda-emoji--append org-agenda-finalize-hook))))
 
+(ert-deftest ps/agenda-emoji--append-noop-when-disabled ()
+  "With the feature disabled, the finalize hook schedules no work."
+  (let ((ps/agenda-emoji-enabled nil)
+        (ps/agenda-emoji--timer nil))
+    (ps/agenda-emoji--append)
+    (should (null ps/agenda-emoji--timer))))
+
 ;;; -------------------------------------------------------
 ;;; map-get
 ;;; -------------------------------------------------------

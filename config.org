@@ -213,18 +213,20 @@ The agenda appends a semantic emoji to each task. Matches come from
 =scripts/org_emoji_matcher.py= and are kept in a persistent on-disk cache, so a
 warm agenda render reuses cached emojis and never spawns Python.
 
+Set =ps/agenda-emoji-enabled= to nil to turn the agenda emojis off entirely.
 =cache-tag= identifies the model/threshold the cache was built for: bump it
 (and, if you like, set =EMOJI_MODEL= / =EMOJI_THRESHOLD= for the script) to
 invalidate the cache after changing the matcher. =right-margin= is how many
 columns from the right window edge the emoji column starts.
 #+begin_src emacs-lisp
-  (setq ps/agenda-emoji-matcher-path
+  (setq ps/agenda-emoji-enabled      t   ; set to nil to disable agenda emojis
+        ps/agenda-emoji-matcher-path
         (expand-file-name "scripts/org_emoji_matcher.py" user-emacs-directory)
         ps/agenda-emoji-cache-file
         (expand-file-name "emoji_matcher/task_cache.json"
                           (expand-file-name ".cache" "~"))
         ps/agenda-emoji-cache-tag    "bge-small-en-v1.5@0.50"
-        ps/agenda-emoji-right-margin 6
+        ps/agenda-emoji-right-margin 3
         ps/agenda-emoji-face         '(:height 0.8))
 #+end_src
 
@@ -471,6 +473,23 @@ Logic lives in =lisp/ps-agenda-emoji.el= (it shells out to
 #+begin_src emacs-lisp
   (ps/agenda-emoji-setup)
   (add-hook 'org-agenda-finalize-hook #'ps/conflicts--agenda-schedule-check)
+#+end_src
+
+*** Uniform blank lines between agenda sections
+=org-agenda-block-separator= "" emits two newlines before each separate agenda
+block (=High-priority=, =In progress=), while org-super-agenda groups are
+single-spaced — so those two sections get an extra blank line. Collapse any run
+of more than one blank line so every section has exactly one blank line above
+it.
+#+begin_src emacs-lisp
+  (defun ps/agenda--single-blank-lines ()
+    "Collapse runs of >1 blank line in the agenda to a single blank line."
+    (let ((inhibit-read-only t))
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "\n\n\n+" nil t)
+          (replace-match "\n\n")))))
+  (add-hook 'org-agenda-finalize-hook #'ps/agenda--single-blank-lines)
 #+end_src
 
 *** Disable clock report (do not show in agenda)
@@ -873,7 +892,8 @@ Logic lives in =lisp/ps-blank-lines.el=.
   ;; Partially reuses the code from:
   ;; https://emacs.stackexchange.com/questions/5371/how-to-change-emacs-windows-from-vertical-split-to-horizontal-split
   (defun ps/window-split-toggle ()
-    "Toggle between horizontal and vertical split with exactly two windows, preserving buffer order."
+    "Switch the two windows between a horizontal (top/bottom) and vertical
+\(left/right) split, keeping their order: left<->top and right<->bottom."
     (interactive)
     ;; Check if the file tree is open
     (let ((tree-open (ps/file-tree-window-exists-p)))
@@ -883,11 +903,21 @@ Logic lives in =lisp/ps-blank-lines.el=.
       ;; Check if there are exactly two windows
       (if (/= (length (window-list)) 2)
           (error "Can only toggle with exactly 2 windows!")
-        (let* ((win1 (nth 0 (window-list)))
-               (win2 (nth 1 (window-list)))
+        ;; Order the windows geometrically (top-left first) rather than by
+        ;; `window-list' order, which starts at the selected window and would
+        ;; otherwise make placement depend on which pane is focused.
+        (let* ((ordered (sort (window-list)
+                              (lambda (a b)
+                                (let ((ea (window-edges a))
+                                      (eb (window-edges b)))
+                                  (if (= (nth 1 ea) (nth 1 eb))
+                                      (< (nth 0 ea) (nth 0 eb))   ;; same top: leftmost first
+                                    (< (nth 1 ea) (nth 1 eb))))))) ;; otherwise topmost first
+               (win1 (nth 0 ordered))
+               (win2 (nth 1 ordered))
                (buf1 (window-buffer win1))
                (buf2 (window-buffer win2))
-               (split-func (if (window-full-height-p)
+               (split-func (if (window-full-height-p win1)
                                #'split-window-vertically
                              #'split-window-horizontally)))
           (delete-other-windows win1)
@@ -997,7 +1027,7 @@ muscle memory; remove them later if you outgrow them.
        ["Magit Status"      magit-status       :keys "C-x g"])
       ("Layout & Navigation"
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
-       ["Toggle Window Split (H/V)" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
+       ["Switch Split: Horizontal <-> Vertical" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
        ["Toggle File Tree"          ps/file-tree-toggle      :keys "F8"]
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
