@@ -209,10 +209,23 @@ active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 #+end_src
 
 ** Agenda emoji matcher (ps-agenda-emoji.el)
-Path to the Python script invoked from the agenda finalize hook.
+The agenda appends a semantic emoji to each task. Matches come from
+=scripts/org_emoji_matcher.py= and are kept in a persistent on-disk cache, so a
+warm agenda render reuses cached emojis and never spawns Python.
+
+=cache-tag= identifies the model/threshold the cache was built for: bump it
+(and, if you like, set =EMOJI_MODEL= / =EMOJI_THRESHOLD= for the script) to
+invalidate the cache after changing the matcher. =right-margin= is how many
+columns from the right window edge the emoji column starts.
 #+begin_src emacs-lisp
   (setq ps/agenda-emoji-matcher-path
-        (expand-file-name "scripts/org_emoji_matcher.py" user-emacs-directory))
+        (expand-file-name "scripts/org_emoji_matcher.py" user-emacs-directory)
+        ps/agenda-emoji-cache-file
+        (expand-file-name "emoji_matcher/task_cache.json"
+                          (expand-file-name ".cache" "~"))
+        ps/agenda-emoji-cache-tag    "bge-small-en-v1.5@0.50"
+        ps/agenda-emoji-right-margin 6
+        ps/agenda-emoji-face         '(:height 0.8))
 #+end_src
 
 * Editor & UI

@@ -1,6 +1,8 @@
 ;;; test-ps-agenda-emoji.el --- ERT tests for ps-agenda-emoji -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
+(require 'seq)
 (add-to-list 'load-path "lisp")
 (require 'ps-agenda-emoji)
 
@@ -8,24 +10,27 @@
 ;; unloaded in batch, leaving the symbol otherwise lexical here).
 (defvar org-agenda-finalize-hook)
 
-;;; A small fixture mimicking rendered agenda lines.
+;;; Helpers
 
-(defconst ps/agenda-emoji-test--sample
-  "  work:      TODO Write the report
-  home:      Scheduled: NEXT Buy groceries
-  proj:      IN-PROGRESS Refactor module
-             Some non-task line
-  misc:      DONE Already finished
-"
-  "Agenda-like buffer content. DONE lines must not match (no DONE in the keyword group).")
+(defun ps/agenda-emoji-test--overlays ()
+  "Return the emoji overlays in the current buffer."
+  (seq-filter (lambda (o) (overlay-get o 'ps/agenda-emoji))
+              (overlays-in (point-min) (point-max))))
 
-(defmacro ps/agenda-emoji-test--with-buffer (content &rest body)
-  "Run BODY in a temp buffer containing CONTENT."
+(defmacro ps/agenda-emoji-test--with-lines (lines &rest body)
+  "Insert LINES, then run BODY with `ps/agenda-emoji--line-title' stubbed.
+The stub treats every non-blank line as a task whose title is the trimmed
+line text, sidestepping the need for a live org-agenda buffer."
   (declare (indent 1))
   `(with-temp-buffer
-     (insert ,content)
-     (goto-char (point-min))
-     ,@body))
+     (insert ,lines)
+     (cl-letf (((symbol-function 'ps/agenda-emoji--line-title)
+                (lambda ()
+                  (let ((s (string-trim
+                            (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position)))))
+                    (if (string= s "") nil s)))))
+       ,@body)))
 
 ;;; -------------------------------------------------------
 ;;; defcustom / API
@@ -43,81 +48,115 @@
     (should (memq 'ps/agenda-emoji--append org-agenda-finalize-hook))))
 
 ;;; -------------------------------------------------------
-;;; extract-tasks
+;;; map-get
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/agenda-emoji--extract-finds-todo ()
-  "A plain TODO task is extracted with its text only."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should (member "Write the report" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-finds-scheduled-next ()
-  "A NEXT task behind a Scheduled: prefix is extracted."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should (member "Buy groceries" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-finds-in-progress ()
-  "An IN-PROGRESS task is extracted."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should (member "Refactor module" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-ignores-non-task ()
-  "Lines without a TODO-like keyword are not extracted."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should-not (member "Some non-task line" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-ignores-done ()
-  "DONE is not in the keyword group, so DONE lines are not extracted."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should-not (member "Already finished" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-strips-trailing-tag ()
-  "A trailing :tag: is removed from the extracted task text."
-  (ps/agenda-emoji-test--with-buffer "  work:  TODO Write the report :urgent:\n"
-    (let ((tasks (ps/agenda-emoji--extract-tasks)))
-      (should (member "Write the report" tasks))
-      (should-not (member "Write the report :urgent:" tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-finds-waiting ()
-  "A WAITING task is extracted."
-  (ps/agenda-emoji-test--with-buffer "  proj:  WAITING On code review\n"
-    (should (member "On code review" (ps/agenda-emoji--extract-tasks)))))
-
-(ert-deftest ps/agenda-emoji--extract-finds-someday ()
-  "A SOMEDAY task is extracted."
-  (ps/agenda-emoji-test--with-buffer "  proj:  SOMEDAY Learn the piano\n"
-    (should (member "Learn the piano" (ps/agenda-emoji--extract-tasks)))))
+(ert-deftest ps/agenda-emoji--map-get-hash-and-alist ()
+  "map-get works for both hash tables and string-keyed alists."
+  (let ((h (make-hash-table :test 'equal)))
+    (puthash "A" '("x") h)
+    (should (equal (ps/agenda-emoji--map-get h "A") '("x")))
+    (should (null (ps/agenda-emoji--map-get h "Z")))
+    (should (equal (ps/agenda-emoji--map-get '(("B" . ("y"))) "B") '("y")))))
 
 ;;; -------------------------------------------------------
-;;; apply
+;;; collect-titles
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/agenda-emoji--apply-appends-emoji ()
-  "Emojis from the map are appended to the end of a matching task line."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
-    (ps/agenda-emoji--apply '(("Write the report" . ("X" "Y"))))
-    (goto-char (point-min))
-    (should (re-search-forward "TODO Write the report X Y" nil t))))
+(ert-deftest ps/agenda-emoji--collect-titles-skips-blanks ()
+  "Only non-blank task lines contribute titles, in order."
+  (ps/agenda-emoji-test--with-lines "Write the report\n\nBuy groceries\n"
+    (should (equal (ps/agenda-emoji--collect-titles)
+                   '("Write the report" "Buy groceries")))))
+
+;;; -------------------------------------------------------
+;;; cache: partition / round-trip / invalidation
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-emoji--partition-splits-hit-miss ()
+  "Cached titles (even empty ones) go to CACHED; unseen titles to MISSING."
+  (let ((ps/agenda-emoji--cache (make-hash-table :test 'equal))
+        (ps/agenda-emoji--cache-loaded-tag ps/agenda-emoji-cache-tag))
+    (puthash "Known" '("✅") ps/agenda-emoji--cache)
+    (puthash "Empty" '() ps/agenda-emoji--cache)
+    (let* ((part (ps/agenda-emoji--partition '("Known" "Empty" "Fresh")))
+           (cached (car part))
+           (missing (cdr part)))
+      (should (equal (alist-get "Known" cached nil nil #'equal) '("✅")))
+      (should (assoc "Empty" cached))             ; present, even though empty
+      (should (member "Fresh" missing))
+      (should-not (member "Known" missing)))))
+
+(ert-deftest ps/agenda-emoji--cache-roundtrip ()
+  "Saving then reloading preserves entries, including empty-list ones."
+  (let* ((tmp (make-temp-file "emoji-cache" nil ".json"))
+         (ps/agenda-emoji-cache-file tmp)
+         (ps/agenda-emoji--cache (make-hash-table :test 'equal))
+         (ps/agenda-emoji--cache-loaded-tag ps/agenda-emoji-cache-tag))
+    (unwind-protect
+        (progn
+          (ps/agenda-emoji--cache-put "Task one" '("📌"))
+          (ps/agenda-emoji--cache-put "Weak task" '())
+          (ps/agenda-emoji--cache-save)
+          ;; Simulate a fresh session: drop in-memory state, reload from disk.
+          (setq ps/agenda-emoji--cache nil
+                ps/agenda-emoji--cache-loaded-tag nil)
+          (let ((cache (ps/agenda-emoji--cache-load)))
+            (should (equal (gethash "Task one" cache) '("📌")))
+            ;; present but empty (not the 'miss sentinel)
+            (should (eq (gethash "Weak task" cache 'miss) nil))
+            (should (eq (gethash "Absent" cache 'miss) 'miss))))
+      (delete-file tmp))))
+
+(ert-deftest ps/agenda-emoji--cache-tag-invalidates ()
+  "A changed cache tag discards the on-disk cache."
+  (let* ((tmp (make-temp-file "emoji-cache" nil ".json"))
+         (ps/agenda-emoji-cache-file tmp)
+         (ps/agenda-emoji-cache-tag "tagA")
+         (ps/agenda-emoji--cache (make-hash-table :test 'equal))
+         (ps/agenda-emoji--cache-loaded-tag "tagA"))
+    (unwind-protect
+        (progn
+          (ps/agenda-emoji--cache-put "Task" '("📌"))
+          (ps/agenda-emoji--cache-save)
+          (setq ps/agenda-emoji--cache nil
+                ps/agenda-emoji--cache-loaded-tag nil
+                ps/agenda-emoji-cache-tag "tagB")
+          (should (= (hash-table-count (ps/agenda-emoji--cache-load)) 0)))
+      (delete-file tmp))))
+
+;;; -------------------------------------------------------
+;;; apply (right-aligned overlays)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-emoji--apply-places-overlay ()
+  "A mapped task gets exactly one emoji overlay carrying the glyph."
+  (ps/agenda-emoji-test--with-lines "Write the report\nBuy groceries\n"
+    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
+    (let ((ovs (ps/agenda-emoji-test--overlays)))
+      (should (= (length ovs) 1))
+      (should (string-match-p "X" (overlay-get (car ovs) 'after-string))))))
 
 (ert-deftest ps/agenda-emoji--apply-skips-unmapped ()
-  "A task with no entry in the map is left unchanged."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
+  "A task absent from the map gets no overlay."
+  (ps/agenda-emoji-test--with-lines "Write the report\n"
     (ps/agenda-emoji--apply '(("Nonexistent" . ("Z"))))
-    (goto-char (point-min))
-    (should-not (re-search-forward " Z$" nil t))))
+    (should-not (ps/agenda-emoji-test--overlays))))
 
-(ert-deftest ps/agenda-emoji--apply-emoji-has-height-face ()
-  "Appended emojis carry the reduced-height face property."
-  (ps/agenda-emoji-test--with-buffer ps/agenda-emoji-test--sample
+(ert-deftest ps/agenda-emoji--apply-is-idempotent ()
+  "Re-applying clears prior overlays instead of stacking them."
+  (ps/agenda-emoji-test--with-lines "Write the report\n"
     (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
-    (goto-char (point-min))
-    (should (re-search-forward "TODO Write the report " nil t))
-    ;; Point is now right before the appended "X".
-    (should (equal (get-text-property (point) 'face) '(:height 0.8)))))
+    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
+    (should (= (length (ps/agenda-emoji-test--overlays)) 1))))
+
+(ert-deftest ps/agenda-emoji--apply-emoji-has-face ()
+  "The appended glyph carries `ps/agenda-emoji-face'."
+  (ps/agenda-emoji-test--with-lines "Write the report\n"
+    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
+    (let* ((ov (car (ps/agenda-emoji-test--overlays)))
+           (s (overlay-get ov 'after-string))
+           (idx (string-match "X" s)))
+      (should (equal (get-text-property idx 'face s) ps/agenda-emoji-face)))))
 
 ;;; test-ps-agenda-emoji.el ends here
