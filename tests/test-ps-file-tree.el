@@ -133,4 +133,44 @@ others as empty files."
   (should-not (ps/file-tree--expandable-state-p nil))
   (should-not (ps/file-tree--expandable-state-p 'unknown-state)))
 
+;;; -------------------------------------------------------
+;;; ps/file-tree--target-window
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree--target-window-picks-most-recently-used ()
+  "Among non-tree windows, the most-recently-selected one is returned."
+  (let ((tree-buf (generate-new-buffer "tree"))
+        (buf-a (generate-new-buffer "a"))
+        (buf-b (generate-new-buffer "b")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) tree-buf)
+          (let* ((tree-win (selected-window))
+                 (win-a (split-window tree-win))
+                 (win-b (split-window win-a)))
+            (set-window-buffer win-a buf-a)
+            (set-window-buffer win-b buf-b)
+            (select-window win-a)
+            (select-window win-b)
+            (cl-letf (((symbol-function 'treemacs-get-local-window)
+                       (lambda () tree-win)))
+              (should (eq (ps/file-tree--target-window) win-b))
+              (select-window win-a)
+              (should (eq (ps/file-tree--target-window) win-a)))))
+      (mapc #'kill-buffer (list tree-buf buf-a buf-b)))))
+
+(ert-deftest ps/file-tree--target-window-nil-when-only-tree-window ()
+  "Returns nil when the file tree is the only window."
+  (let ((tree-buf (generate-new-buffer "tree")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) tree-buf)
+          (let ((tree-win (selected-window)))
+            (cl-letf (((symbol-function 'treemacs-get-local-window)
+                       (lambda () tree-win)))
+              (should-not (ps/file-tree--target-window)))))
+      (kill-buffer tree-buf))))
+
 ;;; test-ps-file-tree.el ends here

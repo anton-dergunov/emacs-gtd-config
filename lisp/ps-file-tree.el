@@ -230,6 +230,14 @@ with nothing to open (project roots, plain directories)."
                       heading (find-file-noselect file))))))
     (_ nil)))
 
+(defun ps/file-tree--target-window ()
+  "Return the window where file-tree clicks should open files.
+This is the most-recently-used window other than the file tree itself, so
+files open wherever the user was last working regardless of how many other
+windows are present. Returns nil if no such window exists."
+  (let ((others (remove (treemacs-get-local-window) (window-list))))
+    (car (cl-sort others #'> :key #'window-use-time))))
+
 (defun ps/file-tree--click-label ()
   "Handle a label click on the node at point.
 Files and org headings (leaf or intermediate) open on the right. Project
@@ -241,10 +249,10 @@ roots and plain directories toggle expand/collapse, as before."
         (treemacs-toggle-node)
       (when-let* ((target (ps/file-tree--node-target btn))
                   (file (car target)))
-        (let ((pos (cdr target)))
-          (if-let* ((win (get-buffer-window (get-file-buffer file))))
-              (select-window win)
-            (other-window 1))
+        (let ((pos (cdr target))
+              (win (or (get-buffer-window (get-file-buffer file))
+                       (ps/file-tree--target-window))))
+          (when win (select-window win))
           (find-file file)
           (when pos
             (goto-char pos)
