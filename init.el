@@ -22,5 +22,16 @@
 (when (file-exists-p custom-file)
   (load custom-file))
 
+;; Disable the org-element cache BEFORE tangling config.org. The startup
+;; tangle parses config.org before any of our config has loaded, so the
+;; cache is otherwise at its default (on) — the same path that throws
+;; "Invalid search bound (wrong side of point)" and produces a broken,
+;; partially-tangled config.el (load errors or silently-missing changes).
+;; The matching setting inside config.org loads too late to protect this
+;; step: it can only take effect after config.el has already been tangled
+;; and loaded. This is the authoritative tangle-time guard.
+(require 'org)
+(setq org-element-use-cache nil)
+
 ;; Load the main configuration from `config.org`
 (org-babel-load-file (expand-file-name "config.org" user-emacs-directory))

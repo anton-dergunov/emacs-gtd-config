@@ -14,10 +14,13 @@ file needs. Do not move it.
   ;; -*- lexical-binding: t; -*-
   ;; Code above enables lexical scoping so lambdas can capture variables (needed for async code)
 
-  ;; Disable the org-element cache before anything else.  Without this,
+  ;; Disable the org-element cache for runtime Org use.  Without this,
   ;; Org can hit "Invalid search bound (wrong side of point)" while
-  ;; parsing this very file at startup — before the Org Mode section
-  ;; gets to set it later.
+  ;; parsing this very file — before the Org Mode section sets it later.
+  ;; NOTE: the authoritative *tangle-time* guard lives in init.el, set
+  ;; before `org-babel-load-file' tangles this file; this line cannot
+  ;; protect that tangle since it only takes effect once config.el is
+  ;; already built and loaded. Kept here as belt-and-suspenders.
   (setq org-element-use-cache nil)
 
   (require 'package)
@@ -64,6 +67,32 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-timezone)
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
+#+end_src
+
+** Auto-tangle this config on save
+Saving =config.org= in a live session regenerates =config.el= immediately.
+Because this tangle runs in a fully-initialized Emacs (org-element cache already
+off, Org fully loaded) it is always clean — unlike the tangle =init.el= performs
+at startup. It also leaves =config.el= newer than =config.org=, so the next
+restart skips startup tangling entirely and just loads a known-good file.
+#+begin_src emacs-lisp
+  (defun ps/tangle-config-on-save ()
+    "Tangle config.org -> config.el after saving config.org.
+  Runs in the live session (org-element cache already off, Org fully
+  loaded), so the tangle is clean — unlike the tangle init.el performs at
+  startup. Regenerating config.el here also makes it newer than config.org,
+  so the next restart skips startup tangling and just loads it."
+    (let ((config (expand-file-name "config.org" user-emacs-directory)))
+      (when (and buffer-file-name
+                 (string= (file-truename buffer-file-name)
+                          (file-truename config)))
+        (let ((org-confirm-babel-evaluate nil))
+          (org-babel-tangle-file
+           config
+           (expand-file-name "config.el" user-emacs-directory)
+           "emacs-lisp")))))
+
+  (add-hook 'after-save-hook #'ps/tangle-config-on-save)
 #+end_src
 
 * Settings
