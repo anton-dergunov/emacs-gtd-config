@@ -414,7 +414,7 @@ icons.
     (setq org-agenda-skip-scheduled-if-done t
           org-agenda-skip-deadline-if-done t
           org-agenda-include-deadlines t
-          org-agenda-block-separator nil
+          org-agenda-block-separator ""
           org-agenda-compact-blocks nil
           org-agenda-start-day nil ;; i.e. today
           org-agenda-span 1
@@ -441,9 +441,9 @@ icons.
                                     :date today
                                     :order 1)))))
               (tags-todo "+PRIORITY=\"A\""
-                         ((org-agenda-overriding-header "\n High-priority:")))
+                         ((org-agenda-overriding-header " High-priority:")))
               (todo "IN-PROGRESS"
-                    ((org-agenda-overriding-header "\n In progress:")))))
+                    ((org-agenda-overriding-header " In progress:")))))
             ("n" "NEXT tasks"
              ((todo "NEXT")))))
 
