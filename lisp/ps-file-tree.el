@@ -50,6 +50,22 @@ May be fractional, e.g. 0.5 for half a character width."
   :type 'number
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-icon-height 20
+  "Height in pixels every file-tree icon is scaled to.
+Scaling preserves each icon's aspect ratio (only the height is fixed).
+A single shared height lets `ps/file-tree-icon-ascent' align all icons
+consistently regardless of their source size."
+  :type 'integer
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-icon-ascent 75
+  "Vertical alignment of file-tree icons, as a percentage above the baseline.
+Passed as the `:ascent' of every icon image (0-100). Higher values raise
+the icon relative to its label; lower values drop it. Tune this so icons
+line up vertically with their text."
+  :type 'integer
+  :group 'ps-file-tree)
+
 ;;; Ignore predicate
 
 (defun ps/file-tree--ignored-p (filename _absolute-path)

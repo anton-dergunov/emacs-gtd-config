@@ -9,6 +9,7 @@
 (declare-function treemacs-theme->gui-icons "treemacs-themes")
 (declare-function treemacs-theme->tui-icons "treemacs-themes")
 (declare-function ht-set! "ht")
+(declare-function ht-get "ht")
 (defvar treemacs--current-theme)
 
 ;; Icon basenames reserved for structural purposes (root icons, per-directory
@@ -35,13 +36,25 @@ or has no SVGs."
         (setq merged (cons entry (assoc-delete-all (car entry) merged)))))
     (nreverse merged)))
 
+(defun ps/file-tree-icons--create-image (file &optional mask)
+  "Create an icon image for FILE for use in the file tree.
+The image is scaled to `ps/file-tree-icon-height'; only the height is
+fixed, so the aspect ratio is preserved (unlike `treemacs-create-icon',
+which stretches to a square). The `:ascent' is `ps/file-tree-icon-ascent',
+which controls vertical alignment with the label. MASK is passed as the
+image `:mask' (e.g. \\='heuristic for raster icons whose transparency needs
+it)."
+  (create-image file nil nil
+                :height ps/file-tree-icon-height
+                :ascent ps/file-tree-icon-ascent
+                :mask mask))
+
 (defun ps/file-tree-icons--register (category file)
   "Register FILE as the file-tree icon for CATEGORY.org files.
-Unlike `treemacs-create-icon', this preserves FILE's natural size and
-aspect ratio instead of stretching it to a square."
+Scales FILE to a uniform height while preserving its aspect ratio."
   (let ((ext (downcase (concat category ".org")))
         (gui-icon (propertize " " 'display
-                               (create-image file nil nil :ascent 'center))))
+                               (ps/file-tree-icons--create-image file))))
     (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) ext gui-icon)
     (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) ext "")))
 
@@ -49,7 +62,7 @@ aspect ratio instead of stretching it to a square."
   "Return a propertized icon image for icon NAME in MERGED, or nil."
   (let ((file (cdr (assoc name merged))))
     (when file
-      (propertize " " 'display (create-image file nil nil :ascent 'center)))))
+      (propertize " " 'display (ps/file-tree-icons--create-image file)))))
 
 (defun ps/file-tree-icons--register-root-icons (merged)
   "Set the icon shown before every top-level project root label.
@@ -83,6 +96,28 @@ category-specific icon in MERGED (i.e. no `<Category>.svg' matching
       (unless (assoc (file-name-base file) merged)
         (ps/file-tree-icons--register-file file image)))))
 
+(defun ps/file-tree-icons--override-tag-icons ()
+  "Restyle treemacs's tag icons (org headings) to match file/dir icons.
+By default tag icons differ from file/dir icons in two ways: a wider,
+full-width gap between icon and label, and a different vertical alignment.
+For each tag icon in the current theme, re-create its image at our height
+and ascent and replace treemacs's trailing full-width space with the
+standard `ps/file-tree--spacer', so tags match files exactly. Skips any
+icon that has no image (e.g. a TUI fallback string)."
+  (let ((gui-icons (treemacs-theme->gui-icons treemacs--current-theme)))
+    (dolist (key '(tag-leaf tag-open tag-closed))
+      (let* ((icon (ht-get gui-icons key))
+             (image (and (stringp icon) (> (length icon) 0)
+                         (get-text-property 0 'display icon)))
+             (file (and (eq (car-safe image) 'image)
+                        (image-property image :file))))
+        (when file
+          (ht-set!
+           gui-icons key
+           (concat (propertize " " 'display
+                                (ps/file-tree-icons--create-image file 'heuristic))
+                   (ps/file-tree--spacer))))))))
+
 (defun ps/file-tree-icons-apply (icon-dirs base-dir)
   "Register a treemacs theme mapping <Category>.org files to category SVGs,
 set the icon shown before top-level project root labels, and set up
@@ -108,7 +143,8 @@ available."
            (ps/file-tree-icons--image-for merged "Vision"))
           (ps/file-tree-icons--register-fallback
            (expand-file-name "Areas" base-dir) merged
-           (ps/file-tree-icons--image-for merged "File"))))
+           (ps/file-tree-icons--image-for merged "File"))
+          (ps/file-tree-icons--override-tag-icons)))
       (treemacs-load-theme "ps-file-tree"))))
 
 (provide 'ps-file-tree-icons)

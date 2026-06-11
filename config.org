@@ -143,6 +143,8 @@ instead.
 
   (setq ps/file-tree-use-custom-icons t)
   (setq ps/file-tree-name-spacing 0.5)
+  (setq ps/file-tree-icon-height 20)
+  (setq ps/file-tree-icon-ascent 75)
 #+end_src
 
 ** Done tasks (ps-done.el)
