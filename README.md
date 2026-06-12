@@ -104,6 +104,57 @@ To add an icon for a new category, or override a stock one:
    `fill` attributes.
 
 
+## Typo / Spell Checking
+
+Org buffers get a quiet, multilingual typo checker. A word is underlined with a
+subtle wavy line **only when none of your configured languages recognise it**,
+so terms that are valid in any language you write in are never flagged — for
+example Spanish `calor` or Cyrillic words inside English text stay clean. Code,
+links, file paths and `=verbatim=`/`~code~` markup are skipped automatically.
+Press `M-$` on an underlined word to pick a correction or add the word to your
+personal dictionary. Only individual words are checked — there is no grammar
+checking and no network/LLM use.
+
+The accepted languages default to English, Russian and Spanish; edit
+`ps/typo-languages` in the **Settings → Typo / spell checking** block of
+`config.org` to match the languages you write in. See
+[docs/typo-checker.md](docs/typo-checker.md) for the design rationale.
+
+This feature uses [Jinx](https://github.com/minad/jinx), which needs the
+`enchant` library plus a dictionary for each language.
+
+**macOS:**
+
+```bash
+brew install enchant          # also pulls in hunspell
+xcode-select --install        # C compiler for Jinx's module (skip if installed)
+```
+
+English and several other languages work out of the box via the macOS system
+speller (AppleSpell). Note that AppleSpell is fairly permissive — it accepts
+some misspellings (e.g. `teh`) — which keeps false positives low but also lets a
+few typos through. For stricter checking, install Hunspell dictionary files
+(`<locale>.aff` and `<locale>.dic`, e.g. `en_US.*`, `es_ES.*`, `ru_RU.*`) into
+`~/.config/enchant/hunspell/`; `enchant` prefers them over AppleSpell. Russian
+is not provided by AppleSpell, so a `ru_RU` Hunspell dictionary is required for
+it. List what `enchant` can see with:
+
+```bash
+enchant-2 -list-dicts
+```
+
+Dictionary files are available from the
+[LibreOffice dictionaries](https://github.com/LibreOffice/dictionaries) repo.
+
+**Other systems:** `enchant` is cross-platform — on Linux install it with your
+package manager (e.g. `sudo apt install enchant-2`, plus `hunspell-es`,
+`hunspell-ru`, …); on Windows it is available via MSYS2 and some Emacs builds
+bundle it. Only the dictionary-install step differs per OS.
+
+If `enchant` is not installed, the rest of the config still loads normally —
+typo checking simply stays off until the library and dictionaries are present.
+
+
 ## Changing the Color Theme
 
 Everybody has strong opinions about colors, so switching the whole look is a

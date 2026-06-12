@@ -67,6 +67,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-timezone)
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
+  (require 'ps-typo)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -249,6 +250,29 @@ columns from the right window edge the emoji column starts.
         ps/agenda-emoji-cache-tag    "bge-small-en-v1.5@0.50"
         ps/agenda-emoji-right-margin 3
         ps/agenda-emoji-face         '(:height 0.8))
+#+end_src
+
+** Typo / spell checking (ps-typo.el)
+A quiet, multilingual typo checker for Org buffers. A word is underlined only
+when *no* configured language recognises it, so terms valid in any of your
+languages (e.g. Spanish =calor=, Cyrillic words) are never flagged. Code, links
+and markup are skipped automatically. Correct a word with =M-$=.
+
+=ps/typo-languages= is the union of accepted languages — extend it for every
+language you write in (each needs an =enchant= dictionary; see README.md).
+=ps/typo-near-miss-gate= is an extra-precision mode (only flag words that look
+like a near miss of a real word); it is off by default so you can experiment.
+=ps/typo-order-suggestions-by-language= lists fixes for the locally-detected
+language first; set it to nil to disable. =ps/typo-underline-color= is the wavy
+underline colour (=auto= derives a muted colour from the theme's =shadow= face).
+#+begin_src emacs-lisp
+  (setq ps/typo-languages       '("en_US" "ru_RU" "es_ES")
+        ps/typo-min-length      3
+        ps/typo-near-miss-gate  nil   ; t = only flag near-misses of real words
+        ps/typo-near-miss-max-distance 2
+        ps/typo-order-suggestions-by-language t
+        ;; Solarized keeps a soft grey; other themes derive one from `shadow'.
+        ps/typo-underline-color (if ps/color-theme-solarized-p "gray60" 'auto))
 #+end_src
 
 * Editor & UI
@@ -638,7 +662,16 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
   ;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
   (add-hook 'auto-save-hook 'org-save-all-org-buffers)
 
-  ;; Automatically revert buffers when files change on disk
+  ;; Automatically revert buffers when files change on disk.
+  ;; Rely on file-system notifications instead of the default ~5s polling
+  ;; timer. On the macOS (NS) build, a redisplay forced from inside a timer
+  ;; while Emacs is idle can re-enter AppKit's event loop and hard-freeze the
+  ;; whole UI (no keyboard/mouse input). Notification-based reverts avoid that
+  ;; recurring timer, and silencing revert output avoids extra echo-area
+  ;; redisplay.
+  (setq auto-revert-avoid-polling t
+        auto-revert-verbose nil
+        auto-revert-check-vc-info nil)
   (global-auto-revert-mode t)
 #+end_src
 
@@ -668,6 +701,17 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
 #+begin_src emacs-lisp
   ;; https://emacs.stackexchange.com/questions/42571/org-agenda-date-prompt-mini-calendar-start-week-on-monday
   (setq calendar-week-start-day 1)
+#+end_src
+
+*** Typo / spell checking (ps-typo.el)
+Logic lives in =lisp/ps-typo.el=; knobs are in the Typo / Spell Settings block
+above. =jinx= is the spell engine (needs =enchant=; see README.md) and
+=guess-language= powers optional suggestion ordering. If =enchant= is not
+installed yet, setup degrades gracefully and Org still loads normally.
+#+begin_src emacs-lisp
+  (use-package jinx :ensure t)
+  (use-package guess-language :ensure t)
+  (ps/typo-setup)
 #+end_src
 
 * Workflow
