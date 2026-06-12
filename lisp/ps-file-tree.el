@@ -35,6 +35,39 @@ A file or directory is hidden if its name matches any regexp here."
   :type '(repeat regexp)
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-file-sets
+  '(("All" . (:include nil :exclude nil)))
+  "Named file-visibility sets for the file tree.
+Each entry is (NAME . PLIST) where PLIST has:
+  :include - list of regexps; if non-nil, only paths matching one of these
+             (or directories containing a matching descendant) are shown.
+  :exclude - list of regexps; paths matching any of these are hidden,
+             regardless of :include.
+Regexps are matched as substrings against the absolute path.
+
+This is purely a display filter for the file tree — it does not affect the
+agenda or any other part of the system, which continue to see every file.
+
+The first entry should remain (\"All\" . (:include nil :exclude nil)),
+showing everything. It is also used as the fallback set by
+`ps/file-tree--ensure-valid-set' when `ps/file-tree-current-set' names a
+set that no longer exists.
+
+Set definitions should filter within existing top-level project
+directories, not target those directories themselves — switching sets
+re-renders existing projects but does not recompute the project list."
+  :type '(alist :key-type string
+                 :value-type (plist :key-type symbol :value-type (repeat regexp)))
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-current-set "All"
+  "Name of the currently active file set (a key in `ps/file-tree-file-sets').
+Persisted across restarts via `savehist-additional-variables'. If the
+saved name is no longer present in `ps/file-tree-file-sets',
+`ps/file-tree--ensure-valid-set' falls back to the first entry there."
+  :type 'string
+  :group 'ps-file-tree)
+
 (defcustom ps/file-tree-use-custom-icons t
   "Whether to use custom category icons in the file tree.
 When non-nil (the default), the custom \"ps-file-tree\" icon theme
@@ -68,11 +101,50 @@ line up vertically with their text."
 
 ;;; Ignore predicate
 
-(defun ps/file-tree--ignored-p (filename _absolute-path)
-  "Return non-nil if FILENAME should be hidden from the file tree.
-Matched against `ps/file-tree-ignored-files'."
-  (cl-some (lambda (rx) (string-match-p rx filename))
-           ps/file-tree-ignored-files))
+(defun ps/file-tree--current-set-spec ()
+  "Return the plist for `ps/file-tree-current-set', or nil if not found."
+  (cdr (assoc ps/file-tree-current-set ps/file-tree-file-sets)))
+
+(defun ps/file-tree--path-matches-any-p (path regexps)
+  "Return non-nil if PATH contains a substring match for any of REGEXPS."
+  (cl-some (lambda (rx) (string-match-p rx path)) regexps))
+
+(defun ps/file-tree--descendant-included-p (dir include-regexps)
+  "Return non-nil if DIR has a descendant whose path matches INCLUDE-REGEXPS.
+Recurses into subdirectories; stops at the first match."
+  (cl-some
+   (lambda (entry)
+     (let ((name (file-name-nondirectory entry)))
+       (unless (member name '("." ".."))
+         (or (ps/file-tree--path-matches-any-p entry include-regexps)
+             (and (file-directory-p entry)
+                  (ps/file-tree--descendant-included-p entry include-regexps))))))
+   (and (file-directory-p dir) (directory-files dir t))))
+
+(defun ps/file-tree--set-hidden-p (absolute-path)
+  "Return non-nil if ABSOLUTE-PATH is hidden by the current file set.
+Hidden if ABSOLUTE-PATH matches the current set's :exclude regexps, or if
+:include is non-nil and neither ABSOLUTE-PATH nor (for directories) any of
+its descendants matches an :include regexp."
+  (let ((spec (ps/file-tree--current-set-spec)))
+    (when spec
+      (let ((include (plist-get spec :include))
+            (exclude (plist-get spec :exclude)))
+        (or
+         (and exclude (ps/file-tree--path-matches-any-p absolute-path exclude))
+         (and include
+              (not (ps/file-tree--path-matches-any-p absolute-path include))
+              (not (and (file-directory-p absolute-path)
+                        (ps/file-tree--descendant-included-p absolute-path include)))))))))
+
+(defun ps/file-tree--ignored-p (filename absolute-path)
+  "Return non-nil if FILENAME/ABSOLUTE-PATH should be hidden from the file tree.
+Hidden if FILENAME matches `ps/file-tree-ignored-files', or if
+ABSOLUTE-PATH is hidden by the current file set
+(`ps/file-tree-file-sets' / `ps/file-tree-current-set')."
+  (or (cl-some (lambda (rx) (string-match-p rx filename))
+               ps/file-tree-ignored-files)
+      (ps/file-tree--set-hidden-p absolute-path)))
 
 ;;;###autoload
 (defun ps/file-tree-setup-ignore ()
@@ -126,6 +198,69 @@ Suitable for `treemacs-directory-name-transformer'."
   "Toggle the file tree window."
   (interactive)
   (treemacs))
+
+;;; File sets
+
+(defun ps/file-tree--ensure-valid-set ()
+  "Reset `ps/file-tree-current-set' to the default if it names no set.
+Falls back to the first entry of `ps/file-tree-file-sets'."
+  (unless (assoc ps/file-tree-current-set ps/file-tree-file-sets)
+    (setq ps/file-tree-current-set (car (car ps/file-tree-file-sets)))))
+
+(defun ps/file-tree--refresh ()
+  "Re-render the file tree, re-applying the active file set's filters.
+Collapses and re-expands every project so each directory is rescanned
+against the current `ps/file-tree-current-set' rather than reusing
+already-rendered nodes."
+  (when-let* ((buf (and (fboundp 'treemacs-get-local-buffer)
+                         (treemacs-get-local-buffer))))
+    (with-current-buffer buf
+      (ps/file-tree-collapse-all)
+      (ps/file-tree-expand-all))))
+
+;;;###autoload
+(defun ps/file-tree-set-file-set (name)
+  "Switch the active file set to NAME and refresh the file tree."
+  (interactive
+   (list (completing-read "File set: "
+                           (mapcar #'car ps/file-tree-file-sets)
+                           nil t nil nil ps/file-tree-current-set)))
+  (setq ps/file-tree-current-set name)
+  (ps/file-tree--ensure-valid-set)
+  (ps/file-tree--refresh)
+  (force-mode-line-update t))
+
+(defun ps/file-tree-cycle-file-set ()
+  "Switch to the next file set in `ps/file-tree-file-sets', wrapping around."
+  (interactive)
+  (let* ((names (mapcar #'car ps/file-tree-file-sets))
+         (pos (or (cl-position ps/file-tree-current-set names :test #'equal) -1))
+         (next (nth (mod (1+ pos) (length names)) names)))
+    (ps/file-tree-set-file-set next)))
+
+;;; Mode line
+
+(defun ps/file-tree--modeline-click (event)
+  "Show a popup menu of file sets and switch to the one EVENT selects."
+  (interactive "e")
+  (let* ((names (mapcar #'car ps/file-tree-file-sets))
+         (menu (list "File Set" (cons "File Sets" (mapcar (lambda (n) (cons n n)) names))))
+         (choice (x-popup-menu event menu)))
+    (when choice
+      (ps/file-tree-set-file-set choice))))
+
+(defun ps/file-tree--modeline ()
+  "Return the propertized file-set indicator for the file tree mode line."
+  (propertize (format " [%s ▾]" ps/file-tree-current-set)
+              'face 'mode-line-emphasis
+              'mouse-face 'mode-line-highlight
+              'help-echo "mouse-1: switch file set"
+              'local-map
+              (let ((map (make-sparse-keymap)))
+                (define-key map [mode-line mouse-1] #'ps/file-tree--modeline-click)
+                (define-key map [mode-line down-mouse-3] #'ignore)
+                (define-key map [mode-line mouse-3] #'ignore)
+                map)))
 
 ;;; Expand / collapse all
 

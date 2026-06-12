@@ -176,6 +176,27 @@ instead.
   (setq ps/file-tree-icon-ascent 75)
 #+end_src
 
+*** File sets
+Named filters for which files the tree shows — purely a display filter,
+the agenda and everything else still see every file. Each set has
+=:include= and/or =:exclude= regexps, matched as substrings of each file's
+absolute path. "All" (the default) shows everything, and is also the
+fallback used if =ps/file-tree-current-set= ever names a set that no
+longer exists. The active set is shown and switched from the file tree's
+mode line, and persists across restarts.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-file-sets
+        '(("All" . (:include nil :exclude nil))
+          ;; ;; Examples:
+          ;; ("Work" . (:include ("/Areas/Work\\.org\\'"
+          ;;                       "/Current/")
+          ;;            :exclude nil))
+          ;; ("No Sensitive" . (:include nil
+          ;;                     :exclude ("/Areas/Financial\\.org\\'"
+          ;;                               "/Areas/Interviews\\.org\\'")))
+          ))
+#+end_src
+
 ** Done tasks (ps-done.el)
 Solarized keeps the original light gray; other themes derive a dim colour from the
 active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
@@ -761,9 +782,14 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     :commands (treemacs treemacs-select-window)
     :config
     (ps/file-tree-setup-ignore)
+    (ps/file-tree--ensure-valid-set)
     (if ps/file-tree-use-custom-icons
         (ps/file-tree-icons-apply ps/file-tree-icon-dirs my-org-base-directory)
       (treemacs-load-theme "Default"))
+
+    ;; Replace the file tree's mode line entirely with the active file-set
+    ;; indicator; click it to switch sets.
+    (setq treemacs-user-mode-line-format '(:eval (ps/file-tree--modeline)))
 
     ;; Root project labels (Areas/Current/Vision) should look like ordinary
     ;; file-tree entries (not underlined or oversized like the default
@@ -1074,6 +1100,9 @@ a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
 
   ;; Save the kill-ring to the history
   (add-to-list 'savehist-additional-variables 'kill-ring)
+
+  ;; Persist the selected file-tree file set across restarts
+  (add-to-list 'savehist-additional-variables 'ps/file-tree-current-set)
 
   ;; Reload desktop without asking
   ;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html

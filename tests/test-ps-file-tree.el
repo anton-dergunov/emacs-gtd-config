@@ -5,6 +5,21 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-file-tree)
 
+(defmacro ps/file-tree-test--with-base-dir (entries &rest body)
+  "Create a temp dir containing ENTRIES, bind `dir', run BODY, then clean up.
+Each entry is a name; names ending in \"/\" are created as subdirectories,
+others as empty files."
+  (declare (indent 1))
+  `(let ((dir (make-temp-file "ps-file-tree-" t)))
+     (unwind-protect
+         (progn
+           (dolist (name ,entries)
+             (if (string-suffix-p "/" name)
+                 (make-directory (expand-file-name name dir) t)
+               (with-temp-file (expand-file-name name dir) (insert ""))))
+           ,@body)
+       (delete-directory dir t))))
+
 ;;; -------------------------------------------------------
 ;;; ps/file-tree--ignored-p
 ;;; -------------------------------------------------------
@@ -31,23 +46,97 @@
     (should-not (ps/file-tree--ignored-p "init.org" "/some/path/init.org"))))
 
 ;;; -------------------------------------------------------
-;;; ps/file-tree--list-subdirs
+;;; ps/file-tree--set-hidden-p / file sets
 ;;; -------------------------------------------------------
 
-(defmacro ps/file-tree-test--with-base-dir (entries &rest body)
-  "Create a temp dir containing ENTRIES, bind `dir', run BODY, then clean up.
-Each entry is a name; names ending in \"/\" are created as subdirectories,
-others as empty files."
-  (declare (indent 1))
-  `(let ((dir (make-temp-file "ps-file-tree-" t)))
-     (unwind-protect
-         (progn
-           (dolist (name ,entries)
-             (if (string-suffix-p "/" name)
-                 (make-directory (expand-file-name name dir) t)
-               (with-temp-file (expand-file-name name dir) (insert ""))))
-           ,@body)
-       (delete-directory dir t))))
+(ert-deftest ps/file-tree--set-hidden-default-all-shows-everything ()
+  "The default \"All\" set (nil/nil) hides nothing."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "All"))
+    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Secret.org"))))
+
+(ert-deftest ps/file-tree--set-hidden-exclude-only ()
+  "A path matching :exclude is hidden; non-matching paths are not."
+  (let ((ps/file-tree-file-sets
+         '(("NoSecrets" . (:include nil :exclude ("Secret")))))
+        (ps/file-tree-current-set "NoSecrets"))
+    (should (ps/file-tree--set-hidden-p "/base/Areas/Secret.org"))
+    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Career.org"))))
+
+(ert-deftest ps/file-tree--set-hidden-include-only-hides-non-matching ()
+  "With :include set, a non-matching leaf path is hidden."
+  (let ((ps/file-tree-file-sets
+         '(("Work" . (:include ("/Work/") :exclude nil))))
+        (ps/file-tree-current-set "Work"))
+    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Work/Project.org"))
+    (should (ps/file-tree--set-hidden-p "/base/Areas/Personal/Diary.org"))))
+
+(ert-deftest ps/file-tree--set-hidden-include-shows-dir-with-whitelisted-descendant ()
+  "A directory with a whitelisted descendant remains visible for navigation."
+  (let ((ps/file-tree-file-sets
+         '(("Work" . (:include ("Project\\.org") :exclude nil))))
+        (ps/file-tree-current-set "Work"))
+    (ps/file-tree-test--with-base-dir '("Areas/" "Areas/Work/" "Areas/Work/Project.org" "Areas/Other.org")
+      ;; "Areas" itself doesn't match, but contains a descendant that does.
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas/Work" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas/Work/Project.org" dir)))
+      ;; Sibling file with no matching descendant and no match itself: hidden.
+      (should (ps/file-tree--set-hidden-p (expand-file-name "Areas/Other.org" dir))))))
+
+(ert-deftest ps/file-tree--set-hidden-combined-include-and-exclude ()
+  "Exclude wins even within an included subtree."
+  (let ((ps/file-tree-file-sets
+         '(("Work" . (:include ("/Work/") :exclude ("Confidential")))))
+        (ps/file-tree-current-set "Work"))
+    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Work/Plan.org"))
+    (should (ps/file-tree--set-hidden-p "/base/Areas/Work/Confidential.org"))))
+
+(ert-deftest ps/file-tree--ignored-p-set-exclude-combines-with-ignored-files ()
+  "`ps/file-tree--ignored-p' hides files via either ignore-list or set exclude."
+  (let ((ps/file-tree-ignored-files '("\\`init\\.org\\'"))
+        (ps/file-tree-file-sets '(("Secret" . (:include nil :exclude ("Diary")))))
+        (ps/file-tree-current-set "Secret"))
+    (should (ps/file-tree--ignored-p "init.org" "/base/init.org"))
+    (should (ps/file-tree--ignored-p "Diary.org" "/base/Areas/Diary.org"))
+    (should-not (ps/file-tree--ignored-p "Career.org" "/base/Areas/Career.org"))))
+
+;;; -------------------------------------------------------
+;;; ps/file-tree--ensure-valid-set / set switching
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree--ensure-valid-set-keeps-valid-current ()
+  "A current set that exists in the alist is left unchanged."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                   ("Work" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "Work"))
+    (ps/file-tree--ensure-valid-set)
+    (should (equal ps/file-tree-current-set "Work"))))
+
+(ert-deftest ps/file-tree--ensure-valid-set-falls-back-to-first ()
+  "An unknown current set falls back to the first entry in the alist."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                   ("Work" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "DoesNotExist"))
+    (ps/file-tree--ensure-valid-set)
+    (should (equal ps/file-tree-current-set "All"))))
+
+(ert-deftest ps/file-tree-cycle-file-set-wraps-around ()
+  "Cycling moves to the next set and wraps back to the first."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                   ("Work" . (:include nil :exclude nil))
+                                   ("Personal" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "All"))
+    (ps/file-tree-cycle-file-set)
+    (should (equal ps/file-tree-current-set "Work"))
+    (ps/file-tree-cycle-file-set)
+    (should (equal ps/file-tree-current-set "Personal"))
+    (ps/file-tree-cycle-file-set)
+    (should (equal ps/file-tree-current-set "All"))))
+
+;;; -------------------------------------------------------
+;;; ps/file-tree--list-subdirs
+;;; -------------------------------------------------------
 
 (ert-deftest ps/file-tree--list-subdirs-returns-only-visible-dirs ()
   "Only non-ignored subdirectories are returned, files are excluded."
