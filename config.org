@@ -184,13 +184,13 @@ instead.
 #+end_src
 
 *** File sets
-Named filters for which files the tree shows — purely a display filter,
-the agenda and everything else still see every file. Each set has
-=:include= and/or =:exclude= regexps, matched as substrings of each file's
-absolute path. "All" (the default) shows everything, and is also the
-fallback used if =ps/file-tree-current-set= ever names a set that no
-longer exists. The active set is shown and switched from the file tree's
-mode line, and persists across restarts.
+Named filters for which files the tree shows — by default this is purely
+a display filter, and the agenda and everything else still see every
+file. Each set has =:include= and/or =:exclude= regexps, matched as
+substrings of each file's absolute path. "All" (the default) shows
+everything, and is also the fallback used if =ps/file-tree-current-set=
+ever names a set that no longer exists. The active set is shown and
+switched from the file tree's mode line, and persists across restarts.
 #+begin_src emacs-lisp
   (setq ps/file-tree-file-sets
         '(("All" . (:include nil :exclude nil))
@@ -202,6 +202,14 @@ mode line, and persists across restarts.
           ;;                     :exclude ("/Areas/Financial\\.org\\'"
           ;;                               "/Areas/Interviews\\.org\\'")))
           ))
+#+end_src
+
+Set =ps/file-tree-set-applies-to-agenda= to =t= to additionally scope
+=org-agenda-files= and the standalone Conflicts/Availability buffers to
+the active set's visible files (toggle at any time with
+=ps/file-tree-toggle-agenda-filter=; this also persists across restarts).
+#+begin_src emacs-lisp
+  (setq ps/file-tree-set-applies-to-agenda nil)
 #+end_src
 
 ** Done tasks (ps-done.el)
@@ -442,10 +450,18 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
 *** Agenda files
 #+begin_src emacs-lisp
   ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
-  (setq org-agenda-files
-        (directory-files-recursively
-         (concat my-org-base-directory "Areas/")
-         "\\.org$"))
+  ;; Wrapped in a function so it can be re-run whenever the file-tree set
+  ;; or its agenda-filter toggle changes (see ps/file-tree-set-file-set,
+  ;; ps/file-tree-cycle-file-set, ps/file-tree-toggle-agenda-filter).
+  (defun ps/agenda-files-refresh ()
+    "Recompute `org-agenda-files', applying the active file-tree set's
+filter if `ps/file-tree-set-applies-to-agenda' is enabled."
+    (setq org-agenda-files
+          (ps/file-tree-filter-files
+           (directory-files-recursively
+            (concat my-org-base-directory "Areas/")
+            "\\.org$"))))
+  (ps/agenda-files-refresh)
 #+end_src
 
 *** Agenda misc tweaks
@@ -1075,6 +1091,8 @@ muscle memory; remove them later if you outgrow them.
     (define-key m (kbd "|") #'ps/window-split-toggle)       ; | → swap split direction
     (define-key m (kbd "f") #'recentf-open-files)           ; f → recent Files
     (define-key m (kbd "i") #'imenu)                        ; i → imenu
+    (define-key m (kbd "F") #'ps/file-tree-cycle-file-set)  ; F → File set (cycle)
+    (define-key m (kbd "g") #'ps/file-tree-toggle-agenda-filter) ; g → aGenda filter toggle
     ;; Config
     (define-key m (kbd "C") #'ps/open-config-file)          ; C → Config
     (define-key m (kbd "T") #'ps/preview-theme))            ; T → Theme preview
@@ -1117,6 +1135,11 @@ muscle memory; remove them later if you outgrow them.
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
        ["Switch Split: Horizontal <-> Vertical" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
        ["Toggle File Tree"          ps/file-tree-toggle      :keys "F8"]
+       ["Cycle File Set"            ps/file-tree-cycle-file-set :keys "C-c p F"]
+       ["File Set Restricts Agenda" ps/file-tree-toggle-agenda-filter
+        :style toggle
+        :selected ps/file-tree-set-applies-to-agenda
+        :keys "C-c p g"]
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
@@ -1165,6 +1188,13 @@ a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
 
   ;; Persist the selected file-tree file set across restarts
   (add-to-list 'savehist-additional-variables 'ps/file-tree-current-set)
+
+  ;; Persist whether the file-tree set also restricts the agenda
+  (add-to-list 'savehist-additional-variables 'ps/file-tree-set-applies-to-agenda)
+
+  ;; Re-apply the agenda file-set filter using the persisted set/toggle
+  ;; values, which savehist-mode has just restored above.
+  (ps/agenda-files-refresh)
 
   ;; Reload desktop without asking
   ;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html

@@ -195,6 +195,34 @@ FILES is an alist of (filename . content). Binds `dir'."
       (should (= (length events) 0)))))
 
 ;;; -------------------------------------------------------
+;;; ps/file-tree-set-applies-to-agenda integration
+;;; -------------------------------------------------------
+
+(ert-deftest ps/conflicts--load-events-respects-agenda-filter-when-enabled ()
+  "A file excluded by the active file set is skipped when the toggle is on."
+  (ps/conflicts-test--with-multi-org-dir
+      '(("a.org" . "* A\nSCHEDULED: <2026-05-04 Mon 09:00-10:00>\n")
+        ("secret.org" . "* B\nSCHEDULED: <2026-05-04 Mon 11:00-12:00>\n"))
+    (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                     ("NoSecret" . (:include nil :exclude ("secret\\.org\\'")))))
+          (ps/file-tree-current-set "NoSecret")
+          (ps/file-tree-set-applies-to-agenda t))
+      (let ((events (ps/conflicts--load-events dir)))
+        (should (= (length events) 1))))))
+
+(ert-deftest ps/conflicts--load-events-ignores-file-set-when-disabled ()
+  "All files are loaded when the agenda-filter toggle is off, regardless of set."
+  (ps/conflicts-test--with-multi-org-dir
+      '(("a.org" . "* A\nSCHEDULED: <2026-05-04 Mon 09:00-10:00>\n")
+        ("secret.org" . "* B\nSCHEDULED: <2026-05-04 Mon 11:00-12:00>\n"))
+    (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                     ("NoSecret" . (:include nil :exclude ("secret\\.org\\'")))))
+          (ps/file-tree-current-set "NoSecret")
+          (ps/file-tree-set-applies-to-agenda nil))
+      (let ((events (ps/conflicts--load-events dir)))
+        (should (= (length events) 2))))))
+
+;;; -------------------------------------------------------
 ;;; group-by-day
 ;;; -------------------------------------------------------
 

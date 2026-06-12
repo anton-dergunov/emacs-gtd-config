@@ -2,6 +2,7 @@
 
 (require 'cl-lib)
 (require 'calendar)
+(require 'ps-file-tree)
 
 ;;; Customization
 
@@ -125,9 +126,12 @@ Returns a list of `ps/conflict--event' structs."
 
 (defun ps/conflicts--load-events (directory)
   "Load timed events from all .org files in DIRECTORY (recursive).
-Returns a list of `ps/conflict--event' structs."
+Returns a list of `ps/conflict--event' structs. The file list is passed
+through `ps/file-tree-filter-files', so it is scoped to the active file
+set when `ps/file-tree-set-applies-to-agenda' is enabled."
   (let ((events '()))
-    (dolist (file (directory-files-recursively directory "\\.org$"))
+    (dolist (file (ps/file-tree-filter-files
+                   (directory-files-recursively directory "\\.org$")))
       (setq events (append events
                             (ps/conflicts--extract-events-from-file file))))
     events))

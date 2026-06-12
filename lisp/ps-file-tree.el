@@ -68,6 +68,18 @@ saved name is no longer present in `ps/file-tree-file-sets',
   :type 'string
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-set-applies-to-agenda nil
+  "When non-nil, the active file set also restricts the agenda.
+On top of filtering the file tree's display, the files hidden by
+`ps/file-tree-current-set' (per `ps/file-tree--set-hidden-p') are also
+excluded from `org-agenda-files' and from the standalone Conflicts/
+Availability buffers (`ps/show-conflicts', `ps/org-show-availability').
+
+Toggle with `ps/file-tree-toggle-agenda-filter'. Persisted across restarts
+via `savehist-additional-variables', like `ps/file-tree-current-set'."
+  :type 'boolean
+  :group 'ps-file-tree)
+
 (defcustom ps/file-tree-use-custom-icons t
   "Whether to use custom category icons in the file tree.
 When non-nil (the default), the custom \"ps-file-tree\" icon theme
@@ -136,6 +148,15 @@ its descendants matches an :include regexp."
               (not (ps/file-tree--path-matches-any-p absolute-path include))
               (not (and (file-directory-p absolute-path)
                         (ps/file-tree--descendant-included-p absolute-path include)))))))))
+
+(defun ps/file-tree-filter-files (files)
+  "Return FILES, minus those hidden by the active file set, if enabled.
+When `ps/file-tree-set-applies-to-agenda' is nil, FILES is returned
+unchanged. Used to scope `org-agenda-files' and the standalone Conflicts/
+Availability buffers to the active file set."
+  (if ps/file-tree-set-applies-to-agenda
+      (seq-remove #'ps/file-tree--set-hidden-p files)
+    files))
 
 (defun ps/file-tree--ignored-p (filename absolute-path)
   "Return non-nil if FILENAME/ABSOLUTE-PATH should be hidden from the file tree.
@@ -228,6 +249,8 @@ already-rendered nodes."
   (setq ps/file-tree-current-set name)
   (ps/file-tree--ensure-valid-set)
   (ps/file-tree--refresh)
+  (when (fboundp 'ps/agenda-files-refresh)
+    (ps/agenda-files-refresh))
   (force-mode-line-update t))
 
 (defun ps/file-tree-cycle-file-set ()
@@ -237,6 +260,19 @@ already-rendered nodes."
          (pos (or (cl-position ps/file-tree-current-set names :test #'equal) -1))
          (next (nth (mod (1+ pos) (length names)) names)))
     (ps/file-tree-set-file-set next)))
+
+;;;###autoload
+(defun ps/file-tree-toggle-agenda-filter ()
+  "Toggle whether the active file set also restricts the agenda.
+See `ps/file-tree-set-applies-to-agenda'."
+  (interactive)
+  (setq ps/file-tree-set-applies-to-agenda
+        (not ps/file-tree-set-applies-to-agenda))
+  (when (fboundp 'ps/agenda-files-refresh)
+    (ps/agenda-files-refresh))
+  (force-mode-line-update t)
+  (message "File set %s restricts the agenda"
+           (if ps/file-tree-set-applies-to-agenda "now" "no longer")))
 
 ;;; Mode line
 
@@ -251,7 +287,8 @@ already-rendered nodes."
 
 (defun ps/file-tree--modeline ()
   "Return the propertized file-set indicator for the file tree mode line."
-  (propertize (format " [%s ▾]" ps/file-tree-current-set)
+  (propertize (format " [%s ▾]%s" ps/file-tree-current-set
+                       (if ps/file-tree-set-applies-to-agenda " 📅" ""))
               'face 'mode-line-emphasis
               'mouse-face 'mode-line-highlight
               'help-echo "mouse-1: switch file set"

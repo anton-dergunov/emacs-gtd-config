@@ -2,6 +2,7 @@
 
 (require 'calendar)
 (require 'cl-lib)
+(require 'ps-file-tree)
 
 ;;; Customization
 
@@ -114,9 +115,12 @@ Returns a list of (month day year start-mins end-mins) entries."
 
 (defun ps/org-avail--load-events (directory)
   "Load timed events from all .org files in DIRECTORY.
-Returns a list of (month day year start-mins end-mins) entries."
+Returns a list of (month day year start-mins end-mins) entries. The file
+list is passed through `ps/file-tree-filter-files', so it is scoped to
+the active file set when `ps/file-tree-set-applies-to-agenda' is enabled."
   (let ((events '()))
-    (dolist (file (directory-files directory t "\\.org$"))
+    (dolist (file (ps/file-tree-filter-files
+                   (directory-files directory t "\\.org$")))
       (setq events (append events
                             (ps/org-avail--extract-events-from-file file))))
     events))

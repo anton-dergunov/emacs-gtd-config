@@ -93,6 +93,44 @@ SCHEDULED: <2026-05-05 Tue 15:00-16:00>
       (delete-directory dir t))))
 
 ;;; -------------------------------------------------------
+;;; ps/file-tree-set-applies-to-agenda integration
+;;; -------------------------------------------------------
+
+(ert-deftest ps/org-avail--load-events-respects-agenda-filter-when-enabled ()
+  "A file excluded by the active file set is skipped when the toggle is on."
+  (let ((dir (make-temp-file "ps-avail-test-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "a.org" dir)
+            (insert "SCHEDULED: <2026-05-04 Mon 09:00-10:00>\n"))
+          (with-temp-file (expand-file-name "secret.org" dir)
+            (insert "SCHEDULED: <2026-05-04 Mon 11:00-12:00>\n"))
+          (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                           ("NoSecret" . (:include nil :exclude ("secret\\.org\\'")))))
+                (ps/file-tree-current-set "NoSecret")
+                (ps/file-tree-set-applies-to-agenda t))
+            (let ((events (ps/org-avail--load-events dir)))
+              (should (= (length events) 1)))))
+      (delete-directory dir t))))
+
+(ert-deftest ps/org-avail--load-events-ignores-file-set-when-disabled ()
+  "All files are loaded when the agenda-filter toggle is off, regardless of set."
+  (let ((dir (make-temp-file "ps-avail-test-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "a.org" dir)
+            (insert "SCHEDULED: <2026-05-04 Mon 09:00-10:00>\n"))
+          (with-temp-file (expand-file-name "secret.org" dir)
+            (insert "SCHEDULED: <2026-05-04 Mon 11:00-12:00>\n"))
+          (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                           ("NoSecret" . (:include nil :exclude ("secret\\.org\\'")))))
+                (ps/file-tree-current-set "NoSecret")
+                (ps/file-tree-set-applies-to-agenda nil))
+            (let ((events (ps/org-avail--load-events dir)))
+              (should (= (length events) 2)))))
+      (delete-directory dir t))))
+
+;;; -------------------------------------------------------
 ;;; subtract-intervals
 ;;; -------------------------------------------------------
 

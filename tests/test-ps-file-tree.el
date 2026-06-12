@@ -135,6 +135,47 @@ others as empty files."
     (should (equal ps/file-tree-current-set "All"))))
 
 ;;; -------------------------------------------------------
+;;; ps/file-tree-filter-files / agenda filter toggle
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree-filter-files-noop-when-disabled ()
+  "When the toggle is off, FILES is returned unchanged regardless of set."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                   ("Work" . (:include ("/Areas/Work\\.org\\'")
+                                              :exclude nil))))
+        (ps/file-tree-current-set "Work")
+        (ps/file-tree-set-applies-to-agenda nil)
+        (files '("/base/Areas/Work.org" "/base/Areas/Career.org")))
+    (should (equal (ps/file-tree-filter-files files) files))))
+
+(ert-deftest ps/file-tree-filter-files-removes-hidden-when-enabled ()
+  "When the toggle is on, files hidden by the current set are removed."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
+                                   ("Work" . (:include ("/Areas/Work\\.org\\'")
+                                              :exclude nil))))
+        (ps/file-tree-current-set "Work")
+        (ps/file-tree-set-applies-to-agenda t)
+        (files '("/base/Areas/Work.org" "/base/Areas/Career.org")))
+    (should (equal (ps/file-tree-filter-files files) '("/base/Areas/Work.org")))))
+
+(ert-deftest ps/file-tree-toggle-agenda-filter-flips-variable ()
+  "Toggling twice returns to the original value."
+  (let ((ps/file-tree-set-applies-to-agenda nil))
+    (ps/file-tree-toggle-agenda-filter)
+    (should (eq ps/file-tree-set-applies-to-agenda t))
+    (ps/file-tree-toggle-agenda-filter)
+    (should-not ps/file-tree-set-applies-to-agenda)))
+
+(ert-deftest ps/file-tree--modeline-shows-agenda-marker-when-enabled ()
+  "The mode-line indicator gains a marker when the toggle is on."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "All"))
+    (let ((ps/file-tree-set-applies-to-agenda nil))
+      (should-not (string-match-p "📅" (ps/file-tree--modeline))))
+    (let ((ps/file-tree-set-applies-to-agenda t))
+      (should (string-match-p "📅" (ps/file-tree--modeline))))))
+
+;;; -------------------------------------------------------
 ;;; ps/file-tree--list-subdirs
 ;;; -------------------------------------------------------
 
