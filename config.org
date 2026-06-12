@@ -317,11 +317,23 @@ underline colour (=auto= derives a muted colour from the theme's =shadow= face).
   ;; Display line numbers globally
   (global-display-line-numbers-mode t)
 
-  ;; Disable line numbers for specific modes
-  (dolist (mode '(term-mode-hook
-                  shell-mode-hook
-                  eshell-mode-hook))
-    (add-hook mode (lambda () (display-line-numbers-mode 0))))
+  ;; Major modes that must NEVER show line numbers. Stock Emacs has no built-in
+  ;; exempt list for `global-display-line-numbers-mode' — its turn-on function
+  ;; only skips the minibuffer and otherwise enables numbers in every buffer.
+  ;; Disabling the minor mode from a mode hook is fragile: the global mode
+  ;; re-evaluates buffers on major-mode changes and can re-enable numbers when a
+  ;; buffer is rebuilt, which is how the File Tree (treemacs) intermittently
+  ;; ended up with line numbers (its buffer is recreated on toggle / visibility-
+  ;; set switches). Instead, refuse to turn numbers on for these modes at the
+  ;; source, so the decision holds every time the global mode evaluates a buffer.
+  (defvar ps/display-line-numbers-exempt-modes
+    '(treemacs-mode term-mode shell-mode eshell-mode)
+    "Major modes for which global line numbers must never be enabled.")
+
+  (advice-add 'display-line-numbers--turn-on :before-while
+              (lambda (&rest _)
+                (not (apply #'derived-mode-p ps/display-line-numbers-exempt-modes)))
+              '((name . ps/display-line-numbers-exempt)))
 #+end_src
 
 ** Font
