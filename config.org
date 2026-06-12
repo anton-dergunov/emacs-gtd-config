@@ -23,6 +23,12 @@ file needs. Do not move it.
   ;; already built and loaded. Kept here as belt-and-suspenders.
   (setq org-element-use-cache nil)
 
+  ;; Don't pop up the *Warnings* buffer when third-party packages byte/native-
+  ;; compile on first install (e.g. guess-language emits a few harmless warnings
+  ;; in its own source). Warnings are still logged to *Async-native-compile-log*,
+  ;; and our own ps-* modules are kept warning-clean regardless.
+  (setq native-comp-async-report-warnings-errors 'silent)
+
   (require 'package)
 
   ;; Initialize package sources if needed
