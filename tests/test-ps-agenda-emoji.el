@@ -54,6 +54,26 @@ line text, sidestepping the need for a live org-agenda buffer."
     (ps/agenda-emoji--append)
     (should (null ps/agenda-emoji--timer))))
 
+(ert-deftest ps/agenda-emoji--append-clears-overlays-synchronously ()
+  "The finalize hook clears stale overlays immediately, before the
+debounced update timer fires."
+  (let ((ps/agenda-emoji-enabled t)
+        (ps/agenda-emoji--timer nil))
+    (unwind-protect
+        (with-current-buffer (get-buffer-create "*Org Agenda*")
+          (erase-buffer)
+          (insert "Write the report\n")
+          (let ((ov (make-overlay (point-max) (point-max))))
+            (overlay-put ov 'ps/agenda-emoji t)
+            (overlay-put ov 'after-string "X"))
+          (should (ps/agenda-emoji-test--overlays))
+          (ps/agenda-emoji--append)
+          (should-not (ps/agenda-emoji-test--overlays)))
+      (when ps/agenda-emoji--timer
+        (cancel-timer ps/agenda-emoji--timer)
+        (setq ps/agenda-emoji--timer nil))
+      (kill-buffer "*Org Agenda*"))))
+
 ;;; -------------------------------------------------------
 ;;; map-get
 ;;; -------------------------------------------------------

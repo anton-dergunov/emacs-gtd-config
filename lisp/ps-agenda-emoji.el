@@ -244,6 +244,13 @@ CALLBACK receives a hash table mapping each task title to its emoji list."
 (defun ps/agenda-emoji--append (&rest _)
   "Debounce an emoji update after the agenda renders, when enabled."
   (when ps/agenda-emoji-enabled
+    ;; Drop overlays left over from the previous render immediately --
+    ;; after `org-agenda-redo' erases the buffer, their positions collapse
+    ;; to `point-min', which would briefly render all old emojis on one
+    ;; line until the debounced update below clears and reapplies them.
+    (when (get-buffer "*Org Agenda*")
+      (with-current-buffer "*Org Agenda*"
+        (ps/agenda-emoji--clear-overlays)))
     (when ps/agenda-emoji--timer
       (cancel-timer ps/agenda-emoji--timer))
     (setq ps/agenda-emoji--timer

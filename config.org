@@ -74,6 +74,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
   (require 'ps-typo)
+  (require 'ps-org-src-comment)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -196,7 +197,7 @@ switched from the file tree's mode line, and persists across restarts.
         '(("All" . (:include nil :exclude nil))
           ;; ;; Examples:
           ;; ("Work" . (:include ("/Areas/Work\\.org\\'"
-          ;;                       "/Current/")
+          ;;                      "/Current/")
           ;;            :exclude nil))
           ;; ("No Sensitive" . (:include nil
           ;;                     :exclude ("/Areas/Financial\\.org\\'"
@@ -719,6 +720,18 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
   (setq org-yank-folded-subtrees nil)
 #+end_src
 
+*** Comment/uncomment inside source blocks uses the block's language (ps-org-src-comment.el)
+=C-x C-;= normally toggles org's own =# = comment prefix, which doesn't
+recognize a language's native line-comment syntax (e.g. Lisp's =;; =) as
+already commented — so "uncommenting" example code inside a =#+begin_src=
+block would just add another prefix on top instead of removing one. Inside a
+src block, =ps/org-src-comment-dwim= toggles the block's own comment prefix
+line-by-line over the region (or current line) instead, keeping the markers
+aligned in a single column the way =comment-region= does.
+#+begin_src emacs-lisp
+  (define-key org-mode-map (kbd "C-x C-;") #'ps/org-src-comment-dwim)
+#+end_src
+
 *** =org-journal=
 #+begin_src emacs-lisp
   (use-package org-journal
@@ -989,6 +1002,12 @@ Logic lives in =lisp/ps-blank-lines.el=.
     (find-file (expand-file-name "config.org" user-emacs-directory)))
 
   (global-set-key [f10] 'ps/open-config-file)
+
+  (defun ps/reload-config ()
+    "Re-tangle and re-evaluate config.org, applying most settings live."
+    (interactive)
+    (org-babel-load-file (expand-file-name "config.org" user-emacs-directory))
+    (message "Config reloaded"))
 #+end_src
 
 ** Toggle horizontal/vertical split (=C-x |=)
@@ -1095,6 +1114,7 @@ muscle memory; remove them later if you outgrow them.
     (define-key m (kbd "g") #'ps/file-tree-toggle-agenda-filter) ; g → aGenda filter toggle
     ;; Config
     (define-key m (kbd "C") #'ps/open-config-file)          ; C → Config
+    (define-key m (kbd "R") #'ps/reload-config)             ; R → Reload config
     (define-key m (kbd "T") #'ps/preview-theme))            ; T → Theme preview
 
   (easy-menu-define ps/productivity-menu global-map
@@ -1144,6 +1164,7 @@ muscle memory; remove them later if you outgrow them.
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
        ["Open Config File"        ps/open-config-file        :keys "C-c p C   /   F10"]
+       ["Reload Config"           ps/reload-config           :keys "C-c p R"]
        ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])))
