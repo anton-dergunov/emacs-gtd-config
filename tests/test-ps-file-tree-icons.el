@@ -71,4 +71,29 @@ Each file is created empty.  Cleans up afterward."
           (should (= (length merged) 1))
           (should (string-prefix-p custom-dir (cdr (assoc "Work" merged)))))))))
 
+;;; -------------------------------------------------------
+;;; font-glyph
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree-icons--glyph-svg-has-codepoint-entity ()
+  "The SVG embeds the codepoint as a lowercase hex entity."
+  (let ((svg (ps/file-tree-icons--glyph-svg ps/file-tree-icons--glyph-folder-closed)))
+    (should (string-match-p "&#xe2c7;" svg))))
+
+(ert-deftest ps/file-tree-icons--glyph-svg-uses-configured-font-and-color ()
+  "The SVG uses `ps/file-tree-icon-font-family' and `-font-color'."
+  (let* ((ps/file-tree-icon-font-family "Material Symbols Outlined")
+         (ps/file-tree-icon-font-color "#123456")
+         (svg (ps/file-tree-icons--glyph-svg ps/file-tree-icons--glyph-folder-open)))
+    (should (string-match-p "font-family=\"Material Symbols Outlined\"" svg))
+    (should (string-match-p "fill=\"#123456\"" svg))))
+
+(ert-deftest ps/file-tree-icons--font-glyph-is-image-with-spacer ()
+  "The icon is an image-display string followed by the standard spacer."
+  (let ((icon (ps/file-tree-icons--font-glyph ps/file-tree-icons--glyph-folder-closed)))
+    (should (eq (car (get-text-property 0 'display icon)) 'image))
+    (should (> (length icon) 1))
+    (should (equal (get-text-property 1 'display icon)
+                    (list 'space :width ps/file-tree-name-spacing)))))
+
 ;;; test-ps-file-tree-icons.el ends here

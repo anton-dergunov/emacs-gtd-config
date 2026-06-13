@@ -184,6 +184,17 @@ instead.
   (setq ps/file-tree-icon-ascent 75)
 #+end_src
 
+Root project icons use the "Material Symbols Outlined" font directly (the
+"Folder"/"Folder Open" glyphs) when that font is installed, falling back to
+=FolderClosed.svg=/=FolderOpen.svg= in =icons/stock/= otherwise. The glyphs
+are rendered through the same image pipeline as the SVG icons, so they share
+=ps/file-tree-icon-height= (size) and =ps/file-tree-icon-ascent= (alignment)
+set above — only the font family and fill color are configured here.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-icon-font-family "Material Symbols Outlined")
+  (setq ps/file-tree-icon-font-color "#5f6368")
+#+end_src
+
 *** File sets
 Named filters for which files the tree shows — by default this is purely
 a display filter, and the agenda and everything else still see every

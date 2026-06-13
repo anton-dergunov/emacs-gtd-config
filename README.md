@@ -104,6 +104,42 @@ To add an icon for a new category, or override a stock one:
    `fill` attributes.
 
 
+## File Tree Folder Icons (Material Symbols font)
+
+The File Tree's root folder icons (open/closed) are drawn directly from the
+**Material Symbols Outlined** font, using the "Folder" / "Folder Open"
+glyphs — no SVG download needed. If the font isn't installed, the File Tree
+falls back to the `FolderClosed.svg`/`FolderOpen.svg` icons in
+`icons/stock/`.
+
+To install the font:
+
+1. Download **Material Symbols Outlined** from
+   [Google Fonts](https://fonts.google.com/icons) (use the "Download family"
+   / "Get font" option) or directly from the
+   [google/material-design-icons](https://github.com/google/material-design-icons/tree/master/variablefont)
+   repo.
+2. From the downloaded archive, install only:
+   `Material_Symbols_Outlined/static/MaterialSymbolsOutlined-Regular.ttf`
+
+   (the plain "Regular" static file — not a "Filled" or `*pt-*` variant —
+   matches the outline/weight/size used by the SVG icons above).
+
+3. Install the font file:
+
+   **macOS:** double-click the `.ttf` file and click **Install Font** in Font
+   Book (or drag it into `~/Library/Fonts/`).
+
+   **Linux:** copy it into `~/.local/share/fonts/`, then run
+   `fc-cache -f`.
+
+   **Windows:** right-click the `.ttf` file and choose **Install** (or
+   **Install for all users**).
+
+4. Confirm Emacs (well, restart `./scripts/run_emacs.sh`) sees it — the File
+   Tree's root folder icons should switch from the SVG to the font glyph.
+
+
 ## Typo / Spell Checking
 
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a

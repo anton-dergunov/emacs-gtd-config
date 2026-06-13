@@ -111,6 +111,23 @@ line up vertically with their text."
   :type 'integer
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-icon-font-family "Material Symbols Outlined"
+  "Font family used for font-glyph file-tree icons (e.g. root folder icons).
+When this font is installed, root folder icons are drawn from its glyphs
+(rendered via an in-memory SVG) instead of the SVGs in
+`ps/file-tree-icon-dirs'; falls back to those SVGs otherwise. Used both to
+detect availability and as the `font-family' of the generated SVG. Glyph
+icons share `ps/file-tree-icon-height' (size) and `ps/file-tree-icon-ascent'
+(vertical alignment) with the file-based icons, so they match automatically."
+  :type 'string
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-icon-font-color "#5f6368"
+  "Fill color for font-glyph file-tree icons.
+Matches the `fill' color used by the SVG-based icons."
+  :type 'string
+  :group 'ps-file-tree)
+
 ;;; Ignore predicate
 
 (defun ps/file-tree--current-set-spec ()

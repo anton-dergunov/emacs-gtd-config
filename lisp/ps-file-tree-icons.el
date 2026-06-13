@@ -18,6 +18,14 @@
   '("FolderOpen" "FolderClosed" "Current" "Vision" "File")
   "Icon basenames excluded from per-category <Category>.org registration.")
 
+;; Material Symbols Outlined codepoints for the "Folder" and "Folder Open"
+;; glyphs, used as a font-based replacement for FolderClosed.svg/FolderOpen.svg.
+(defconst ps/file-tree-icons--glyph-folder-closed ?\xe2c7
+  "Codepoint of the Material Symbols \"Folder\" glyph.")
+
+(defconst ps/file-tree-icons--glyph-folder-open ?\xe2c8
+  "Codepoint of the Material Symbols \"Folder Open\" glyph.")
+
 (defun ps/file-tree-icons--build-alist (icon-dir)
   "Build a list of (CATEGORY . FILE) for SVGs in ICON-DIR.
 Mirrors `ps/agenda-icons--build-alist'. Returns nil when ICON-DIR is missing
@@ -58,6 +66,40 @@ Scales FILE to a uniform height while preserving its aspect ratio."
     (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) ext gui-icon)
     (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) ext "")))
 
+(defun ps/file-tree-icons--font-available-p ()
+  "Return non-nil if `ps/file-tree-icon-font-family' is installed."
+  (find-font (font-spec :family ps/file-tree-icon-font-family)))
+
+(defun ps/file-tree-icons--glyph-svg (codepoint)
+  "Return an SVG string drawing CODEPOINT as a Material Symbols glyph.
+Mirrors the attributes `scripts/fix_icon_svg.py' bakes into the icon files
+\(height=20px, width=24px, viewBox=\"0 -960 960 960\"), drawing the glyph as
+a `<text>' element instead of a `<path>'. The font em is 960 units, so
+`font-size=960' at baseline `y=0' fills the viewBox exactly like the
+original path. Uses `ps/file-tree-icon-font-family' for the font and
+`ps/file-tree-icon-font-color' for the fill."
+  (format
+   (concat "<svg xmlns=\"http://www.w3.org/2000/svg\""
+           " height=\"20px\" width=\"24px\" viewBox=\"0 -960 960 960\""
+           " fill=\"%s\"><text x=\"0\" y=\"0\" font-family=\"%s\""
+           " font-size=\"960\">&#x%x;</text></svg>")
+   ps/file-tree-icon-font-color ps/file-tree-icon-font-family codepoint))
+
+(defun ps/file-tree-icons--font-glyph (codepoint)
+  "Return a propertized file-tree icon rendering CODEPOINT from a font.
+Builds the icon from an in-memory SVG (`ps/file-tree-icons--glyph-svg') so it
+goes through the same image pipeline as the file-based icons, sharing their
+`ps/file-tree-icon-height' (size) and `ps/file-tree-icon-ascent' (vertical
+alignment). Appends the standard icon-to-label spacer, matching
+`ps/file-tree-icons--image-for'."
+  (concat
+   (propertize " " 'display
+               (create-image (ps/file-tree-icons--glyph-svg codepoint)
+                             'svg t
+                             :height ps/file-tree-icon-height
+                             :ascent ps/file-tree-icon-ascent))
+   (ps/file-tree--spacer)))
+
 (defun ps/file-tree-icons--image-for (merged name)
   "Return a propertized icon image for icon NAME in MERGED, or nil."
   (let ((file (cdr (assoc name merged))))
@@ -66,14 +108,22 @@ Scales FILE to a uniform height while preserving its aspect ratio."
 
 (defun ps/file-tree-icons--register-root-icons (merged)
   "Set the icon shown before every top-level project root label.
-Uses `FolderOpen'/`FolderClosed' from MERGED for `root-open'/`root-closed',
-the same for every project. Falls back to no icon if not present.
-Appends the standard icon-to-label spacer after each icon."
-  (dolist (pair '((root-open . "FolderOpen") (root-closed . "FolderClosed")))
-    (let* ((icon (ps/file-tree-icons--image-for merged (cdr pair)))
-           (image (if icon (concat icon (ps/file-tree--spacer)) "")))
-      (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) (car pair) image)
-      (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) (car pair) ""))))
+When `ps/file-tree-icon-font-family' is installed, uses the Material Symbols
+\"Folder\"/\"Folder Open\" glyphs for `root-closed'/`root-open'. Otherwise
+falls back to `FolderOpen'/`FolderClosed' from MERGED, the same for every
+project, or no icon if neither is available. Appends the standard
+icon-to-label spacer after each icon."
+  (let ((use-font (ps/file-tree-icons--font-available-p)))
+    (dolist (pair '((root-open . ("FolderOpen" . ps/file-tree-icons--glyph-folder-open))
+                     (root-closed . ("FolderClosed" . ps/file-tree-icons--glyph-folder-closed))))
+      (let* ((svg-name (car (cdr pair)))
+             (glyph (cdr (cdr pair)))
+             (image (cond
+                     (use-font (ps/file-tree-icons--font-glyph (symbol-value glyph)))
+                     (t (let ((icon (ps/file-tree-icons--image-for merged svg-name)))
+                          (if icon (concat icon (ps/file-tree--spacer)) ""))))))
+        (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) (car pair) image)
+        (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) (car pair) "")))))
 
 (defun ps/file-tree-icons--register-file (file image)
   "Register IMAGE as the file-tree icon for FILE (matched by exact name)."
