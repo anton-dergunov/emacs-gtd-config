@@ -8,7 +8,7 @@ default size=24) to the attributes expected by `lisp/ps-agenda-icons.el`:
   height="20px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
 
 Usage:
-  # Fix every *.svg under icons/stock/ and icons/custom/ (repo root)
+  # Fix every *.svg under icons/ (the no-font fallback icons)
   python scripts/fix_icon_svg.py
 
   # Fix specific files
@@ -27,7 +27,9 @@ ATTRIBUTES = {
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DIRS = [REPO_ROOT / "icons" / "stock", REPO_ROOT / "icons" / "custom"]
+# Category icons now come from the Material Symbols font; the only SVGs left are
+# the no-font fallback icons (FolderOpen/FolderClosed/File) in icons/.
+DEFAULT_DIRS = [REPO_ROOT / "icons"]
 
 
 def fix_svg_text(svg_text: str) -> str:

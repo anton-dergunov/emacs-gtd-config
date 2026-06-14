@@ -1,0 +1,59 @@
+#+TITLE: Workspace settings for this Org folder
+
+This file lives in your Org base directory (beside =init.org=) and is loaded
+after =config.org='s defaults, overriding them. It holds settings specific to
+*this data folder*: which Material Symbols icon each file/folder uses, and the
+file-tree file sets. Keeping them here (not in =config.org=) means pulling
+upstream changes never conflicts.
+
+Each =("Name" . "icon")= below is one alist pair (a cons cell): the left side is
+your =<Name>.org= file's basename, the right side is a Material Symbols name
+from https://fonts.google.com/icons. Keys must match your real file basenames.
+
+This particular file is the example shipped with the repo; it maps the sample
+=Areas/= files. Open =Productivity → Config → Workspace= to edit your own.
+
+* Category icons
+#+begin_src emacs-lisp
+  (ps/material-icons-add
+   '(("Blog"         . "edit_square")
+     ("Career"       . "work")
+     ("Financial"    . "savings")
+     ("Health"       . "spa")
+     ("Inbox"        . "drafts")
+     ("Interviews"   . "frame_person_mic")
+     ("Languages"    . "dictionary")
+     ("ML"           . "neurology")
+     ("Math"         . "calculate")
+     ("Misc"         . "help_center")
+     ("Photo"        . "photo_camera")
+     ("Productivity" . "avg_time")
+     ("Programming"  . "terminal")
+     ("Projects"     . "lightbulb")
+     ("Statistics"   . "finance")
+     ("Travel"       . "explore")
+     ("Work"         . "badge")))
+#+end_src
+
+* Whole-folder icons
+Icon every =.org= file directly inside a folder (here =Current/= and =Vision/=).
+#+begin_src emacs-lisp
+  (setq ps/material-icons-folder-map
+        '(("Current" . "calendar_month")
+          ("Vision"  . "mountain_flag")))
+#+end_src
+
+* File sets
+Named filters for the file tree. =:include= / =:exclude= are lists of regexps
+matched as substrings of each file's absolute path. Switch sets from the file
+tree's mode line.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-file-sets
+        '(("All"  . (:include nil :exclude nil))
+          ("Work" . (:include ("/Areas/Career\\.org\\'"
+                               "/Areas/Work\\.org\\'"
+                               "/Current/")
+                     :exclude nil))
+          ("No Money" . (:include nil
+                         :exclude ("/Areas/Financial\\.org\\'")))))
+#+end_src

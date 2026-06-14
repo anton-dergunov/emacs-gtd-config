@@ -83,9 +83,9 @@ via `savehist-additional-variables', like `ps/file-tree-current-set'."
 (defcustom ps/file-tree-use-custom-icons t
   "Whether to use custom category icons in the file tree.
 When non-nil (the default), the custom \"ps-file-tree\" icon theme
-(`ps/file-tree-icons-apply') is loaded, mapping `<Category>.org' files to
-SVGs in `ps/file-tree-icon-dirs'. When nil, treemacs's built-in \"Default\"
-theme (generic file/folder icons) is used instead."
+(`ps/file-tree-icons-apply') is loaded, drawing `<Category>.org' icons from
+the Material Symbols font per `ps/material-icons-category-map'. When nil,
+treemacs's built-in \"Default\" theme (generic file/folder icons) is used."
   :type 'boolean
   :group 'ps-file-tree)
 
@@ -95,37 +95,21 @@ May be fractional, e.g. 0.5 for half a character width."
   :type 'number
   :group 'ps-file-tree)
 
-(defcustom ps/file-tree-icon-height 20
-  "Height in pixels every file-tree icon is scaled to.
-Scaling preserves each icon's aspect ratio (only the height is fixed).
-A single shared height lets `ps/file-tree-icon-ascent' align all icons
-consistently regardless of their source size."
-  :type 'integer
-  :group 'ps-file-tree)
-
 (defcustom ps/file-tree-icon-ascent 75
   "Vertical alignment of file-tree icons, as a percentage above the baseline.
-Passed as the `:ascent' of every icon image (0-100). Higher values raise
-the icon relative to its label; lower values drop it. Tune this so icons
-line up vertically with their text."
+Passed as the `:ascent' of every file-tree icon image (0-100), root projects
+and files alike. Higher values raise the icon relative to its label; lower
+values drop it. Icon size is `ps/material-icons-height' (auto-derived from the
+font), so this one value stays valid across font sizes."
   :type 'integer
   :group 'ps-file-tree)
 
-(defcustom ps/file-tree-icon-font-family "Material Symbols Outlined"
-  "Font family used for font-glyph file-tree icons (e.g. root folder icons).
-When this font is installed, root folder icons are drawn from its glyphs
-(rendered via an in-memory SVG) instead of the SVGs in
-`ps/file-tree-icon-dirs'; falls back to those SVGs otherwise. Used both to
-detect availability and as the `font-family' of the generated SVG. Glyph
-icons share `ps/file-tree-icon-height' (size) and `ps/file-tree-icon-ascent'
-(vertical alignment) with the file-based icons, so they match automatically."
-  :type 'string
-  :group 'ps-file-tree)
-
-(defcustom ps/file-tree-icon-font-color "#5f6368"
-  "Fill color for font-glyph file-tree icons.
-Matches the `fill' color used by the SVG-based icons."
-  :type 'string
+(defcustom ps/file-tree-icon-fallback-dir
+  (expand-file-name "icons" user-emacs-directory)
+  "Directory holding the no-font fallback SVGs.
+Used only when `ps/material-icons-font-family' is not installed: files use
+`File.svg' and project roots use `FolderOpen.svg'/`FolderClosed.svg' from here."
+  :type 'directory
   :group 'ps-file-tree)
 
 ;;; Ignore predicate

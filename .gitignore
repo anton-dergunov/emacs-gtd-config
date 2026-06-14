@@ -9,8 +9,8 @@
 !lisp/*.el
 
 !icons/
-!icons/stock/
-!icons/stock/**
+!icons/*.svg
+!icons/material-symbols.codepoints
 
 !scripts/
 !scripts/*.py

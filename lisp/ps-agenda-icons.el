@@ -1,31 +1,31 @@
 ;;; ps-agenda-icons.el --- Category icons for the org agenda -*- lexical-binding: t; -*-
 
+(require 'ps-material-icons)
+
 ;; Set by `ps/agenda-icons-apply'; declared by org-agenda.
 (defvar org-agenda-category-icon-alist)
 
-(defun ps/agenda-icons--build-alist (icon-dir)
-  "Build an `org-agenda-category-icon-alist' from SVG files in ICON-DIR.
-Each .svg yields (CATEGORY FILE nil nil :ascent center) where CATEGORY is the
-file's base name.  Returns nil when ICON-DIR is missing or has no SVGs."
-  (let ((icons '()))
-    (when (file-directory-p icon-dir)
-      (dolist (file (directory-files icon-dir t "\\.svg$"))
-        (let ((category (file-name-base file)))
-          (push `(,category ,file nil nil :ascent center) icons))))
-    icons))
+(defun ps/agenda-icons--build-alist ()
+  "Build an `org-agenda-category-icon-alist' from `ps/material-icons-category-map'.
+Each `(CATEGORY . NAME)' yields a (CATEGORY SVG svg t :ascent center :height H)
+entry rendering the Material Symbols glyph NAME as an in-memory SVG image.
+Entries whose icon name does not resolve are skipped. Returns nil for an empty
+map."
+  (let ((height (ps/material-icons--pixel-height))
+        (icons '()))
+    (dolist (entry ps/material-icons-category-map)
+      (when-let ((svg (ps/material-icons-svg (cdr entry))))
+        (push `(,(car entry) ,svg svg t :ascent center :height ,height) icons)))
+    (nreverse icons)))
 
-(defun ps/agenda-icons-apply (icon-dirs)
-  "Populate `org-agenda-category-icon-alist' from SVG files in ICON-DIRS.
-ICON-DIRS is a list of directories ordered from lowest to highest priority:
-if the same category appears in more than one directory, the entry from the
-directory listed last wins. Missing directories are skipped. Does nothing if
-no icons are found in any directory."
-  (let (merged)
-    (dolist (dir icon-dirs)
-      (dolist (entry (ps/agenda-icons--build-alist dir))
-        (setq merged (cons entry (assoc-delete-all (car entry) merged)))))
-    (when merged
-      (customize-set-value 'org-agenda-category-icon-alist (nreverse merged)))))
+(defun ps/agenda-icons-apply ()
+  "Populate `org-agenda-category-icon-alist' from `ps/material-icons-category-map'.
+Does nothing when the Material Symbols font is unavailable or no category icons
+resolve, leaving any existing value untouched."
+  (when (ps/material-icons-available-p)
+    (let ((alist (ps/agenda-icons--build-alist)))
+      (when alist
+        (customize-set-value 'org-agenda-category-icon-alist alist)))))
 
 (provide 'ps-agenda-icons)
 ;;; ps-agenda-icons.el ends here

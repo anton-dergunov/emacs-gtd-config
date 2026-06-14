@@ -65,6 +65,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-done)
   (require 'ps-git-sync)
   (require 'ps-agenda-emoji)
+  (require 'ps-material-icons)
   (require 'ps-agenda-icons)
   (require 'ps-schedule-icons)
   (require 'ps-blank-lines)
@@ -163,36 +164,43 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
         ps/conflicts-include-past   nil)
 #+end_src
 
+** Material icons (ps-material-icons.el)
+Category icons (in the agenda and the file tree) are drawn from the "Material
+Symbols Outlined" font — no per-icon SVG files. See the README for installing
+the font. Icon *size* auto-derives from your font height (so alignment stays
+stable across fonts/OSes); tune =ps/material-icons-height-scale= once if needed.
+
+The =category-map= (=<Category>.org= → icon name) and =folder-map= (whole-folder
+icons) are left *empty* here: =config.org= renders every file with the generic
+=File= icon unless overridden. Real mappings live in your Org folder's
+=workspace.org= (see "Workspace config" below), so your personal categories
+never enter this public repo. Names come from https://fonts.google.com/icons.
+#+begin_src emacs-lisp
+  (setq ps/material-icons-font-family "Material Symbols Outlined")
+  (setq ps/material-icons-color       "#5f6368")
+  (setq ps/material-icons-height      'auto)
+  (setq ps/material-icons-height-scale 1.0)
+  (setq ps/material-icons-category-map nil)
+  (setq ps/material-icons-folder-map   nil)
+#+end_src
+
 ** File Tree (ps-file-tree.el / ps-file-tree-icons.el)
 Files/dirs whose name matches any regexp here are hidden from the file tree
-(=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Icons are
-loaded from =icons/stock/= and =icons/custom/= and matched to
-=<Category>.org= files, the same as the agenda category icons. Set
-=ps/file-tree-use-custom-icons= to =nil= to use treemacs's generic icons
-instead.
+(=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Category icons
+come from the Material Symbols font (see above); =ps/file-tree-icon-ascent= sets
+the vertical alignment of every file-tree icon (root projects and files alike).
+If the font is unavailable, the tree falls back to the =FolderOpen=/=FolderClosed=
+/=File= SVGs in =ps/file-tree-icon-fallback-dir=. Set =ps/file-tree-use-custom-icons=
+to =nil= to use treemacs's generic icons instead.
 #+begin_src emacs-lisp
   (setq ps/file-tree-ignored-files
         '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
 
-  (setq ps/file-tree-icon-dirs
-        (list (expand-file-name "icons/stock" user-emacs-directory)
-              (expand-file-name "icons/custom" user-emacs-directory)))
-
   (setq ps/file-tree-use-custom-icons t)
   (setq ps/file-tree-name-spacing 0.5)
-  (setq ps/file-tree-icon-height 20)
-  (setq ps/file-tree-icon-ascent 75)
-#+end_src
-
-Root project icons use the "Material Symbols Outlined" font directly (the
-"Folder"/"Folder Open" glyphs) when that font is installed, falling back to
-=FolderClosed.svg=/=FolderOpen.svg= in =icons/stock/= otherwise. The glyphs
-are rendered through the same image pipeline as the SVG icons, so they share
-=ps/file-tree-icon-height= (size) and =ps/file-tree-icon-ascent= (alignment)
-set above — only the font family and fill color are configured here.
-#+begin_src emacs-lisp
-  (setq ps/file-tree-icon-font-family "Material Symbols Outlined")
-  (setq ps/file-tree-icon-font-color "#5f6368")
+  (setq ps/file-tree-icon-ascent 80)
+  (setq ps/file-tree-icon-fallback-dir
+        (expand-file-name "icons" user-emacs-directory))
 #+end_src
 
 *** File sets
@@ -299,6 +307,57 @@ underline colour (=auto= derives a muted colour from the theme's =shadow= face).
         ps/typo-order-suggestions-by-language t
         ;; Solarized keeps a soft grey; other themes derive one from `shadow'.
         ps/typo-underline-color (if ps/color-theme-solarized-p "gray60" 'auto))
+#+end_src
+
+** Workspace config (per-Org-folder overrides)
+A small =workspace.org= in your Org base directory (beside =init.org=) holds
+settings specific to *this data folder* — personal category→icon mappings and
+file sets — overriding the (intentionally empty) defaults above. It is loaded
+here, after those defaults but before icons are applied, so its overrides take
+effect. Keeping personal data there (not in =config.org=) means pulling upstream
+changes never conflicts. It is loaded artifact-free: its elisp is tangled to a
+throwaway file in the system temp dir, never inside your Org folder.
+#+begin_src emacs-lisp
+  (defun ps/workspace-config-file ()
+    "Return the path to this Org folder's workspace.org."
+    (expand-file-name "workspace.org" my-org-base-directory))
+
+  (defun ps/load-workspace-config ()
+    "Load emacs-lisp from workspace.org, if it exists.
+Tangles its blocks to a temp .el in the system temp dir (never the Org dir),
+loads it, then deletes it. Silently does nothing when the file is absent."
+    (let ((file (ps/workspace-config-file)))
+      (when (file-exists-p file)
+        (require 'ob-tangle)
+        (let ((el (make-temp-file "ps-workspace-" nil ".el")))
+          (unwind-protect
+              (let ((org-confirm-babel-evaluate nil))
+                (org-babel-tangle-file file el "emacs-lisp")
+                (load el nil t))
+            (when (file-exists-p el) (delete-file el)))))))
+
+  (defun ps/icons-reapply ()
+    "Re-apply agenda and file-tree icons from the current maps."
+    (ps/agenda-icons-apply)
+    (when (and ps/file-tree-use-custom-icons (featurep 'treemacs))
+      (ps/file-tree-icons-apply my-org-base-directory)
+      (when (fboundp 'ps/file-tree--refresh) (ps/file-tree--refresh))))
+
+  (defun ps/open-workspace-config ()
+    "Open this Org folder's workspace.org (a fresh buffer if it doesn't exist)."
+    (interactive)
+    (find-file (ps/workspace-config-file)))
+
+  (defun ps/reload-workspace-config ()
+    "Reload workspace.org and re-apply icons and file sets."
+    (interactive)
+    (ps/load-workspace-config)
+    (ps/icons-reapply)
+    (when (fboundp 'ps/agenda-files-refresh) (ps/agenda-files-refresh))
+    (message "Workspace config reloaded"))
+
+  ;; Apply this folder's overrides now, before icons are built below.
+  (ps/load-workspace-config)
 #+end_src
 
 * Editor & UI
@@ -488,16 +547,12 @@ filter if `ps/file-tree-set-applies-to-agenda' is enabled."
 #+end_src
 
 *** Category icons (ps-agenda-icons.el)
-Icon-loading logic lives in =lisp/ps-agenda-icons.el=. The =prefix-format= below
-is a layout preference and stays here. Icons are loaded from =icons/stock/=
-(shipped with this config) and =icons/custom/= (your own additions or
-overrides, gitignored by default); if the same category exists in both, the
-one in =icons/custom/= wins. Leaving both directories empty/absent disables
-icons.
+Icon-loading logic lives in =lisp/ps-agenda-icons.el=. Each agenda category is
+drawn from the Material Symbols font per =ps/material-icons-category-map=
+(populated from =workspace.org=). The =prefix-format= below is a layout
+preference and stays here.
 #+begin_src emacs-lisp
-  (ps/agenda-icons-apply
-   (list (expand-file-name "icons/stock" user-emacs-directory)
-         (expand-file-name "icons/custom" user-emacs-directory)))
+  (ps/agenda-icons-apply)
 
   ;; Reserve space for the category name (max 14 chars in my case) next to the icon.
   (setq org-agenda-prefix-format
@@ -886,7 +941,7 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (ps/file-tree-setup-ignore)
     (ps/file-tree--ensure-valid-set)
     (if ps/file-tree-use-custom-icons
-        (ps/file-tree-icons-apply ps/file-tree-icon-dirs my-org-base-directory)
+        (ps/file-tree-icons-apply my-org-base-directory)
       (treemacs-load-theme "Default"))
 
     ;; Replace the file tree's mode line entirely with the active file-set
@@ -1124,8 +1179,10 @@ muscle memory; remove them later if you outgrow them.
     (define-key m (kbd "F") #'ps/file-tree-cycle-file-set)  ; F → File set (cycle)
     (define-key m (kbd "g") #'ps/file-tree-toggle-agenda-filter) ; g → aGenda filter toggle
     ;; Config
-    (define-key m (kbd "C") #'ps/open-config-file)          ; C → Config
-    (define-key m (kbd "R") #'ps/reload-config)             ; R → Reload config
+    (define-key m (kbd "C") #'ps/open-config-file)          ; C → global Config
+    (define-key m (kbd "R") #'ps/reload-config)             ; R → Reload global config
+    (define-key m (kbd "W") #'ps/open-workspace-config)     ; W → open Workspace config
+    (define-key m (kbd "w") #'ps/reload-workspace-config)   ; w → reload Workspace config
     (define-key m (kbd "T") #'ps/preview-theme))            ; T → Theme preview
 
   (easy-menu-define ps/productivity-menu global-map
@@ -1174,8 +1231,12 @@ muscle memory; remove them later if you outgrow them.
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("Config"
-       ["Open Config File"        ps/open-config-file        :keys "C-c p C   /   F10"]
-       ["Reload Config"           ps/reload-config           :keys "C-c p R"]
+       ("Global"
+        ["Open config.org"        ps/open-config-file        :keys "C-c p C   /   F10"]
+        ["Reload"                 ps/reload-config           :keys "C-c p R"])
+       ("Workspace"
+        ["Open workspace.org"     ps/open-workspace-config   :keys "C-c p W"]
+        ["Reload"                 ps/reload-workspace-config :keys "C-c p w"])
        ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])))

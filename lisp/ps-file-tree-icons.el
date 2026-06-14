@@ -1,6 +1,7 @@
 ;;; ps-file-tree-icons.el --- Category icons for the file tree -*- lexical-binding: t; -*-
 
 (require 'ps-file-tree)
+(require 'ps-material-icons)
 
 ;; Provided by treemacs/ht; declared here so this file loads (and its pure
 ;; functions are testable) without treemacs installed.
@@ -12,139 +13,91 @@
 (declare-function ht-get "ht")
 (defvar treemacs--current-theme)
 
-;; Icon basenames reserved for structural purposes (root icons, per-directory
-;; file icon overrides, fallback) rather than <Category>.org matching.
-(defconst ps/file-tree-icons--structural-names
-  '("FolderOpen" "FolderClosed" "Current" "Vision" "File")
-  "Icon basenames excluded from per-category <Category>.org registration.")
+;; Material Symbols names for the structural icons (hardcoded — not part of the
+;; user-facing category map).
+(defconst ps/file-tree-icons--folder-closed "folder"
+  "Material Symbols name for the closed-folder (project root) icon.")
+(defconst ps/file-tree-icons--folder-open "folder_open"
+  "Material Symbols name for the open-folder (project root) icon.")
+(defconst ps/file-tree-icons--file "draft"
+  "Material Symbols name for the generic file icon.")
 
-;; Material Symbols Outlined codepoints for the "Folder" and "Folder Open"
-;; glyphs, used as a font-based replacement for FolderClosed.svg/FolderOpen.svg.
-(defconst ps/file-tree-icons--glyph-folder-closed ?\xe2c7
-  "Codepoint of the Material Symbols \"Folder\" glyph.")
+;;; Image / icon-string builders
 
-(defconst ps/file-tree-icons--glyph-folder-open ?\xe2c8
-  "Codepoint of the Material Symbols \"Folder Open\" glyph.")
-
-(defun ps/file-tree-icons--build-alist (icon-dir)
-  "Build a list of (CATEGORY . FILE) for SVGs in ICON-DIR.
-Mirrors `ps/agenda-icons--build-alist'. Returns nil when ICON-DIR is missing
-or has no SVGs."
-  (let ((icons '()))
-    (when (file-directory-p icon-dir)
-      (dolist (file (directory-files icon-dir t "\\.svg$"))
-        (push (cons (file-name-base file) file) icons)))
-    icons))
-
-(defun ps/file-tree-icons--merge (icon-dirs)
-  "Merge ICON-DIRS (lowest to highest priority) into one alist, last wins."
-  (let (merged)
-    (dolist (dir icon-dirs)
-      (dolist (entry (ps/file-tree-icons--build-alist dir))
-        (setq merged (cons entry (assoc-delete-all (car entry) merged)))))
-    (nreverse merged)))
-
-(defun ps/file-tree-icons--create-image (file &optional mask)
-  "Create an icon image for FILE for use in the file tree.
-The image is scaled to `ps/file-tree-icon-height'; only the height is
-fixed, so the aspect ratio is preserved (unlike `treemacs-create-icon',
-which stretches to a square). The `:ascent' is `ps/file-tree-icon-ascent',
-which controls vertical alignment with the label. MASK is passed as the
-image `:mask' (e.g. \\='heuristic for raster icons whose transparency needs
-it)."
+(defun ps/file-tree-icons--file-image (file &optional mask)
+  "Image for an SVG/PNG FILE at the shared icon height/ascent.
+Height is `ps/material-icons--pixel-height' (font-derived); `:ascent' is
+`ps/file-tree-icon-ascent'. MASK is the image `:mask' (e.g. \\='heuristic)."
   (create-image file nil nil
-                :height ps/file-tree-icon-height
+                :height (ps/material-icons--pixel-height)
                 :ascent ps/file-tree-icon-ascent
                 :mask mask))
 
-(defun ps/file-tree-icons--register (category file)
-  "Register FILE as the file-tree icon for CATEGORY.org files.
-Scales FILE to a uniform height while preserving its aspect ratio."
-  (let ((ext (downcase (concat category ".org")))
-        (gui-icon (propertize " " 'display
-                               (ps/file-tree-icons--create-image file))))
-    (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) ext gui-icon)
-    (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) ext "")))
+(defun ps/file-tree-icons--icon-string (image)
+  "Wrap IMAGE in a propertized space plus the standard icon-to-label spacer."
+  (concat (propertize " " 'display image) (ps/file-tree--spacer)))
 
-(defun ps/file-tree-icons--font-available-p ()
-  "Return non-nil if `ps/file-tree-icon-font-family' is installed."
-  (find-font (font-spec :family ps/file-tree-icon-font-family)))
+(defun ps/file-tree-icons--glyph (name)
+  "Return a file-tree icon string for Material Symbols NAME, or nil if unknown."
+  (when-let ((image (ps/material-icons-image name ps/file-tree-icon-ascent)))
+    (ps/file-tree-icons--icon-string image)))
 
-(defun ps/file-tree-icons--glyph-svg (codepoint)
-  "Return an SVG string drawing CODEPOINT as a Material Symbols glyph.
-Mirrors the attributes `scripts/fix_icon_svg.py' bakes into the icon files
-\(height=20px, width=24px, viewBox=\"0 -960 960 960\"), drawing the glyph as
-a `<text>' element instead of a `<path>'. The font em is 960 units, so
-`font-size=960' at baseline `y=0' fills the viewBox exactly like the
-original path. Uses `ps/file-tree-icon-font-family' for the font and
-`ps/file-tree-icon-font-color' for the fill."
-  (format
-   (concat "<svg xmlns=\"http://www.w3.org/2000/svg\""
-           " height=\"20px\" width=\"24px\" viewBox=\"0 -960 960 960\""
-           " fill=\"%s\"><text x=\"0\" y=\"0\" font-family=\"%s\""
-           " font-size=\"960\">&#x%x;</text></svg>")
-   ps/file-tree-icon-font-color ps/file-tree-icon-font-family codepoint))
+(defun ps/file-tree-icons--fallback-svg (basename &optional mask)
+  "Return a file-tree icon string for BASENAME.svg in the fallback dir, or nil."
+  (let ((file (expand-file-name (concat basename ".svg")
+                                ps/file-tree-icon-fallback-dir)))
+    (when (file-readable-p file)
+      (ps/file-tree-icons--icon-string
+       (ps/file-tree-icons--file-image file mask)))))
 
-(defun ps/file-tree-icons--font-glyph (codepoint)
-  "Return a propertized file-tree icon rendering CODEPOINT from a font.
-Builds the icon from an in-memory SVG (`ps/file-tree-icons--glyph-svg') so it
-goes through the same image pipeline as the file-based icons, sharing their
-`ps/file-tree-icon-height' (size) and `ps/file-tree-icon-ascent' (vertical
-alignment). Appends the standard icon-to-label spacer, matching
-`ps/file-tree-icons--image-for'."
-  (concat
-   (propertize " " 'display
-               (create-image (ps/file-tree-icons--glyph-svg codepoint)
-                             'svg t
-                             :height ps/file-tree-icon-height
-                             :ascent ps/file-tree-icon-ascent))
-   (ps/file-tree--spacer)))
+;;; treemacs theme registration
 
-(defun ps/file-tree-icons--image-for (merged name)
-  "Return a propertized icon image for icon NAME in MERGED, or nil."
-  (let ((file (cdr (assoc name merged))))
-    (when file
-      (propertize " " 'display (ps/file-tree-icons--create-image file)))))
+(defun ps/file-tree-icons--set (key icon)
+  "Register ICON (a string) under KEY in the current theme's GUI+TUI icons."
+  (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) key (or icon ""))
+  (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) key ""))
 
-(defun ps/file-tree-icons--register-root-icons (merged)
-  "Set the icon shown before every top-level project root label.
-When `ps/file-tree-icon-font-family' is installed, uses the Material Symbols
-\"Folder\"/\"Folder Open\" glyphs for `root-closed'/`root-open'. Otherwise
-falls back to `FolderOpen'/`FolderClosed' from MERGED, the same for every
-project, or no icon if neither is available. Appends the standard
-icon-to-label spacer after each icon."
-  (let ((use-font (ps/file-tree-icons--font-available-p)))
-    (dolist (pair '((root-open . ("FolderOpen" . ps/file-tree-icons--glyph-folder-open))
-                     (root-closed . ("FolderClosed" . ps/file-tree-icons--glyph-folder-closed))))
-      (let* ((svg-name (car (cdr pair)))
-             (glyph (cdr (cdr pair)))
-             (image (cond
-                     (use-font (ps/file-tree-icons--font-glyph (symbol-value glyph)))
-                     (t (let ((icon (ps/file-tree-icons--image-for merged svg-name)))
-                          (if icon (concat icon (ps/file-tree--spacer)) ""))))))
-        (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) (car pair) image)
-        (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) (car pair) "")))))
+(defun ps/file-tree-icons--register-file (file icon)
+  "Register ICON as the file-tree icon for FILE (matched by exact name)."
+  (when icon
+    (ps/file-tree-icons--set (downcase (file-name-nondirectory file)) icon)))
 
-(defun ps/file-tree-icons--register-file (file image)
-  "Register IMAGE as the file-tree icon for FILE (matched by exact name)."
-  (let ((key (downcase (file-name-nondirectory file))))
-    (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) key image)
-    (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) key "")))
-
-(defun ps/file-tree-icons--register-dir-icon (dir image)
-  "Register IMAGE as the file-tree icon for every .org file directly in DIR."
-  (when (and image (file-directory-p dir))
+(defun ps/file-tree-icons--register-dir-files (dir icon)
+  "Register ICON as the file-tree icon for every .org file directly in DIR."
+  (when (and icon (file-directory-p dir))
     (dolist (file (directory-files dir nil "\\.org\\'"))
-      (ps/file-tree-icons--register-file file image))))
+      (ps/file-tree-icons--register-file file icon))))
 
-(defun ps/file-tree-icons--register-fallback (dir merged image)
-  "Register IMAGE as the file-tree icon for .org files in DIR with no
-category-specific icon in MERGED (i.e. no `<Category>.svg' matching
-`<Category>.org')."
-  (when (and image (file-directory-p dir))
+(defun ps/file-tree-icons--register-root-icons (open-icon closed-icon)
+  "Set the icons shown before every top-level project root label."
+  (ps/file-tree-icons--set 'root-open open-icon)
+  (ps/file-tree-icons--set 'root-closed closed-icon))
+
+(defun ps/file-tree-icons--register-categories ()
+  "Register a glyph icon for each `(BASENAME . NAME)' in the category map."
+  (dolist (entry ps/material-icons-category-map)
+    (ps/file-tree-icons--register-file
+     (concat (car entry) ".org")
+     (ps/file-tree-icons--glyph (cdr entry)))))
+
+(defun ps/file-tree-icons--register-folders (base-dir)
+  "Register whole-folder glyph icons per `ps/material-icons-folder-map'.
+Each `(FOLDER . NAME)' icons every .org file directly in BASE-DIR/FOLDER."
+  (dolist (entry ps/material-icons-folder-map)
+    (ps/file-tree-icons--register-dir-files
+     (expand-file-name (car entry) base-dir)
+     (ps/file-tree-icons--glyph (cdr entry)))))
+
+(defun ps/file-tree-icons--register-file-fallback (base-dir)
+  "Register the generic `draft' glyph for unmapped .org files under BASE-DIR.
+Applies to direct .org files of the `Areas' subdirectory that have no entry in
+`ps/material-icons-category-map'."
+  (when-let* ((icon (ps/file-tree-icons--glyph ps/file-tree-icons--file))
+              (dir (expand-file-name "Areas" base-dir))
+              ((file-directory-p dir)))
     (dolist (file (directory-files dir nil "\\.org\\'"))
-      (unless (assoc (file-name-base file) merged)
-        (ps/file-tree-icons--register-file file image)))))
+      (unless (assoc (file-name-base file) ps/material-icons-category-map)
+        (ps/file-tree-icons--register-file file icon)))))
 
 (defun ps/file-tree-icons--override-tag-icons ()
   "Restyle treemacs's tag icons (org headings) to match file/dir icons.
@@ -162,40 +115,47 @@ icon that has no image (e.g. a TUI fallback string)."
              (file (and (eq (car-safe image) 'image)
                         (image-property image :file))))
         (when file
-          (ht-set!
-           gui-icons key
-           (concat (propertize " " 'display
-                                (ps/file-tree-icons--create-image file 'heuristic))
-                   (ps/file-tree--spacer))))))))
+          (ht-set! gui-icons key
+                   (ps/file-tree-icons--icon-string
+                    (ps/file-tree-icons--file-image file 'heuristic))))))))
 
-(defun ps/file-tree-icons-apply (icon-dirs base-dir)
-  "Register a treemacs theme mapping <Category>.org files to category SVGs,
-set the icon shown before top-level project root labels, and set up
-directory-based file icon overrides for `Current'/`Vision'/`Areas' under
-BASE-DIR. ICON-DIRS is a list of directories ordered from lowest to highest
-priority, as in `ps/agenda-icons-apply'. Does nothing if treemacs isn't
-available."
+;;; Font-missing fallback (uses the three SVGs in `ps/file-tree-icon-fallback-dir')
+
+(defun ps/file-tree-icons--apply-fallback (base-dir)
+  "Register the no-font fallback icons: folder SVGs for roots, File for files."
+  (ps/file-tree-icons--register-root-icons
+   (ps/file-tree-icons--fallback-svg "FolderOpen")
+   (ps/file-tree-icons--fallback-svg "FolderClosed"))
+  (when-let ((file-icon (ps/file-tree-icons--fallback-svg "File")))
+    (dolist (sub '("Areas" "Current" "Vision"))
+      (ps/file-tree-icons--register-dir-files
+       (expand-file-name sub base-dir) file-icon))))
+
+;;; Public entry point
+
+(defun ps/file-tree-icons-apply (base-dir)
+  "Register a treemacs theme drawing file-tree icons from Material Symbols.
+Maps each `<Category>.org' under BASE-DIR to its glyph
+(`ps/material-icons-category-map'), icons the `Current'/`Vision' folders
+wholesale (`ps/material-icons-folder-map'), uses the generic `draft' glyph for
+unmapped files, and the folder glyphs for project roots. When the Material
+Symbols font is unavailable, falls back to the SVGs in
+`ps/file-tree-icon-fallback-dir'. Does nothing if treemacs isn't available."
   (when (require 'treemacs nil t)
-    (let ((merged (ps/file-tree-icons--merge icon-dirs)))
-      (treemacs-create-theme "ps-file-tree"
-        :extends "Default"
-        :config
-        (progn
-          (dolist (entry merged)
-            (unless (member (car entry) ps/file-tree-icons--structural-names)
-              (ps/file-tree-icons--register (car entry) (cdr entry))))
-          (ps/file-tree-icons--register-root-icons merged)
-          (ps/file-tree-icons--register-dir-icon
-           (expand-file-name "Current" base-dir)
-           (ps/file-tree-icons--image-for merged "Current"))
-          (ps/file-tree-icons--register-dir-icon
-           (expand-file-name "Vision" base-dir)
-           (ps/file-tree-icons--image-for merged "Vision"))
-          (ps/file-tree-icons--register-fallback
-           (expand-file-name "Areas" base-dir) merged
-           (ps/file-tree-icons--image-for merged "File"))
-          (ps/file-tree-icons--override-tag-icons)))
-      (treemacs-load-theme "ps-file-tree"))))
+    (treemacs-create-theme "ps-file-tree"
+      :extends "Default"
+      :config
+      (if (ps/material-icons-available-p)
+          (progn
+            (ps/file-tree-icons--register-categories)
+            (ps/file-tree-icons--register-folders base-dir)
+            (ps/file-tree-icons--register-file-fallback base-dir)
+            (ps/file-tree-icons--register-root-icons
+             (ps/file-tree-icons--glyph ps/file-tree-icons--folder-open)
+             (ps/file-tree-icons--glyph ps/file-tree-icons--folder-closed))
+            (ps/file-tree-icons--override-tag-icons))
+        (ps/file-tree-icons--apply-fallback base-dir)))
+    (treemacs-load-theme "ps-file-tree")))
 
 (provide 'ps-file-tree-icons)
 ;;; ps-file-tree-icons.el ends here

@@ -78,66 +78,58 @@ The agenda scans `Areas/` recursively for `.org` files; `Vision/` and
 See `samples/realistic/` for a working example of this layout.
 
 
-## Agenda Category Icons
+## Icons (Material Symbols)
 
-Category icons in the agenda (next to each task) come from two directories
-inside this repo (i.e. `~/.emacs.d`):
+Category icons — in the agenda (next to each task) and the file tree — are drawn
+directly from Google's **Material Symbols Outlined** font. There are no per-icon
+SVG files to download or maintain; each icon is rendered from a font glyph, sized
+automatically to your font so it stays aligned across fonts and platforms.
 
-- **`icons/stock/`** — the icon set shipped with this config, one `.svg` per
-  stock `Areas/<Category>.org` file (e.g. `Career.svg`). Tracked in git.
-- **`icons/custom/`** — your own additions or overrides. Gitignored by
-  default, so your personal icons never enter this repo's git history unless
-  you explicitly `git add -f` them.
-
-Both directories are matched by filename to category names (e.g.
-`Career.svg` ↔ the `Career` category). Leaving both directories empty/absent
-disables agenda icons.
-
-To add an icon for a new category, or override a stock one:
-
-1. Download the icon (default size=24) from the
-   [Material Design Icons collection](https://fonts.google.com/icons).
-2. Save it as `icons/custom/<Category>.svg`.
-3. Run `python scripts/fix_icon_svg.py` (with no arguments it normalizes
-   every `.svg` under `icons/stock/` and `icons/custom/`; pass a file path to
-   fix just that one) to set the expected `height`, `viewBox`, `width`, and
-   `fill` attributes.
-
-
-## File Tree Folder Icons (Material Symbols font)
-
-The File Tree's root folder icons (open/closed) are drawn directly from the
-**Material Symbols Outlined** font, using the "Folder" / "Folder Open"
-glyphs — no SVG download needed. If the font isn't installed, the File Tree
-falls back to the `FolderClosed.svg`/`FolderOpen.svg` icons in
-`icons/stock/`.
-
-To install the font:
+### Install the font
 
 1. Download **Material Symbols Outlined** from
-   [Google Fonts](https://fonts.google.com/icons) (use the "Download family"
-   / "Get font" option) or directly from the
+   [Google Fonts](https://fonts.google.com/icons) ("Download family") or the
    [google/material-design-icons](https://github.com/google/material-design-icons/tree/master/variablefont)
    repo.
-2. From the downloaded archive, install only:
+2. From the archive, install only
    `Material_Symbols_Outlined/static/MaterialSymbolsOutlined-Regular.ttf`
+   (the plain "Regular" static file — not a "Filled" or `*pt-*` variant).
+3. Install it:
+   - **macOS:** double-click the `.ttf` and click **Install Font** (or drop it in `~/Library/Fonts/`).
+   - **Linux:** copy it into `~/.local/share/fonts/`, then run `fc-cache -f`.
+   - **Windows:** right-click the `.ttf` and choose **Install**.
 
-   (the plain "Regular" static file — not a "Filled" or `*pt-*` variant —
-   matches the outline/weight/size used by the SVG icons above).
+If the font is not installed, the file tree still works: project folders and files
+fall back to the `FolderOpen`/`FolderClosed`/`File` SVGs in `icons/`.
 
-3. Install the font file:
+### Assign icons to your files
 
-   **macOS:** double-click the `.ttf` file and click **Install Font** in Font
-   Book (or drag it into `~/Library/Fonts/`).
+Icons are assigned declaratively, mapping a `<Category>.org` file's basename to a
+[Material Symbols name](https://fonts.google.com/icons), e.g. `("Blog" . "edit_square")`.
+`config.org` ships **no** mappings — every file shows the generic `File` icon until
+you provide a map. You normally do that per Org folder in `workspace.org` (below);
+see `samples/realistic/workspace.org` for a complete example. Whole folders (e.g.
+`Current/`, `Vision/`) can be icon-mapped too via `ps/material-icons-folder-map`.
 
-   **Linux:** copy it into `~/.local/share/fonts/`, then run
-   `fc-cache -f`.
+To fine-tune size/alignment, adjust `ps/material-icons-height-scale` and
+`ps/file-tree-icon-ascent` in the **Settings** section of `config.org`.
 
-   **Windows:** right-click the `.ttf` file and choose **Install** (or
-   **Install for all users**).
 
-4. Confirm Emacs (well, restart `./scripts/run_emacs.sh`) sees it — the File
-   Tree's root folder icons should switch from the SVG to the font glyph.
+## Workspace config (per-Org-folder settings)
+
+`config.org` is the shared, public configuration (like VS Code's *User* settings).
+Settings tied to a specific Org **data** folder — your personal category→icon map
+and your file-tree file sets — live instead in a small **`workspace.org`** in that
+folder, beside `init.org` (like *Workspace* settings). It is loaded after
+`config.org` and overrides it, so:
+
+- your personal categories never enter the public repo, and
+- pulling upstream changes to `config.org` never conflicts with your customizations.
+
+Open or reload it from **Productivity → Config → Workspace** (`C-c p W` / `C-c p w`).
+If the file doesn't exist yet, it is simply ignored; "Open" starts a fresh one.
+Copy `samples/realistic/workspace.org` into your Org base directory as a starting
+point.
 
 
 ## Typo / Spell Checking

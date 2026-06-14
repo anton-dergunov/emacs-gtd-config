@@ -5,124 +5,95 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-agenda-icons)
 
-(defmacro ps/agenda-icons-test--with-icon-dir (files &rest body)
-  "Create a temp dir containing FILES (a list of names), bind `dir', run BODY.
-Each file is created empty.  Cleans up afterward."
+;; Point at the repo's shipped codepoints list.
+(setq ps/material-icons-codepoints-file
+      (expand-file-name "icons/material-symbols.codepoints"
+                        (locate-dominating-file default-directory "icons")))
+
+(defmacro ps/agenda-icons-test--with-map (map &rest body)
+  "Run BODY with `ps/material-icons-category-map' bound to MAP and a fresh table."
   (declare (indent 1))
-  `(let ((dir (make-temp-file "ps-agenda-icons-" t)))
-     (unwind-protect
-         (progn
-           (dolist (name ,files)
-             (with-temp-file (expand-file-name name dir) (insert "")))
-           ,@body)
-       (delete-directory dir t))))
+  `(let ((ps/material-icons-category-map ,map)
+         (ps/material-icons--table nil))
+     ,@body))
 
 ;;; -------------------------------------------------------
 ;;; build-alist
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/agenda-icons--build-counts-svgs-only ()
-  "Only .svg files produce entries; other files are ignored."
-  (ps/agenda-icons-test--with-icon-dir '("a.svg" "b.svg" "c.txt" "notes.org")
-    (should (= (length (ps/agenda-icons--build-alist dir)) 2))))
-
-(ert-deftest ps/agenda-icons--build-categories-are-basenames ()
-  "Categories are the SVG file base names (no extension, no directory)."
-  (ps/agenda-icons-test--with-icon-dir '("Work.svg" "Home.svg")
-    (let ((cats (mapcar #'car (ps/agenda-icons--build-alist dir))))
-      (should (member "Work" cats))
-      (should (member "Home" cats)))))
-
 (ert-deftest ps/agenda-icons--build-entry-shape ()
-  "Each entry has shape (CATEGORY FILE nil nil :ascent center) with an abs path."
-  (ps/agenda-icons-test--with-icon-dir '("Work.svg")
-    (let ((entry (car (ps/agenda-icons--build-alist dir))))
-      (should (equal (nth 0 entry) "Work"))
-      (should (string-suffix-p "Work.svg" (nth 1 entry)))
-      (should (file-name-absolute-p (nth 1 entry)))
-      (should (null (nth 2 entry)))
-      (should (null (nth 3 entry)))
+  "Each entry is (CATEGORY SVG svg t :ascent center :height H) with SVG data."
+  (ps/agenda-icons-test--with-map '(("Blog" . "edit_square"))
+    (let ((entry (car (ps/agenda-icons--build-alist))))
+      (should (equal (nth 0 entry) "Blog"))
+      (should (string-match-p "&#xf88d;" (nth 1 entry)))
+      (should (eq (nth 2 entry) 'svg))
+      (should (eq (nth 3 entry) t))
       (should (eq (nth 4 entry) :ascent))
-      (should (eq (nth 5 entry) 'center)))))
+      (should (eq (nth 5 entry) 'center))
+      (should (eq (nth 6 entry) :height))
+      (should (integerp (nth 7 entry))))))
 
-(ert-deftest ps/agenda-icons--build-empty-dir ()
-  "A directory with no SVGs yields nil."
-  (ps/agenda-icons-test--with-icon-dir '("readme.txt")
-    (should (null (ps/agenda-icons--build-alist dir)))))
+(ert-deftest ps/agenda-icons--build-preserves-order-and-count ()
+  "Every resolvable map entry yields one alist entry, in order."
+  (ps/agenda-icons-test--with-map '(("Blog" . "edit_square")
+                                     ("Work" . "badge"))
+    (let ((alist (ps/agenda-icons--build-alist)))
+      (should (= (length alist) 2))
+      (should (equal (mapcar #'car alist) '("Blog" "Work"))))))
 
-(ert-deftest ps/agenda-icons--build-missing-dir ()
-  "A non-existent directory yields nil."
-  (should (null (ps/agenda-icons--build-alist "/no/such/dir/at/all"))))
+(ert-deftest ps/agenda-icons--build-skips-unresolved ()
+  "Entries whose icon name does not resolve are skipped."
+  (ps/agenda-icons-test--with-map '(("Blog" . "edit_square")
+                                     ("Bogus" . "no_such_icon_xyz"))
+    (let ((alist (ps/agenda-icons--build-alist)))
+      (should (= (length alist) 1))
+      (should (equal (caar alist) "Blog")))))
+
+(ert-deftest ps/agenda-icons--build-empty-map ()
+  "An empty category map yields nil."
+  (ps/agenda-icons-test--with-map nil
+    (should (null (ps/agenda-icons--build-alist)))))
 
 ;;; -------------------------------------------------------
 ;;; apply
 ;;; -------------------------------------------------------
 
-;; `customize-set-value' writes the variable's default via `set-default', so
-;; assert against `default-value' (a lexical `let' would not observe it). Save
-;; and restore the global so the shared test process is not polluted.
+;; `customize-set-value' writes via `set-default', so assert against
+;; `default-value'. Save/restore the global so the shared process stays clean.
+
+;; `ps/material-icons-available-p' needs a font backend (absent in batch), so
+;; stub it to exercise `apply' deterministically.
 
 (ert-deftest ps/agenda-icons--apply-sets-variable ()
   "apply sets org-agenda-category-icon-alist (default value) to the built alist."
-  (ps/agenda-icons-test--with-icon-dir '("a.svg" "b.svg")
+  (ps/agenda-icons-test--with-map '(("Blog" . "edit_square") ("Work" . "badge"))
     (let ((bound (boundp 'org-agenda-category-icon-alist))
           (saved (and (boundp 'org-agenda-category-icon-alist)
                       (default-value 'org-agenda-category-icon-alist))))
       (unwind-protect
-          (progn
-            (ps/agenda-icons-apply (list dir))
-            (should (= (length (default-value 'org-agenda-category-icon-alist)) 2))
-            (should (equal (default-value 'org-agenda-category-icon-alist)
-                           (ps/agenda-icons--build-alist dir))))
+          (cl-letf (((symbol-function 'ps/material-icons-available-p)
+                     (lambda () t)))
+            (ps/agenda-icons-apply)
+            (should (= (length (default-value 'org-agenda-category-icon-alist)) 2)))
         (if bound
             (set-default 'org-agenda-category-icon-alist saved)
           (makunbound 'org-agenda-category-icon-alist))))))
 
-(ert-deftest ps/agenda-icons--apply-missing-dir-noop ()
-  "apply does not touch the variable when all directories are missing."
-  (let ((bound (boundp 'org-agenda-category-icon-alist))
-        (saved (and (boundp 'org-agenda-category-icon-alist)
-                    (default-value 'org-agenda-category-icon-alist))))
-    (unwind-protect
-        (progn
-          (set-default 'org-agenda-category-icon-alist 'sentinel)
-          (ps/agenda-icons-apply (list "/no/such/dir/at/all"))
-          (should (eq (default-value 'org-agenda-category-icon-alist) 'sentinel)))
-      (if bound
-          (set-default 'org-agenda-category-icon-alist saved)
-        (makunbound 'org-agenda-category-icon-alist)))))
-
-(ert-deftest ps/agenda-icons--apply-skips-missing-dir ()
-  "apply still finds icons in later dirs when an earlier one is missing."
-  (ps/agenda-icons-test--with-icon-dir '("Work.svg")
+(ert-deftest ps/agenda-icons--apply-empty-map-noop ()
+  "apply does not touch the variable when the map is empty."
+  (ps/agenda-icons-test--with-map nil
     (let ((bound (boundp 'org-agenda-category-icon-alist))
           (saved (and (boundp 'org-agenda-category-icon-alist)
                       (default-value 'org-agenda-category-icon-alist))))
       (unwind-protect
-          (progn
-            (ps/agenda-icons-apply (list "/no/such/dir/at/all" dir))
-            (should (= (length (default-value 'org-agenda-category-icon-alist)) 1)))
+          (cl-letf (((symbol-function 'ps/material-icons-available-p)
+                     (lambda () t)))
+            (set-default 'org-agenda-category-icon-alist 'sentinel)
+            (ps/agenda-icons-apply)
+            (should (eq (default-value 'org-agenda-category-icon-alist) 'sentinel)))
         (if bound
             (set-default 'org-agenda-category-icon-alist saved)
           (makunbound 'org-agenda-category-icon-alist))))))
-
-(ert-deftest ps/agenda-icons--apply-later-dir-overrides-earlier ()
-  "When the same category exists in multiple dirs, the last dir wins."
-  (ps/agenda-icons-test--with-icon-dir '("Work.svg")
-    (let ((stock-dir dir))
-      (ps/agenda-icons-test--with-icon-dir '("Work.svg")
-        (let ((custom-dir dir)
-              (bound (boundp 'org-agenda-category-icon-alist))
-              (saved (and (boundp 'org-agenda-category-icon-alist)
-                          (default-value 'org-agenda-category-icon-alist))))
-          (unwind-protect
-              (progn
-                (ps/agenda-icons-apply (list stock-dir custom-dir))
-                (let ((alist (default-value 'org-agenda-category-icon-alist)))
-                  (should (= (length alist) 1))
-                  (should (string-prefix-p custom-dir (nth 1 (assoc "Work" alist))))))
-            (if bound
-                (set-default 'org-agenda-category-icon-alist saved)
-              (makunbound 'org-agenda-category-icon-alist))))))))
 
 ;;; test-ps-agenda-icons.el ends here
