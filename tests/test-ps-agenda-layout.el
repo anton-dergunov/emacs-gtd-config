@@ -23,6 +23,16 @@
   (should (eq (ps/agenda-layout--reldate-tint 0) 'today))
   (should (eq (ps/agenda-layout--reldate-tint 4) 'future)))
 
+(ert-deftest ps/agenda-layout--reldate-glyph-by-type ()
+  (let ((ps/agenda-layout-reldate-glyphs '(("deadline" . "⚑") ("scheduled" . "⏱"))))
+    (should (equal (ps/agenda-layout--reldate-glyph "deadline") "⚑"))
+    (should (equal (ps/agenda-layout--reldate-glyph "scheduled") "⏱"))
+    (should (null (ps/agenda-layout--reldate-glyph "timestamp")))))
+
+(ert-deftest ps/agenda-layout--reldate-glyph-disabled-when-nil ()
+  (let ((ps/agenda-layout-reldate-glyphs nil))
+    (should (null (ps/agenda-layout--reldate-glyph "deadline")))))
+
 ;;; -------------------------------------------------------
 ;;; time formatting
 ;;; -------------------------------------------------------
@@ -60,11 +70,11 @@
 
 (ert-deftest ps/agenda-layout--state-label-default-verbatim ()
   (let ((ps/agenda-layout-state-labels nil))
-    (should (equal (ps/agenda-layout--state-label "IN-PROGRESS") "IN-PROGRESS"))))
+    (should (equal (ps/agenda-layout--state-label "INPR") "INPR"))))
 
 (ert-deftest ps/agenda-layout--state-label-remapped ()
-  (let ((ps/agenda-layout-state-labels '(("IN-PROGRESS" . "WIP"))))
-    (should (equal (ps/agenda-layout--state-label "IN-PROGRESS") "WIP"))
+  (let ((ps/agenda-layout-state-labels '(("INPR" . "WIP"))))
+    (should (equal (ps/agenda-layout--state-label "INPR") "WIP"))
     (should (equal (ps/agenda-layout--state-label "TODO") "TODO"))))
 
 ;;; -------------------------------------------------------

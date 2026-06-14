@@ -4,13 +4,13 @@
 
 * NEXT Next state task
 
-* IN-PROGRESS Active task
+* INPR Active task
 Started working on this recently.
 
-* WAITING External dependency task
+* WAIT External dependency task
 Waiting for another person.
 
-* SOMEDAY Future idea
+* MAYB Future idea
 
 * DONE Completed task
 CLOSED: [2026-05-10 Sun]
@@ -86,10 +86,10 @@ Another paragraph.
 ****** TODO Level 6
 
 * Mixed States
-** IN-PROGRESS Parent task
+** INPR Parent task
 *** DONE Finished subtask
 *** TODO Remaining task
-*** WAITING External blocker
+*** WAIT External blocker
 
 * URLs
 ** TODO Example URLs
@@ -117,17 +117,17 @@ Some text here.
 More text here.
 
 * Large Project Example
-** IN-PROGRESS Project
+** INPR Project
 *** TODO Planning
 **** TODO Requirements
 **** TODO Milestones
 
-*** IN-PROGRESS Implementation
+*** INPR Implementation
 **** DONE Setup
 **** TODO Development
 **** TODO Testing
 
-*** WAITING Review
+*** WAIT Review
 **** TODO Final approval
 
 * Long Text Example

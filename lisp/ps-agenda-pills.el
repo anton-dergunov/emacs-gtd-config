@@ -23,13 +23,26 @@
   :type 'integer
   :group 'ps-agenda-pills)
 
-(defcustom ps/agenda-pills-radius-scale 0.45
-  "Pill corner radius as a fraction of the line height."
+(defcustom ps/agenda-pills-height-scale 0.7
+  "Pill rectangle height as a fraction of the line height.
+The SVG canvas remains the full line height (for column alignment); the
+rectangle itself is drawn shorter and vertically centered, giving a smaller,
+calmer badge."
   :type 'number
   :group 'ps-agenda-pills)
 
-(defcustom ps/agenda-pills-font-scale 0.78
-  "Pill label font size as a fraction of the line height."
+(defcustom ps/agenda-pills-radius-scale 0.45
+  "Pill corner radius as a fraction of the pill rectangle's height."
+  :type 'number
+  :group 'ps-agenda-pills)
+
+(defcustom ps/agenda-pills-font-scale 0.6
+  "Pill label font size as a fraction of the pill rectangle's height."
+  :type 'number
+  :group 'ps-agenda-pills)
+
+(defcustom ps/agenda-pills-stroke-opacity 0.35
+  "Opacity of a pill's border, when a stroke color is given."
   :type 'number
   :group 'ps-agenda-pills)
 
@@ -74,24 +87,27 @@
 BG/FG are fill colors, STROKE an optional border color.  CW/CH are the
 character width and line height the geometry is derived from."
   (let* ((w (* cols cw))
-         (h ch)
+         (h (max 1 (round (* ps/agenda-pills-height-scale ch))))
+         (y0 (/ (- ch h) 2.0))
          (r (max 1 (round (* ps/agenda-pills-radius-scale h))))
          (fs (max 6 (round (* ps/agenda-pills-font-scale h))))
-         (baseline (round (* h 0.72)))
+         (baseline (round (+ y0 (* h 0.72))))
          (family (or ps/agenda-pills-font-family
                      (face-attribute 'default :family nil t)
                      "sans-serif")))
     (format
      (concat
       "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\">"
-      "<rect x=\"0.5\" y=\"0.5\" width=\"%d\" height=\"%d\" rx=\"%d\" ry=\"%d\""
+      "<rect x=\"0.5\" y=\"%s\" width=\"%d\" height=\"%d\" rx=\"%d\" ry=\"%d\""
       " fill=\"%s\"%s/>"
       "<text x=\"%d\" y=\"%d\" font-family=\"%s\" font-size=\"%d\" fill=\"%s\""
       " text-anchor=\"middle\">%s</text>"
       "</svg>")
-     w h
-     (max 1 (- w 1)) (max 1 (- h 1)) r r bg
-     (if stroke (format " stroke=\"%s\" stroke-width=\"1\"" stroke) "")
+     w ch
+     (format "%.1f" (+ y0 0.5)) (max 1 (- w 1)) (max 1 (- h 1)) r r bg
+     (if stroke (format " stroke=\"%s\" stroke-width=\"1\" stroke-opacity=\"%s\""
+                         stroke ps/agenda-pills-stroke-opacity)
+       "")
      (/ w 2) baseline (ps/agenda-pills--escape family) fs fg
      (ps/agenda-pills--escape label))))
 
@@ -106,7 +122,8 @@ empty LABEL.  Results are cached."
            (bg (or bg "#dddddd"))
            (fg (or fg "#333333"))
            (key (list label cols bg fg stroke ascent cw ch
-                      ps/agenda-pills-radius-scale ps/agenda-pills-font-scale
+                      ps/agenda-pills-height-scale ps/agenda-pills-radius-scale
+                      ps/agenda-pills-font-scale ps/agenda-pills-stroke-opacity
                       ps/agenda-pills-font-family)))
       (or (gethash key ps/agenda-pills--cache)
           (puthash key

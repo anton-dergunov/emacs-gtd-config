@@ -20,7 +20,7 @@ Need to optimize for:
 ** TODO [#B] Create yearly career review template
 DEADLINE: <2026-06-01 Mon>
 
-** IN-PROGRESS Map current strengths and weaknesses          :reflection:
+** INPR Map current strengths and weaknesses          :reflection:
 Started: [2026-05-12 Tue]
 Strengths:
 - debugging complex systems
@@ -53,7 +53,7 @@ DEADLINE: <2026-06-10 Wed>
 *** DONE Finish review of transformer internals
 CLOSED: [2026-05-10 Sun 18:40]
 
-*** WAITING Feedback from colleague on evaluation framework proposal
+*** WAIT Feedback from colleague on evaluation framework proposal
 Waiting for architecture comments.
 
 ** Systems Design
@@ -64,7 +64,7 @@ Waiting for architecture comments.
 *** Multi-region deployment
 **** TODO Read about failover strategies
 **** TODO Compare cloud provider offerings
-**** SOMEDAY Build small demo deployment
+**** MAYB Build small demo deployment
 
 ** Programming
 *** TODO Improve modern C++ knowledge
@@ -103,7 +103,7 @@ CLOSED: [2026-05-11 Mon]
 SCHEDULED: <2026-05-27 Wed 14:00-15:00>
 
 *** TODO Create onboarding notes template
-*** WAITING Response from mentee regarding project ideas
+*** WAIT Response from mentee regarding project ideas
 
 * Research
 ** TODO Track important AI papers weekly
@@ -128,8 +128,8 @@ SCHEDULED: <2026-05-21 Thu +1w>
 ** TODO Improve professional online presence
 
 ** Conferences
-*** SOMEDAY Attend systems conference
-*** SOMEDAY Attend applied AI conference
+*** MAYB Attend systems conference
+*** MAYB Attend applied AI conference
 
 * Career Experiments
 ** TODO Explore open-source contribution strategy
@@ -286,9 +286,9 @@ CLOSED: [2026-04-10 Fri]
 *** DONE Subtask two
 *** TODO Follow-up improvement
 
-** IN-PROGRESS Active long-term effort
+** INPR Active long-term effort
 *** DONE Initial setup
-*** IN-PROGRESS Evaluation improvements
+*** INPR Evaluation improvements
 *** TODO Final cleanup
 
 * Miscellaneous Notes

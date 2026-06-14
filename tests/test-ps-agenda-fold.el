@@ -25,6 +25,24 @@ leading date header that must NOT be treated as foldable."
        (goto-char (point-min))
        ,@body)))
 
+(defmacro ps/agenda-fold-test--with-agenda-blank-line (&rest body)
+  "Like `ps/agenda-fold-test--with-agenda', but with a blank separator line
+between \"Overdue:\"'s items and the \"In progress:\" header."
+  (declare (indent 0))
+  `(with-temp-buffer
+     (cl-letf (((symbol-function 'org-get-at-bol)
+                (lambda (prop)
+                  (get-text-property (line-beginning-position) prop))))
+       (insert (propertize "Sunday 14 June 2026\n" 'org-agenda-date-header t))
+       (insert (propertize "Overdue:\n" 'org-super-agenda-header t))
+       (insert "  item one\n")
+       (insert "  item two\n")
+       (insert "\n")
+       (insert (propertize "In progress:\n" 'org-agenda-structural-header t))
+       (insert "  item three\n")
+       (goto-char (point-min))
+       ,@body)))
+
 (defun ps/agenda-fold-test--goto (substr)
   "Move point to the start of the line containing SUBSTR."
   (goto-char (point-min))
@@ -80,6 +98,21 @@ leading date header that must NOT be treated as foldable."
       (should-not (string-match-p "In progress"
                                   (buffer-substring-no-properties (car region) (cdr region)))))))
 
+(ert-deftest ps/agenda-fold--body-region-excludes-trailing-blank-line ()
+  "A blank separator line before the next header is excluded from the body."
+  (ps/agenda-fold-test--with-agenda-blank-line
+    (ps/agenda-fold-test--goto "Overdue:")
+    (let ((region (ps/agenda-fold--body-region)))
+      (should region)
+      (should (string-match-p "item two"
+                              (buffer-substring-no-properties (car region) (cdr region))))
+      ;; ends at the start of the blank line, not at "In progress:"'s bol
+      (save-excursion
+        (goto-char (cdr region))
+        (should (= (line-beginning-position) (line-end-position)))
+        (forward-line 1)
+        (should (looking-at-p "In progress:"))))))
+
 ;;; -------------------------------------------------------
 ;;; collapse / indicator overlays
 ;;; -------------------------------------------------------
@@ -90,7 +123,21 @@ leading date header that must NOT be treated as foldable."
     (ps/agenda-fold--collapse-here)
     (let ((ovs (ps/agenda-fold-test--overlays 'ps/agenda-fold)))
       (should (= (length ovs) 1))
-      (should (eq (overlay-get (car ovs) 'invisible) t)))))
+      (should (equal (overlay-get (car ovs) 'display) "")))))
+
+(ert-deftest ps/agenda-fold--collapse-here-keeps-trailing-blank-line-visible ()
+  (ps/agenda-fold-test--with-agenda-blank-line
+    (ps/agenda-fold-test--goto "Overdue:")
+    (ps/agenda-fold--collapse-here)
+    (let ((item-two-pos (progn (ps/agenda-fold-test--goto "item two")
+                                (point)))
+          (blank-pos (progn (ps/agenda-fold-test--goto "In progress:")
+                             (forward-line -1)
+                             (point))))
+      (should (cl-find-if (lambda (o) (overlay-get o 'ps/agenda-fold))
+                          (overlays-at item-two-pos)))
+      (should-not (cl-find-if (lambda (o) (overlay-get o 'ps/agenda-fold))
+                              (overlays-at blank-pos))))))
 
 (ert-deftest ps/agenda-fold--indicator-shows-arrow ()
   (ps/agenda-fold-test--with-agenda

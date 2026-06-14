@@ -26,6 +26,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'subr-x)
 (require 'ps-agenda-pills)
 
@@ -86,7 +87,7 @@ the Schedule block."
 
 (defcustom ps/agenda-layout-state-labels nil
   "Alist remapping a TODO keyword to a shorter pill label.
-Each entry is (KEYWORD . LABEL), e.g. (\"IN-PROGRESS\" . \"WIP\").  Empty means
+Each entry is (KEYWORD . LABEL), e.g. (\"WAIT\" . \"W\").  Empty means
 the keyword is shown verbatim."
   :type '(alist :key-type string :value-type string)
   :group 'ps-agenda-layout)
@@ -118,9 +119,10 @@ the keyword is shown verbatim."
   "Width reserved for the category name, in character columns."
   :type 'integer :group 'ps-agenda-layout)
 
-(defcustom ps/agenda-layout-state-cols 13
+(defcustom ps/agenda-layout-state-cols 8
   "Width reserved for the task-state pill, in character columns.
-Must clear the widest keyword pill (e.g. IN-PROGRESS) for titles to align."
+Must clear the widest keyword pill (TODO keywords are all ≤4 chars) for
+titles to align."
   :type 'integer :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-priority-cols 4
@@ -172,9 +174,13 @@ Tints: `overdue', `today', `future', and `time' (timed schedule events)."
   "Face for inline tags shown after a task title."
   :group 'ps-agenda-layout)
 
-(defface ps/agenda-layout-now-face
-  '((t :inherit org-agenda-current-time :weight bold))
-  "Face for the compact \"now\" marker in the Schedule block."
+(defcustom ps/agenda-layout-reldate-glyphs
+  '(("deadline" . "⚑") ("scheduled" . "⏱"))
+  "Alist mapping a scheduling TYPE substring to a leading glyph.
+Each entry is (TYPE-SUBSTRING . GLYPH); the glyph is prepended to the
+relative-date pill text for items whose `type' text property contains
+TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
+  :type '(alist :key-type string :value-type string)
   :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-emoji-face nil
@@ -226,25 +232,6 @@ the same substring (e.g. \"Scheduled earlier:\") are not misclassified."
          (or (string= trimmed target)
              (string= trimmed (concat target ":"))))))
 
-(defun ps/agenda-layout--line-has-face-p (bol eol face)
-  "Non-nil when any character in [BOL, EOL) carries FACE."
-  (let ((pos bol) found)
-    (while (and pos (< pos eol) (not found))
-      (let ((f (get-text-property pos 'face)))
-        (when (or (eq f face) (and (listp f) (memq face f)))
-          (setq found t)))
-      (setq pos (next-single-property-change pos 'face nil eol)))
-    found))
-
-(defun ps/agenda-layout--now-line-p (bol eol)
-  "Non-nil when [BOL, EOL) is the time-grid \"now\" line.
-Recognizes both Org's own \"now\" line (via its `org-agenda-current-time'
-face) and a line already replaced by `ps/agenda-layout--now-string' on a
-previous pass (via the `ps/agenda-layout-now' marker, since that replacement's
-own face is what carries `ps/agenda-layout-now-face' instead)."
-  (or (org-get-at-bol 'ps/agenda-layout-now)
-      (ps/agenda-layout--line-has-face-p bol eol 'org-agenda-current-time)))
-
 ;;; Pure formatting helpers (unit-tested)
 
 (defun ps/agenda-layout--state-label (state)
@@ -258,6 +245,15 @@ own face is what carries `ps/agenda-layout-now-face' instead)."
    ((> days 0) (if (>= days 14) (format "in %dw" (round days 7)) (format "in %dd" days)))
    (t (let ((a (- days)))
         (if (>= a 14) (format "%dw ago" (round a 7)) (format "%dd ago" a))))))
+
+(defun ps/agenda-layout--reldate-glyph (type)
+  "Return the leading glyph for scheduling TYPE, or nil.
+TYPE is the agenda item's `type' text property (e.g. \"deadline\" or
+\"scheduled\"); the glyph is looked up in `ps/agenda-layout-reldate-glyphs' by
+matching the alist key as a substring of TYPE."
+  (and (stringp type)
+       (cdr (cl-find-if (lambda (entry) (string-match-p (car entry) type))
+                         ps/agenda-layout-reldate-glyphs))))
 
 (defun ps/agenda-layout--reldate-tint (days)
   "Return the scheduling tint symbol for a signed DAYS offset."
@@ -333,19 +329,20 @@ own face is what carries `ps/agenda-layout-now-face' instead)."
   (let ((colors (or (cdr (assoc state ps/agenda-layout-state-colors))
                     ps/agenda-layout-state-default-colors)))
     (ps/agenda-pills-image (ps/agenda-layout--state-label state)
-                           :bg (car colors) :fg (cdr colors))))
+                           :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
 
 (defun ps/agenda-layout--priority-pill (char)
   "Return a pill image for priority CHAR (e.g. ?A)."
   (let ((colors (or (cdr (assq char ps/agenda-layout-priority-colors))
                     ps/agenda-layout-priority-default-colors)))
-    (ps/agenda-pills-image (format "#%c" char) :bg (car colors) :fg (cdr colors))))
+    (ps/agenda-pills-image (format "#%c" char)
+                           :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
 
 (defun ps/agenda-layout--reldate-pill (text tint)
   "Return a pill image for scheduling TEXT with color TINT."
   (let ((colors (or (cdr (assq tint ps/agenda-layout-reldate-colors))
                     ps/agenda-layout-state-default-colors)))
-    (ps/agenda-pills-image text :bg (car colors) :fg (cdr colors))))
+    (ps/agenda-pills-image text :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
 
 (defun ps/agenda-layout--tags-string (tags)
   "Return a propertized inline tag string for TAGS, or empty string."
@@ -364,8 +361,10 @@ own face is what carries `ps/agenda-layout-now-face' instead)."
                      (if deadline-p (org-get-deadline-time (point))
                        (org-get-scheduled-time (point))))))
         (when time
-          (let ((days (- (time-to-days time) (time-to-days (current-time)))))
-            (cons (ps/agenda-layout--reldate-string days)
+          (let* ((days (- (time-to-days time) (time-to-days (current-time))))
+                 (glyph (ps/agenda-layout--reldate-glyph type))
+                 (text (ps/agenda-layout--reldate-string days)))
+            (cons (if glyph (concat glyph " " text) text)
                   (ps/agenda-layout--reldate-tint days))))))))
 
 (defun ps/agenda-layout--right-element (schedule-compact tod dur)
@@ -449,13 +448,6 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
       (push right-str parts))
     (apply #'concat (nreverse parts))))
 
-(defun ps/agenda-layout--now-string ()
-  "Return the compact \"now\" marker string for the Schedule block."
-  (concat (ps/agenda-layout--space-to ps/agenda-layout-left-margin-cols)
-          (propertize (concat "▸ now " (format-time-string "%H:%M"))
-                      'face 'ps/agenda-layout-now-face
-                      'ps/agenda-layout-now t)))
-
 ;;; Buffer-text replacement
 
 (defun ps/agenda-layout--clear ()
@@ -524,10 +516,7 @@ working anywhere on the line.  Point ends at the end of the inserted text."
              ((and (org-get-at-bol 'time-of-day)
                    (ps/agenda-layout--header-schedule-p header)
                    (eq style 'compact))
-              (if (ps/agenda-layout--now-line-p bol eol)
-                  (ps/agenda-layout--replace-line
-                   bol eol (ps/agenda-layout--now-string))
-                (ps/agenda-layout--hide-line bol eol)))))
+              (ps/agenda-layout--hide-line bol eol))))
           (forward-line 1))))))
 
 ;;; Public API

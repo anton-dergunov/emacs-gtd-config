@@ -18,7 +18,7 @@ Topics:
 - Incremental learning
 - Context accumulation
 
-** SOMEDAY Write article about debugging neural networks :ml:debugging:
+** MAYB Write article about debugging neural networks :ml:debugging:
 Potential sections:
 - Gradient explosions
 - Silent NaNs
@@ -48,7 +48,7 @@ SCHEDULED: <2026-05-22 Fri>
 - SVG export
 - Terminal screenshots
 
-** IN-PROGRESS Build static site preview pipeline
+** INPR Build static site preview pipeline
 Started: [2026-05-18 Sun]
 Current blockers:
 - CSS organization
@@ -85,4 +85,4 @@ Current blockers:
 ** TODO Maintain backlog of small article ideas
 ** TODO Publish shorter posts more frequently
 ** TODO Reuse notes from org files as source material
-** WAITING Feedback from peer review on workflow article
+** WAIT Feedback from peer review on workflow article

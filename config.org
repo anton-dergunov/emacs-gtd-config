@@ -300,8 +300,9 @@ would overflow.
 - =schedule-style=: =grid= keeps Org's native time ruler; =compact= hides the
   empty grid rows and lays timed events out like the other sections. Switch and
   press =g= in the agenda to compare.
-- =state-labels=: shorten long keywords in the pill, e.g. ="IN-PROGRESS" → "WIP"=
-  (the actual TODO keyword is unchanged). Empty = show keywords verbatim.
+- =state-labels=: shorten long keywords in the pill, e.g. ="WAIT" → "W"= (the
+  actual TODO keyword is unchanged). Rarely needed now that all TODO keywords
+  are ≤4 chars. Empty = show keywords verbatim.
 - The =*-cols= numbers are column widths; =state-cols= must clear the widest
   keyword pill for titles to align. Pill colours are tuned for light themes; for
   dark themes pick darker backgrounds / lighter text below.
@@ -309,9 +310,9 @@ would overflow.
   (setq ps/agenda-layout-enabled        t
         ps/agenda-layout-category-display 'icon   ; icon | name | both | none
         ps/agenda-layout-schedule-style   'grid   ; grid | compact
-        ps/agenda-layout-state-labels     nil     ; e.g. '(("IN-PROGRESS" . "WIP"))
+        ps/agenda-layout-state-labels     nil     ; e.g. '(("WAIT" . "W"))
         ps/agenda-layout-truncate         t
-        ps/agenda-layout-state-cols       13
+        ps/agenda-layout-state-cols       8
         ps/agenda-layout-priority-cols    4
         ps/agenda-layout-emoji-cols       2
         ps/agenda-layout-category-cols    3)
@@ -565,9 +566,9 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
         '((sequence
            "TODO(t)"
            "NEXT(n)"
-           "IN-PROGRESS(i)"
-           "WAITING(w)"
-           "SOMEDAY(s)"
+           "INPR(i)"
+           "WAIT(w)"
+           "MAYB(m)"
            "|"
            "DONE(d)")))
 #+end_src
@@ -657,7 +658,7 @@ preference and stays here.
                                     :order 1)))))
               (tags-todo "+PRIORITY=\"A\""
                          ((org-agenda-overriding-header " High-priority:")))
-              (todo "IN-PROGRESS"
+              (todo "INPR"
                     ((org-agenda-overriding-header " In progress:")))))
             ("n" "NEXT tasks"
              ((todo "NEXT")))))

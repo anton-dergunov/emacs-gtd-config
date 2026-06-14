@@ -36,12 +36,12 @@
 - Good evaluation infrastructure compounds over time.
 
 * Learning Projects
-** IN-PROGRESS Build toy coding agent
+** INPR Build toy coding agent
 Started: [2026-05-12 Tue]
 
 ** TODO Create synthetic evaluation datasets
 ** TODO Experiment with lightweight RAG pipeline
 
 * Long-Term
-** SOMEDAY Learn Rust for systems programming
-** SOMEDAY Contribute to open-source ML tooling
+** MAYB Learn Rust for systems programming
+** MAYB Contribute to open-source ML tooling

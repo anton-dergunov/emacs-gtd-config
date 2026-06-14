@@ -28,7 +28,7 @@
 ** TODO Read about index fund strategies :finance:
 ** TODO Understand tax-efficient investing accounts
 ** TODO Compare investment platforms
-** SOMEDAY Learn more about bond allocation
+** MAYB Learn more about bond allocation
 
 * Career and Compensation
 ** TODO Research compensation trends for ML engineers

@@ -68,13 +68,20 @@ keymap of their own.")
 
 (defun ps/agenda-fold--body-region ()
   "Return (START . END) of the body following the header at point, or nil.
-The body runs from the next line to the next header or end of buffer."
+The body runs from the next line up to the next header or end of buffer.  A
+trailing run of blank line(s) immediately before the next header (or eobp) is
+excluded from the body, so it stays visible as a separator and the invisible
+region never ends at the same position as the next header's indicator."
   (save-excursion
-    (let ((start (min (point-max) (1+ (line-end-position)))))
+    (let ((start (min (point-max) (1+ (line-end-position))))
+          (blank-start nil))
       (forward-line 1)
       (while (and (not (eobp)) (not (ps/agenda-fold--header-p)))
+        (if (= (line-beginning-position) (line-end-position))
+            (unless blank-start (setq blank-start (line-beginning-position)))
+          (setq blank-start nil))
         (forward-line 1))
-      (let ((end (point)))
+      (let ((end (or blank-start (point))))
         (and (> end start) (cons start end))))))
 
 ;;; Overlays
@@ -88,12 +95,17 @@ The body runs from the next line to the next header or end of buffer."
                              'face 'ps/agenda-fold-indicator-face))))
 
 (defun ps/agenda-fold--collapse-here ()
-  "Hide the body of the header at point with an invisible overlay."
+  "Hide the body of the header at point with a `display'-overriding overlay."
   (when-let ((region (ps/agenda-fold--body-region)))
     (let ((ov (make-overlay (car region) (cdr region))))
       (overlay-put ov 'ps/agenda-fold t)
       (overlay-put ov 'evaporate t)
-      (overlay-put ov 'invisible t))))
+      ;; `invisible' alone does not hide characters whose own `display' property
+      ;; is an `image' spec (e.g. the category-icon and pill images from
+      ;; `ps/agenda-layout--apply'), leaving fragments of the first hidden item
+      ;; visible.  Overriding `display' for the whole range hides everything,
+      ;; images included.
+      (overlay-put ov 'display ""))))
 
 ;;; Apply / toggle
 

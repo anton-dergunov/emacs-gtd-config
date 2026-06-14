@@ -25,9 +25,9 @@
 ** TODO Improve listening comprehension
 
 * Cities to Visit
-** SOMEDAY Visit Tokyo during autumn
-** SOMEDAY Explore small coastal towns in Portugal
-** SOMEDAY Visit mountain regions for landscape photography
+** MAYB Visit Tokyo during autumn
+** MAYB Explore small coastal towns in Portugal
+** MAYB Visit mountain regions for landscape photography
 
 * Practical Tasks
 ** TODO Review travel insurance options

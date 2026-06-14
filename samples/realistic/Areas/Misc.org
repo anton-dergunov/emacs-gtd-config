@@ -30,9 +30,9 @@
 ** TODO Reduce screen time before sleep
 
 * Fun Projects
-** SOMEDAY Build retro-style terminal dashboard
-** SOMEDAY Create tiny personal search engine
-** SOMEDAY Build custom RSS aggregation workflow
+** MAYB Build retro-style terminal dashboard
+** MAYB Create tiny personal search engine
+** MAYB Build custom RSS aggregation workflow
 
 * Notes
 - Most systems become too complicated over time.
@@ -40,6 +40,9 @@
 - Small frictions compound quickly.
 
 * Someday Ideas
-** SOMEDAY Learn basic music theory
-** SOMEDAY Try watercolor painting
-** SOMEDAY Build small home server
+** TODO Test 
+SCHEDULED: <2026-06-14 Sun 20:00-21:00>
+
+** MAYB Learn basic music theory
+** MAYB Try watercolor painting
+** MAYB Build small home server

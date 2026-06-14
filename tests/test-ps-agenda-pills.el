@@ -12,7 +12,7 @@
   "A pill is the label width plus padding on both sides."
   (let ((ps/agenda-pills-pad 1))
     (should (= (ps/agenda-pills-columns "TODO") 6))
-    (should (= (ps/agenda-pills-columns "IN-PROGRESS") 13))
+    (should (= (ps/agenda-pills-columns "INPR") 6))
     (should (= (ps/agenda-pills-columns "#A") 4))))
 
 (ert-deftest ps/agenda-pills--columns-respect-pad ()
@@ -53,7 +53,17 @@
   (should-not (string-match-p "stroke="
                               (ps/agenda-pills--svg "X" 3 "#eee" "#333" nil 8 16)))
   (should (string-match-p "stroke=\"#000\""
+                          (ps/agenda-pills--svg "X" 3 "#eee" "#333" "#000" 8 16)))
+  (should (string-match-p "stroke-opacity=\"0.35\""
                           (ps/agenda-pills--svg "X" 3 "#eee" "#333" "#000" 8 16))))
+
+(ert-deftest ps/agenda-pills--svg-rect-shorter-than-canvas ()
+  "The pill rectangle is drawn shorter than the full line height and centered."
+  (let ((svg (ps/agenda-pills--svg "X" 3 "#eee" "#333" nil 8 16)))
+    ;; canvas stays the full line height
+    (should (string-match-p "height=\"16\"" svg))
+    ;; the rect itself is drawn at the reduced height (0.7 * 16 = 11.2 -> 11, minus 1px inset)
+    (should (string-match-p "height=\"10\"" svg))))
 
 ;;; -------------------------------------------------------
 ;;; image / cache

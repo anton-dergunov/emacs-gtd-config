@@ -43,7 +43,7 @@ The main configuration file is [config.org](config.org).
    ```org
    * My Project
    ** TODO [#A] Task 1
-   ** IN-PROGRESS Task 2
+   ** INPR Task 2
    ** TODO Overdue Task 3
       DEADLINE: <2024-01-01 Mon>
    ** TODO Overdue Task 4

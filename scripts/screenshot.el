@@ -17,6 +17,13 @@
 ;; otherwise `screencapture' produces a blank/desktop-only image. It also needs
 ;; Accessibility/Automation permission (to control "System Events"), used here
 ;; to bring this Emacs window to the front before capturing.
+;;
+;; To manually inspect the layout for a given fake date without the 2-second
+;; auto-capture-then-quit, set PS_SCREENSHOT_INTERACTIVE=1: Emacs builds the
+;; same two-window layout and stays open for interactive use.
+;;
+;;   PS_SCREENSHOT_FAKE_DATE="2026-05-21 10:00" PS_SCREENSHOT_INTERACTIVE=1 \
+;;     ./scripts/run_emacs_dev.sh -l scripts/screenshot.el
 
 (defun ps/screenshot--capture ()
   "Capture the selected frame to PS_SCREENSHOT_OUT via `screencapture'."
@@ -58,7 +65,7 @@
   (let ((fake-day (time-to-days (date-to-time fake-date))))
     (advice-add 'org-today :override (lambda () fake-day))))
 
-(defvar ps/screenshot-org-file "Plans/Career.org"
+(defvar ps/screenshot-org-file "Areas/Career.org"
   "Org file (relative to `my-org-base-directory') shown in the top window.")
 
 ;; Build a deterministic two-window layout: chosen org file on top, agenda
@@ -72,7 +79,9 @@
   (ignore-errors (org-agenda nil "c")))
 (balance-windows)
 (redisplay t)
-;; Give org-modern / fontification a moment to settle, then capture.
-(run-with-timer 2 nil #'ps/screenshot--capture)
+;; Give org-modern / fontification a moment to settle, then capture --
+;; unless PS_SCREENSHOT_INTERACTIVE is set, in which case leave Emacs open.
+(unless (getenv "PS_SCREENSHOT_INTERACTIVE")
+  (run-with-timer 2 nil #'ps/screenshot--capture))
 
 ;;; screenshot.el ends here

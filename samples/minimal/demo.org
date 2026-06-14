@@ -9,7 +9,7 @@
 ** TODO Finish presentation
 DEADLINE: <2026-05-28 Thu>
 
-** IN-PROGRESS Prepare weekly report
+** INPR Prepare weekly report
 SCHEDULED: <2026-05-21 Thu>
 
 * Learning
@@ -27,8 +27,8 @@ SCHEDULED: <2026-05-21 Thu 18:00>
 SCHEDULED: <2026-05-21 Thu +1d>
 
 * Someday
-** SOMEDAY Learn Rust
-** SOMEDAY Build personal dashboard
+** MAYB Learn Rust
+** MAYB Build personal dashboard
 
 * Notes
 This file demonstrates:
