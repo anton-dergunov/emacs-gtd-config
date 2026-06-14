@@ -1,13 +1,17 @@
 ;;; ps-agenda-emoji.el --- Append semantic emojis to org agenda tasks -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Decorates org-agenda task lines with a semantic emoji chosen by
+;; Computes a semantic emoji for each org-agenda task via
 ;; `scripts/org_emoji_matcher.py'.  Task titles are read from org-agenda's own
 ;; per-line text properties (robust against every prefix format, including
 ;; overdue lines and titles containing colons).  Results are kept in a
 ;; persistent on-disk cache keyed by title, so a warm agenda render reuses
-;; cached emojis and never spawns Python.  Emojis are shown as right-aligned
-;; overlays, so they line up in a column and never modify the buffer text.
+;; cached emojis and never spawns Python.
+;;
+;; This module only owns the emoji *data*: `ps-agenda-layout' reads it through
+;; `ps/agenda-emoji-lookup' and draws each emoji in its reserved column.  After a
+;; render this module fills in any uncached emojis (asynchronously) and then asks
+;; the layout to refresh, so emojis appear without shifting the aligned columns.
 
 ;;; Code:
 
@@ -15,6 +19,8 @@
 
 (declare-function org-get-at-bol "org" (property))
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
+(declare-function org-with-point-at "org-macs" (pom &rest body))
+(declare-function ps/agenda-layout-refresh "ps-agenda-layout" ())
 (defvar org-agenda-finalize-hook)
 
 ;;; Customization
@@ -153,35 +159,13 @@ titles present in the cache, MISSING is the list of titles absent from it."
   "Store EMOJIS (a list, possibly empty) for TITLE in the cache."
   (puthash title (append emojis nil) (ps/agenda-emoji--cache-load)))
 
-;;; Display (right-aligned overlays)
+;;; Lookup (consumed by ps-agenda-layout)
 
-(defun ps/agenda-emoji--clear-overlays ()
-  "Remove emoji overlays previously placed in the current buffer."
-  (remove-overlays (point-min) (point-max) 'ps/agenda-emoji t))
-
-(defun ps/agenda-emoji--apply (emoji-map)
-  "Draw right-aligned emoji overlays for EMOJI-MAP on the current buffer.
-EMOJI-MAP maps a title to its list of emoji strings (hash table or alist).
-Existing emoji overlays are cleared first, so this is idempotent."
-  (ps/agenda-emoji--clear-overlays)
-  (save-excursion
-    (goto-char (point-min))
-    (while (not (eobp))
-      (let ((title (ps/agenda-emoji--line-title)))
-        (when title
-          (let ((emojis (ps/agenda-emoji--map-get emoji-map title)))
-            (when emojis
-              (let* ((eol (line-end-position))
-                     (ov (make-overlay eol eol))
-                     (glyphs (mapconcat
-                              (lambda (e) (propertize e 'face ps/agenda-emoji-face))
-                              emojis " "))
-                     (spacer (propertize
-                              " " 'display
-                              `(space :align-to (- right ,ps/agenda-emoji-right-margin)))))
-                (overlay-put ov 'ps/agenda-emoji t)
-                (overlay-put ov 'after-string (concat spacer glyphs)))))))
-      (forward-line 1))))
+(defun ps/agenda-emoji-lookup (title)
+  "Return the cached emoji for TITLE, or nil.
+With more than one cached emoji, the first is returned (the layout shows one)."
+  (when (and ps/agenda-emoji-enabled title)
+    (car (gethash title (ps/agenda-emoji--cache-load)))))
 
 ;;; Async matcher process
 
@@ -218,18 +202,21 @@ CALLBACK receives a hash table mapping each task title to its emoji list."
 
 ;;; Agenda integration
 
-(defun ps/agenda-emoji--update ()
-  "Update the *Org Agenda* buffer with emojis, using the cache then Python."
+(defun ps/agenda-emoji--refresh-layout ()
+  "Ask the agenda layout to redraw, so newly cached emojis fill their column."
+  (when (fboundp 'ps/agenda-layout-refresh)
+    (ps/agenda-layout-refresh)))
+
+(defun ps/agenda-emoji--ensure ()
+  "Compute emojis for any uncached agenda titles, then refresh the layout.
+Cached titles are already shown by the layout's own render; this only spawns
+Python for what is missing, and re-renders once results arrive."
   (when (get-buffer "*Org Agenda*")
     (with-current-buffer "*Org Agenda*"
-      (let* ((titles (ps/agenda-emoji--collect-titles))
-             (part (ps/agenda-emoji--partition titles))
-             (cached (car part))
-             (missing (cdr part)))
-        ;; Draw what we already know immediately; if everything is cached we
-        ;; never spawn Python.
-        (ps/agenda-emoji--apply cached)
-        (when missing
+      (let ((missing (cdr (ps/agenda-emoji--partition
+                           (ps/agenda-emoji--collect-titles)))))
+        (if (null missing)
+            (ps/agenda-emoji--refresh-layout)
           (ps/agenda-emoji--run-matcher
            missing
            (lambda (emoji-map)
@@ -237,20 +224,11 @@ CALLBACK receives a hash table mapping each task title to its emoji list."
                (ps/agenda-emoji--cache-put
                 title (ps/agenda-emoji--map-get emoji-map title)))
              (ps/agenda-emoji--cache-save)
-             (when (get-buffer "*Org Agenda*")
-               (with-current-buffer "*Org Agenda*"
-                 (ps/agenda-emoji--apply (ps/agenda-emoji--cache-load)))))))))))
+             (ps/agenda-emoji--refresh-layout))))))))
 
 (defun ps/agenda-emoji--append (&rest _)
-  "Debounce an emoji update after the agenda renders, when enabled."
+  "Debounce filling in any uncached emojis after the agenda renders."
   (when ps/agenda-emoji-enabled
-    ;; Drop overlays left over from the previous render immediately --
-    ;; after `org-agenda-redo' erases the buffer, their positions collapse
-    ;; to `point-min', which would briefly render all old emojis on one
-    ;; line until the debounced update below clears and reapplies them.
-    (when (get-buffer "*Org Agenda*")
-      (with-current-buffer "*Org Agenda*"
-        (ps/agenda-emoji--clear-overlays)))
     (when ps/agenda-emoji--timer
       (cancel-timer ps/agenda-emoji--timer))
     (setq ps/agenda-emoji--timer
@@ -258,12 +236,14 @@ CALLBACK receives a hash table mapping each task title to its emoji list."
            0.4 nil
            (lambda ()
              (setq ps/agenda-emoji--timer nil)
-             (ps/agenda-emoji--update))))))
+             (ps/agenda-emoji--ensure))))))
 
 ;;; Public API
 
 (defun ps/agenda-emoji-setup ()
-  "Enable emoji decoration of agenda tasks after each agenda render."
+  "Compute missing agenda emojis after each agenda render.
+The layout module draws them; this only keeps the cache warm and triggers a
+refresh once new emojis are available."
   (add-hook 'org-agenda-finalize-hook #'ps/agenda-emoji--append))
 
 (provide 'ps-agenda-emoji)

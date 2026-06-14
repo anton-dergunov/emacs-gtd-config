@@ -67,6 +67,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-agenda-emoji)
   (require 'ps-material-icons)
   (require 'ps-agenda-icons)
+  (require 'ps-agenda-pills)
+  (require 'ps-agenda-layout)
+  (require 'ps-agenda-fold)
   (require 'ps-schedule-icons)
   (require 'ps-blank-lines)
   (require 'ps-availability)
@@ -286,6 +289,57 @@ columns from the right window edge the emoji column starts.
         ps/agenda-emoji-face         '(:height 0.8))
 #+end_src
 
+** Agenda layout (ps-agenda-layout.el / ps-agenda-pills.el)
+The agenda task lines are re-laid into aligned columns:
+=[category] [STATE] [PRIORITY] [emoji]  Title… [tags]   [when]=. State, priority
+and the relative date ("11d ago") are drawn as rounded pill badges; titles line
+up across every section and are truncated (full text shown on hover) when they
+would overflow.
+
+- =category-display=: =icon= (default), =name=, =both=, or =none=.
+- =schedule-style=: =grid= keeps Org's native time ruler; =compact= hides the
+  empty grid rows and lays timed events out like the other sections. Switch and
+  press =g= in the agenda to compare.
+- =state-labels=: shorten long keywords in the pill, e.g. ="IN-PROGRESS" → "WIP"=
+  (the actual TODO keyword is unchanged). Empty = show keywords verbatim.
+- The =*-cols= numbers are column widths; =state-cols= must clear the widest
+  keyword pill for titles to align. Pill colours are tuned for light themes; for
+  dark themes pick darker backgrounds / lighter text below.
+#+begin_src emacs-lisp
+  (setq ps/agenda-layout-enabled        t
+        ps/agenda-layout-category-display 'icon   ; icon | name | both | none
+        ps/agenda-layout-schedule-style   'grid   ; grid | compact
+        ps/agenda-layout-state-labels     nil     ; e.g. '(("IN-PROGRESS" . "WIP"))
+        ps/agenda-layout-truncate         t
+        ps/agenda-layout-state-cols       13
+        ps/agenda-layout-priority-cols    4
+        ps/agenda-layout-emoji-cols       2
+        ps/agenda-layout-category-cols    3)
+
+  ;; Pill colours (BG . FG). Defaults suit light themes; override for dark ones.
+  (unless ps/color-theme-solarized-p
+    (setq ps/agenda-layout-state-default-colors    '("#3a3a3a" . "#dddddd")
+          ps/agenda-layout-priority-default-colors '("#3a3a3a" . "#dddddd")
+          ps/agenda-layout-priority-colors
+          '((?A . ("#5a3a1a" . "#f0c98a"))
+            (?B . ("#3a3a3a" . "#dddddd"))
+            (?C . ("#2f4a2f" . "#bfe0bf")))
+          ps/agenda-layout-reldate-colors
+          '((overdue . ("#5a2a26" . "#f0b3aa"))
+            (today   . ("#26405a" . "#aacdf0"))
+            (future  . ("#3a3a3a" . "#dddddd"))
+            (time    . ("#3a3a3a" . "#dddddd")))))
+#+end_src
+
+** Agenda fold (ps-agenda-fold.el)
+Agenda sections (Overdue / High-priority / In progress / …) can be collapsed.
+Press =TAB= or click a section header to fold/unfold it; =M-x
+ps/agenda-fold-collapse-all= / =ps/agenda-fold-expand-all= toggle everything.
+List the section headers that should start collapsed when the agenda opens.
+#+begin_src emacs-lisp
+  (setq ps/agenda-fold-default-collapsed nil)  ; e.g. '("In progress:")
+#+end_src
+
 ** Typo / spell checking (ps-typo.el)
 A quiet, multilingual typo checker for Org buffers. A word is underlined only
 when *no* configured language recognises it, so terms valid in any of your
@@ -406,7 +460,7 @@ loads it, then deletes it. Silently does nothing when the file is absent."
   ;; set switches). Instead, refuse to turn numbers on for these modes at the
   ;; source, so the decision holds every time the global mode evaluates a buffer.
   (defvar ps/display-line-numbers-exempt-modes
-    '(treemacs-mode term-mode shell-mode eshell-mode)
+    '(treemacs-mode term-mode shell-mode eshell-mode org-agenda-mode)
     "Major modes for which global line numbers must never be enabled.")
 
   (advice-add 'display-line-numbers--turn-on :before-while
@@ -612,13 +666,19 @@ preference and stays here.
     (org-super-agenda-mode))
 #+end_src
 
-*** Emoji decoration + conflict check
-Logic lives in =lisp/ps-agenda-emoji.el= (it shells out to
-=scripts/org_emoji_matcher.py=). The conflict-check agenda hook from
-=ps-conflicts= is also registered here.
+*** Aligned layout, emoji, folding, conflict check
+The redesigned agenda layout lives in =lisp/ps-agenda-layout.el= (aligned
+columns + rounded pills, reusing =ps-agenda-pills.el=). =ps-agenda-emoji.el=
+feeds it semantic emojis (via =scripts/org_emoji_matcher.py=);
+=ps-agenda-fold.el= adds collapsible sections. The conflict-check agenda hook
+from =ps-conflicts= is also registered here. Agenda lines are truncated (no
+wrapping) so the right-aligned scheduling pill always lands on screen.
 #+begin_src emacs-lisp
+  (ps/agenda-layout-setup)
   (ps/agenda-emoji-setup)
+  (ps/agenda-fold-setup)
   (add-hook 'org-agenda-finalize-hook #'ps/conflicts--agenda-schedule-check)
+  (add-hook 'org-agenda-mode-hook (lambda () (setq truncate-lines t)))
 #+end_src
 
 *** Uniform blank lines between agenda sections

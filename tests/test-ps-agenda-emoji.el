@@ -12,11 +12,6 @@
 
 ;;; Helpers
 
-(defun ps/agenda-emoji-test--overlays ()
-  "Return the emoji overlays in the current buffer."
-  (seq-filter (lambda (o) (overlay-get o 'ps/agenda-emoji))
-              (overlays-in (point-min) (point-max))))
-
 (defmacro ps/agenda-emoji-test--with-lines (lines &rest body)
   "Insert LINES, then run BODY with `ps/agenda-emoji--line-title' stubbed.
 The stub treats every non-blank line as a task whose title is the trimmed
@@ -54,25 +49,17 @@ line text, sidestepping the need for a live org-agenda buffer."
     (ps/agenda-emoji--append)
     (should (null ps/agenda-emoji--timer))))
 
-(ert-deftest ps/agenda-emoji--append-clears-overlays-synchronously ()
-  "The finalize hook clears stale overlays immediately, before the
-debounced update timer fires."
+(ert-deftest ps/agenda-emoji--append-schedules-when-enabled ()
+  "With the feature enabled, the finalize hook arms the debounce timer."
   (let ((ps/agenda-emoji-enabled t)
         (ps/agenda-emoji--timer nil))
     (unwind-protect
-        (with-current-buffer (get-buffer-create "*Org Agenda*")
-          (erase-buffer)
-          (insert "Write the report\n")
-          (let ((ov (make-overlay (point-max) (point-max))))
-            (overlay-put ov 'ps/agenda-emoji t)
-            (overlay-put ov 'after-string "X"))
-          (should (ps/agenda-emoji-test--overlays))
+        (progn
           (ps/agenda-emoji--append)
-          (should-not (ps/agenda-emoji-test--overlays)))
+          (should (timerp ps/agenda-emoji--timer)))
       (when ps/agenda-emoji--timer
         (cancel-timer ps/agenda-emoji--timer)
-        (setq ps/agenda-emoji--timer nil))
-      (kill-buffer "*Org Agenda*"))))
+        (setq ps/agenda-emoji--timer nil)))))
 
 ;;; -------------------------------------------------------
 ;;; map-get
@@ -153,37 +140,32 @@ debounced update timer fires."
       (delete-file tmp))))
 
 ;;; -------------------------------------------------------
-;;; apply (right-aligned overlays)
+;;; lookup (consumed by ps-agenda-layout)
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/agenda-emoji--apply-places-overlay ()
-  "A mapped task gets exactly one emoji overlay carrying the glyph."
-  (ps/agenda-emoji-test--with-lines "Write the report\nBuy groceries\n"
-    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
-    (let ((ovs (ps/agenda-emoji-test--overlays)))
-      (should (= (length ovs) 1))
-      (should (string-match-p "X" (overlay-get (car ovs) 'after-string))))))
+(ert-deftest ps/agenda-emoji--lookup-returns-first-cached ()
+  "lookup returns the first cached emoji for a title."
+  (let ((ps/agenda-emoji-enabled t)
+        (ps/agenda-emoji--cache (make-hash-table :test 'equal))
+        (ps/agenda-emoji--cache-loaded-tag ps/agenda-emoji-cache-tag))
+    (puthash "Known" '("✅" "📌") ps/agenda-emoji--cache)
+    (should (equal (ps/agenda-emoji-lookup "Known") "✅"))))
 
-(ert-deftest ps/agenda-emoji--apply-skips-unmapped ()
-  "A task absent from the map gets no overlay."
-  (ps/agenda-emoji-test--with-lines "Write the report\n"
-    (ps/agenda-emoji--apply '(("Nonexistent" . ("Z"))))
-    (should-not (ps/agenda-emoji-test--overlays))))
+(ert-deftest ps/agenda-emoji--lookup-nil-for-absent-or-empty ()
+  "lookup returns nil for an unknown title or an empty cached list."
+  (let ((ps/agenda-emoji-enabled t)
+        (ps/agenda-emoji--cache (make-hash-table :test 'equal))
+        (ps/agenda-emoji--cache-loaded-tag ps/agenda-emoji-cache-tag))
+    (puthash "Empty" '() ps/agenda-emoji--cache)
+    (should (null (ps/agenda-emoji-lookup "Empty")))
+    (should (null (ps/agenda-emoji-lookup "Absent")))))
 
-(ert-deftest ps/agenda-emoji--apply-is-idempotent ()
-  "Re-applying clears prior overlays instead of stacking them."
-  (ps/agenda-emoji-test--with-lines "Write the report\n"
-    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
-    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
-    (should (= (length (ps/agenda-emoji-test--overlays)) 1))))
-
-(ert-deftest ps/agenda-emoji--apply-emoji-has-face ()
-  "The appended glyph carries `ps/agenda-emoji-face'."
-  (ps/agenda-emoji-test--with-lines "Write the report\n"
-    (ps/agenda-emoji--apply '(("Write the report" . ("X"))))
-    (let* ((ov (car (ps/agenda-emoji-test--overlays)))
-           (s (overlay-get ov 'after-string))
-           (idx (string-match "X" s)))
-      (should (equal (get-text-property idx 'face s) ps/agenda-emoji-face)))))
+(ert-deftest ps/agenda-emoji--lookup-nil-when-disabled ()
+  "lookup returns nil when the feature is disabled."
+  (let ((ps/agenda-emoji-enabled nil)
+        (ps/agenda-emoji--cache (make-hash-table :test 'equal))
+        (ps/agenda-emoji--cache-loaded-tag ps/agenda-emoji-cache-tag))
+    (puthash "Known" '("✅") ps/agenda-emoji--cache)
+    (should (null (ps/agenda-emoji-lookup "Known")))))
 
 ;;; test-ps-agenda-emoji.el ends here
