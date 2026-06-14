@@ -189,8 +189,8 @@ Files/dirs whose name matches any regexp here are hidden from the file tree
 (=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Category icons
 come from the Material Symbols font (see above); =ps/file-tree-icon-ascent= sets
 the vertical alignment of every file-tree icon (root projects and files alike).
-If the font is unavailable, the tree falls back to the =FolderOpen=/=FolderClosed=
-/=File= SVGs in =ps/file-tree-icon-fallback-dir=. Set =ps/file-tree-use-custom-icons=
+If the font is unavailable, the tree falls back to the =folder=/=folder_open=
+/=draft= SVGs in =ps/file-tree-icon-fallback-dir=. Set =ps/file-tree-use-custom-icons=
 to =nil= to use treemacs's generic icons instead.
 #+begin_src emacs-lisp
   (setq ps/file-tree-ignored-files

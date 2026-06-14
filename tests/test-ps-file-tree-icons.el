@@ -41,12 +41,12 @@
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/file-tree-icons--fallback-svg-found ()
-  "A shipped fallback SVG renders to an image-with-spacer string."
-  (let ((icon (ps/file-tree-icons--fallback-svg "File")))
+  "A shipped fallback SVG (named after its glyph) renders to an image string."
+  (let ((icon (ps/file-tree-icons--fallback-svg ps/file-tree-icons--file)))
     (should icon)
     (should (eq (car (get-text-property 0 'display icon)) 'image))
     (should (equal (image-property (get-text-property 0 'display icon) :file)
-                    (expand-file-name "File.svg" ps/file-tree-icon-fallback-dir)))))
+                    (expand-file-name "draft.svg" ps/file-tree-icon-fallback-dir)))))
 
 (ert-deftest ps/file-tree-icons--fallback-svg-missing-is-nil ()
   "A missing fallback SVG yields nil."

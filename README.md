@@ -100,7 +100,8 @@ automatically to your font so it stays aligned across fonts and platforms.
    - **Windows:** right-click the `.ttf` and choose **Install**.
 
 If the font is not installed, the file tree still works: project folders and files
-fall back to the `FolderOpen`/`FolderClosed`/`File` SVGs in `icons/`.
+fall back to the `folder`/`folder_open`/`draft` SVGs in `icons/` (each named after
+the Material Symbols glyph it stands in for).
 
 ### Assign icons to your files
 
@@ -113,6 +114,11 @@ see `samples/realistic/workspace.org` for a complete example. Whole folders (e.g
 
 To fine-tune size/alignment, adjust `ps/material-icons-height-scale` and
 `ps/file-tree-icon-ascent` in the **Settings** section of `config.org`.
+
+Icon names are resolved to font codepoints via `icons/material-symbols.codepoints`,
+the official list Google ships with the font (Apache-2.0). Codepoints for existing
+icons are stable, so you never need to touch it; only if you want an icon Google has
+*added* since, refresh it with `scripts/update_material_symbols_codepoints.sh`.
 
 
 ## Workspace config (per-Org-folder settings)

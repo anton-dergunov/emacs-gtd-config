@@ -28,7 +28,7 @@ ATTRIBUTES = {
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # Category icons now come from the Material Symbols font; the only SVGs left are
-# the no-font fallback icons (FolderOpen/FolderClosed/File) in icons/.
+# the no-font fallback icons (folder/folder_open/draft) in icons/.
 DEFAULT_DIRS = [REPO_ROOT / "icons"]
 
 

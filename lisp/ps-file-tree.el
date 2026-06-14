@@ -108,7 +108,8 @@ font), so this one value stays valid across font sizes."
   (expand-file-name "icons" user-emacs-directory)
   "Directory holding the no-font fallback SVGs.
 Used only when `ps/material-icons-font-family' is not installed: files use
-`File.svg' and project roots use `FolderOpen.svg'/`FolderClosed.svg' from here."
+`draft.svg' and project roots use `folder_open.svg'/`folder.svg' from here.
+Each file is named after the Material Symbols glyph it stands in for."
   :type 'directory
   :group 'ps-file-tree)
 

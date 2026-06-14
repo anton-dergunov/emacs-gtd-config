@@ -119,14 +119,16 @@ icon that has no image (e.g. a TUI fallback string)."
                    (ps/file-tree-icons--icon-string
                     (ps/file-tree-icons--file-image file 'heuristic))))))))
 
-;;; Font-missing fallback (uses the three SVGs in `ps/file-tree-icon-fallback-dir')
+;;; Font-missing fallback (uses the SVGs in `ps/file-tree-icon-fallback-dir',
+;;; named after the glyphs they stand in for: folder.svg, folder_open.svg,
+;;; draft.svg — so the same constants name both the glyph and its fallback).
 
 (defun ps/file-tree-icons--apply-fallback (base-dir)
-  "Register the no-font fallback icons: folder SVGs for roots, File for files."
+  "Register the no-font fallback icons: folder SVGs for roots, draft for files."
   (ps/file-tree-icons--register-root-icons
-   (ps/file-tree-icons--fallback-svg "FolderOpen")
-   (ps/file-tree-icons--fallback-svg "FolderClosed"))
-  (when-let ((file-icon (ps/file-tree-icons--fallback-svg "File")))
+   (ps/file-tree-icons--fallback-svg ps/file-tree-icons--folder-open)
+   (ps/file-tree-icons--fallback-svg ps/file-tree-icons--folder-closed))
+  (when-let ((file-icon (ps/file-tree-icons--fallback-svg ps/file-tree-icons--file)))
     (dolist (sub '("Areas" "Current" "Vision"))
       (ps/file-tree-icons--register-dir-files
        (expand-file-name sub base-dir) file-icon))))
