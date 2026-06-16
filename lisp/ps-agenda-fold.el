@@ -185,6 +185,16 @@ region never ends at the same position as the next header's indicator."
     (setq ps/agenda-fold--collapsed
           (copy-sequence ps/agenda-fold-default-collapsed))))
 
+(defun ps/agenda-fold--after-layout-refresh (&rest _)
+  "Re-apply fold indicators after `ps/agenda-layout-refresh'.
+`ps/agenda-layout-refresh' re-renders buffer text (changing line lengths),
+which shifts section header positions.  Without this, fold indicator overlays
+would point to stale positions after a window resize or similar refresh."
+  (let ((buf (get-buffer "*Org Agenda*")))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (ps/agenda-fold--apply)))))
+
 (defun ps/agenda-fold-setup ()
   "Enable collapsible agenda sections: bind keys and register the render hook.
 Keymaps are bound through `with-eval-after-load' so this is safe to call before
@@ -199,7 +209,13 @@ org-agenda / org-super-agenda are loaded."
     (define-key org-super-agenda-header-map (kbd "<tab>") #'ps/agenda-fold-toggle)
     (define-key org-super-agenda-header-map [mouse-1] #'ps/agenda-fold-mouse-toggle))
   (add-hook 'org-agenda-finalize-hook #'ps/agenda-fold--init-buffer t)
-  (add-hook 'org-agenda-finalize-hook #'ps/agenda-fold--apply t))
+  (add-hook 'org-agenda-finalize-hook #'ps/agenda-fold--apply t)
+  ;; Re-apply fold indicators after the layout-refresh path (window resize etc.)
+  ;; which re-renders buffer text but does not run the full finalize hook.
+  (with-eval-after-load 'ps-agenda-layout
+    (advice-add 'ps/agenda-layout-refresh :after
+                #'ps/agenda-fold--after-layout-refresh
+                '((name . ps/agenda-fold)))))
 
 (provide 'ps-agenda-fold)
 ;;; ps-agenda-fold.el ends here

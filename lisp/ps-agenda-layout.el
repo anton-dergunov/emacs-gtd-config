@@ -29,6 +29,11 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+(defvar ps/schedule-view-override nil
+  "When non-nil, `ps-schedule-view' is handling the Schedule section.
+`ps/agenda-layout--apply' will skip all lines inside the Schedule block
+so the two modules don't reformat the same lines.")
+
 ;; org / org-agenda are loaded by the time the finalize hook runs.
 (declare-function org-get-at-bol "org" (property))
 (declare-function org-with-point-at "org-macs" (pom &rest body))
@@ -524,13 +529,15 @@ working anywhere on the line.  Point ends at the end of the inserted text."
               (setq header (string-trim (buffer-substring-no-properties bol eol))))
              ((ps/agenda-layout--item-p)
               (let ((in-sched (ps/agenda-layout--header-schedule-p header)))
-                (unless (and in-sched (eq style 'grid))
+                (unless (and in-sched
+                             (or (eq style 'grid) ps/schedule-view-override))
                   (ps/agenda-layout--replace-line
                    bol eol
                    (ps/agenda-layout--render-item cols in-sched)))))
              ((and (org-get-at-bol 'time-of-day)
                    (ps/agenda-layout--header-schedule-p header)
-                   (eq style 'compact))
+                   (eq style 'compact)
+                   (not ps/schedule-view-override))
               (ps/agenda-layout--hide-line bol eol))))
           (forward-line 1))))))
 

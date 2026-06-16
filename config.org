@@ -68,6 +68,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-material-icons)
   (require 'ps-agenda-icons)
   (require 'ps-agenda-layout)
+  (require 'ps-schedule-view)
   (require 'ps-agenda-fold)
   (require 'ps-schedule-icons)
   (require 'ps-blank-lines)
@@ -315,6 +316,29 @@ would overflow.
         ps/agenda-layout-priority-cols    4
         ps/agenda-layout-emoji-cols       2
         ps/agenda-layout-category-cols    3)
+#+end_src
+
+** Schedule view (ps-schedule-view.el)
+Replaces the native time-grid rendering for the Schedule section with two
+styles, switchable from the =Productivity → Schedule View= menu:
+
+- =Timeline= — shows the full time axis: a tick row for each grid interval
+  appears between timed events.  Useful when you want to see the complete time
+  structure of the day.
+- =Events= — shows only the timed events; grid-tick rows are hidden for a more
+  compact view.
+
+Both styles use a left-hand time column (=HH:MM-HH:MM ┆=) with task body
+columns identical to the other sections (just shifted right by the time prefix).
+Overlapping events are flagged with =⚠ overlap= at the right edge.
+
+=auto-refresh=: when enabled (default), the agenda is re-generated at the
+start of each calendar minute so the now-indicator and DONE-task visibility stay
+current.  Cursor and scroll position are preserved across refreshes.
+#+begin_src emacs-lisp
+  (setq ps/schedule-view-style       'timeline   ; timeline | events
+        ps/schedule-view-auto-refresh t)
+  (ps/schedule-view-setup)
 #+end_src
 
 ** Agenda fold (ps-agenda-fold.el)
@@ -1247,6 +1271,14 @@ muscle memory; remove them later if you outgrow them.
        ["Full Agenda…"        org-agenda               :keys "C-c a"]
        ["Show Availability"   ps/org-show-availability :keys "C-c p v"]
        ["Check Conflicts"     ps/show-conflicts        :keys "C-c p x"])
+      ("Schedule View"
+       ["Timeline" (ps/schedule-view-set-style 'timeline)
+        :style radio :selected (eq ps/schedule-view-style 'timeline)]
+       ["Events"   (ps/schedule-view-set-style 'events)
+        :style radio :selected (eq ps/schedule-view-style 'events)]
+       "---"
+       ["Auto-refresh (every minute)" ps/schedule-view-toggle-auto-refresh
+        :style toggle :selected ps/schedule-view-auto-refresh])
       ("Capture & Notes"
        ["Capture…"            org-capture              :keys "C-c p k"]
        ["New Journal Entry"   org-journal-new-entry    :keys "C-c p j"]
