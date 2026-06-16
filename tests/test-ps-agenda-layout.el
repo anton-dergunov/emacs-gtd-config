@@ -142,7 +142,8 @@
 
 (ert-deftest ps/agenda-layout--strip-display-props-drops-display-face-help-echo ()
   (should (equal (ps/agenda-layout--strip-display-props
-                  '(display "x" face bold help-echo "y" org-marker mark todo-state "TODO"))
+                  '(display "x" face bold help-echo "y" org-marker mark todo-state "TODO"
+                    org-not-done-regexp "TODO" org-todo-regexp "TODO\\|DONE"))
                  '(org-marker mark todo-state "TODO"))))
 
 (ert-deftest ps/agenda-layout--replace-line-renders-display-and-keeps-nav-props ()
@@ -183,17 +184,25 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/agenda-layout--state-text-active ()
+  "State badge uses display-property padding like org-modern--todo, not literal spaces."
   (let ((ps/agenda-layout-state-labels nil)
         (org-done-keywords nil))
     (let ((s (ps/agenda-layout--state-text "INPR")))
-      (should (equal s " INPR "))
+      ;; actual string content is just the label, no surrounding spaces
+      (should (equal s "INPR"))
+      ;; first char has leading space via display property
+      (should (equal (get-text-property 0 'display s) " I"))
+      ;; last char has trailing space via display property
+      (should (equal (get-text-property 3 'display s) "R "))
       (should (eq (get-text-property 0 'face s) 'org-modern-todo)))))
 
 (ert-deftest ps/agenda-layout--state-text-done ()
   (let ((ps/agenda-layout-state-labels nil)
         (org-done-keywords '("DONE")))
     (let ((s (ps/agenda-layout--state-text "DONE")))
-      (should (equal s " DONE "))
+      (should (equal s "DONE"))
+      (should (equal (get-text-property 0 'display s) " D"))
+      (should (equal (get-text-property 3 'display s) "E "))
       (should (eq (get-text-property 0 'face s) 'org-modern-done)))))
 
 (ert-deftest ps/agenda-layout--priority-text-face ()

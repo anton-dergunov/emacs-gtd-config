@@ -323,13 +323,24 @@ derives the width from the longest keyword in `org-todo-all-keywords' plus
 
 (defun ps/agenda-layout--state-text (state)
   "Return propertized badge text for TODO keyword STATE.
-Uses `org-modern-done' for done keywords and `org-modern-todo' otherwise,
-matching the badge style org-modern applies in org buffers."
+Uses `org-modern-done' for done keywords and `org-modern-todo' otherwise.
+Padding is applied via display properties on the first/last chars of the
+label (matching exactly what `org-modern--todo' does), so the badge renders
+identically to org-modern's own keyword badges."
   (let* ((label (ps/agenda-layout--state-label state))
          (done-p (and (boundp 'org-done-keywords)
                       (member state org-done-keywords)))
-         (face (if done-p 'org-modern-done 'org-modern-todo)))
-    (propertize (concat " " label " ") 'face face)))
+         (face (if done-p 'org-modern-done 'org-modern-todo))
+         (len (length label)))
+    (if (= len 0)
+        ""
+      (let ((s (copy-sequence label)))
+        (if (= len 1)
+            (put-text-property 0 1 'display (format " %c " (aref s 0)) s)
+          (put-text-property 0 1 'display (format " %c" (aref s 0)) s)
+          (put-text-property (1- len) len 'display (string (aref s (1- len)) ?\s) s))
+        (add-face-text-property 0 len face nil s)
+        s))))
 
 (defun ps/agenda-layout--priority-text (char)
   "Return propertized badge text for priority CHAR (e.g. ?A), or nil."
@@ -462,7 +473,7 @@ without also dragging along the original line's own display/face/tooltip."
   (let (result)
     (while props
       (let ((key (car props)) (val (cadr props)))
-        (unless (memq key '(display face help-echo))
+        (unless (memq key '(display face help-echo org-not-done-regexp org-todo-regexp))
           (push key result)
           (push val result)))
       (setq props (cddr props)))
