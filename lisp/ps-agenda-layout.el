@@ -1,20 +1,20 @@
-;;; ps-agenda-layout.el --- Aligned, pill-based layout for the org agenda -*- lexical-binding: t; -*-
+;;; ps-agenda-layout.el --- Aligned, badge-based layout for the org agenda -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Re-lays each org-agenda task line into aligned columns:
 ;;
-;;   [category icon] [STATE pill] [PRIORITY pill] [emoji]  Title… [tags]   [sched pill]
+;;   [category icon] [STATE badge] [PRIORITY badge] [emoji]  Title… [tags]   [sched badge]
 ;;
 ;; The work happens on `org-agenda-finalize-hook'.  For every item line we read
 ;; org-agenda's own per-line text properties (`org-marker', `todo-state',
 ;; `org-category', `tags', `time-of-day', `type', …) plus the source heading via
-;; its marker, then cover the line with a single overlay carrying a `display'
-;; string built from images and `(space :align-to COL)' separators.  Because the
-;; column positions are fixed (in character columns) and `:align-to' ignores the
-;; pixel width of preceding images, task titles line up across every section.
-;; The buffer text and its line-start markers are never touched, so navigation
-;; (RET/TAB/bulk) keeps working — the same overlay technique used by
-;; `ps-agenda-emoji'.
+;; its marker, then replace the line with a display string built from propertized
+;; text (face-based badges using `org-modern' faces) and `(space :align-to COL)'
+;; separators.  Category icons remain SVG images.  Because the column positions
+;; are fixed (in character columns) and `:align-to' ignores the pixel width of
+;; preceding images, task titles line up across every section.  The buffer text
+;; and its line-start markers are never touched, so navigation (RET/TAB/bulk)
+;; keeps working.
 ;;
 ;; The Schedule (time-grid) block is special and switchable via
 ;; `ps/agenda-layout-schedule-style':
@@ -22,13 +22,12 @@
 ;;               sections are reformatted.
 ;;   `compact' — hide the empty grid filler rows and lay timed events out with
 ;;               the same columns as the other sections (so titles align
-;;               everywhere), with the time range as the right-hand pill.
+;;               everywhere), with the time range as the right-hand badge.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'ps-agenda-pills)
 
 ;; org / org-agenda are loaded by the time the finalize hook runs.
 (declare-function org-get-at-bol "org" (property))
@@ -41,12 +40,14 @@
 (declare-function ps/material-icons-available-p "ps-material-icons" ())
 (declare-function ps/agenda-emoji-lookup "ps-agenda-emoji" (title))
 (defvar org-agenda-finalize-hook)
+(defvar org-done-keywords)
+(defvar org-todo-all-keywords)
 (defvar ps/material-icons-category-map)
 
 ;;; Customization
 
 (defgroup ps-agenda-layout nil
-  "Aligned, pill-based layout for the org agenda."
+  "Aligned, badge-based layout for the org agenda."
   :group 'ps)
 
 (defcustom ps/agenda-layout-enabled t
@@ -73,7 +74,7 @@
   "How the Schedule (time-grid) block is rendered.
 `grid' keeps Org's native time ruler and reformats only the list sections;
 `compact' hides the empty grid rows and lays timed events out like the list
-sections, with the time range as the right-hand pill."
+sections, with the time range as the right-hand badge."
   :type '(choice (const :tag "Keep native time grid" grid)
                  (const :tag "Compact event list" compact))
   :group 'ps-agenda-layout)
@@ -86,7 +87,7 @@ the Schedule block."
   :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-state-labels nil
-  "Alist remapping a TODO keyword to a shorter pill label.
+  "Alist remapping a TODO keyword to a shorter badge label.
 Each entry is (KEYWORD . LABEL), e.g. (\"WAIT\" . \"W\").  Empty means
 the keyword is shown verbatim."
   :type '(alist :key-type string :value-type string)
@@ -119,14 +120,15 @@ the keyword is shown verbatim."
   "Width reserved for the category name, in character columns."
   :type 'integer :group 'ps-agenda-layout)
 
-(defcustom ps/agenda-layout-state-cols 8
-  "Width reserved for the task-state pill, in character columns.
-Must clear the widest keyword pill (TODO keywords are all ≤4 chars) for
-titles to align."
-  :type 'integer :group 'ps-agenda-layout)
+(defcustom ps/agenda-layout-state-cols nil
+  "Width in columns reserved for the TODO-state badge, or nil to auto-compute.
+When nil, the width is derived at render time from the longest keyword in
+`org-todo-all-keywords' plus 2 padding spaces."
+  :type '(choice (const :tag "Auto" nil) integer)
+  :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-priority-cols 4
-  "Width reserved for the priority pill, in character columns."
+  "Width reserved for the priority badge, in character columns."
   :type 'integer :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-emoji-cols 2
@@ -134,51 +136,14 @@ titles to align."
   :type 'integer :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-right-margin-cols 2
-  "Empty margin kept to the right of the scheduling pill, in character columns."
+  "Empty margin kept to the right of the scheduling badge, in character columns."
   :type 'integer :group 'ps-agenda-layout)
-
-;; Colors: each value is (BACKGROUND . FOREGROUND).
-(defcustom ps/agenda-layout-state-default-colors '("#e3e0d6" . "#5c5c5c")
-  "Default (BG . FG) for a task-state pill with no specific entry."
-  :type '(cons string string) :group 'ps-agenda-layout)
-
-(defcustom ps/agenda-layout-state-colors nil
-  "Alist mapping a TODO keyword to a (BG . FG) pill color pair."
-  :type '(alist :key-type string :value-type (cons string string))
-  :group 'ps-agenda-layout)
-
-(defcustom ps/agenda-layout-priority-colors
-  '((?A . ("#f3dcc4" . "#8a5300"))
-    (?B . ("#e6e2d0" . "#5c5c5c"))
-    (?C . ("#dfe7d6" . "#4f6a3f")))
-  "Alist mapping a priority character to a (BG . FG) pill color pair."
-  :type '(alist :key-type character :value-type (cons string string))
-  :group 'ps-agenda-layout)
-
-(defcustom ps/agenda-layout-priority-default-colors '("#e6e2d0" . "#5c5c5c")
-  "Default (BG . FG) for a priority pill with no specific entry."
-  :type '(cons string string) :group 'ps-agenda-layout)
-
-(defcustom ps/agenda-layout-reldate-colors
-  '((overdue . ("#f0d6d2" . "#a33a2b"))
-    (today   . ("#d7e6f2" . "#2c5d86"))
-    (future  . ("#e3e0d6" . "#5c5c5c"))
-    (time    . ("#e3e0d6" . "#5c5c5c")))
-  "Alist mapping a scheduling tint to a (BG . FG) pill color pair.
-Tints: `overdue', `today', `future', and `time' (timed schedule events)."
-  :type '(alist :key-type symbol :value-type (cons string string))
-  :group 'ps-agenda-layout)
-
-(defface ps/agenda-layout-tags-face
-  '((t :inherit shadow :height 0.85))
-  "Face for inline tags shown after a task title."
-  :group 'ps-agenda-layout)
 
 (defcustom ps/agenda-layout-reldate-glyphs
   '(("deadline" . "⚑") ("scheduled" . "⏱"))
   "Alist mapping a scheduling TYPE substring to a leading glyph.
 Each entry is (TYPE-SUBSTRING . GLYPH); the glyph is prepended to the
-relative-date pill text for items whose `type' text property contains
+relative-date badge text for items whose `type' text property contains
 TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
   :type '(alist :key-type string :value-type string)
   :group 'ps-agenda-layout)
@@ -186,6 +151,28 @@ TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
 (defcustom ps/agenda-layout-emoji-face nil
   "Face spec applied to the in-column semantic emoji, or nil for none."
   :type '(choice (const :tag "None" nil) sexp)
+  :group 'ps-agenda-layout)
+
+;;; Faces
+
+(defface ps/agenda-layout-reldate-overdue
+  '((t :inherit (org-warning org-modern-label) :inverse-video t))
+  "Badge face for overdue relative dates."
+  :group 'ps-agenda-layout)
+
+(defface ps/agenda-layout-reldate-today
+  '((t :inherit (org-scheduled-today org-modern-label) :inverse-video t))
+  "Badge face for today's relative dates."
+  :group 'ps-agenda-layout)
+
+(defface ps/agenda-layout-reldate-future
+  '((t :inherit (shadow org-modern-label) :inverse-video t))
+  "Badge face for future relative dates."
+  :group 'ps-agenda-layout)
+
+(defface ps/agenda-layout-reldate-time
+  '((t :inherit (shadow org-modern-label) :inverse-video t))
+  "Badge face for time-range badges (compact Schedule events)."
   :group 'ps-agenda-layout)
 
 ;;; Line classification and source reads
@@ -235,7 +222,7 @@ the same substring (e.g. \"Scheduled earlier:\") are not misclassified."
 ;;; Pure formatting helpers (unit-tested)
 
 (defun ps/agenda-layout--state-label (state)
-  "Return the pill label for TODO keyword STATE."
+  "Return the badge label for TODO keyword STATE."
   (or (cdr (assoc state ps/agenda-layout-state-labels)) state))
 
 (defun ps/agenda-layout--reldate-string (days)
@@ -279,6 +266,16 @@ matching the alist key as a substring of TYPE."
 
 ;;; Column geometry
 
+(defun ps/agenda-layout--effective-state-cols ()
+  "Return the effective state-column width in character columns.
+Uses `ps/agenda-layout-state-cols' when set to a non-nil integer; otherwise
+derives the width from the longest keyword in `org-todo-all-keywords' plus
+2 padding spaces (one on each side of the label)."
+  (or ps/agenda-layout-state-cols
+      (+ 2 (if (boundp 'org-todo-all-keywords)
+               (apply #'max 0 (mapcar #'string-width org-todo-all-keywords))
+             4))))
+
 (defun ps/agenda-layout--columns ()
   "Return a plist of column start positions (in columns) from the settings."
   (let* ((left ps/agenda-layout-left-margin-cols)
@@ -290,7 +287,7 @@ matching the alist key as a substring of TYPE."
                      ('both (+ ps/agenda-layout-category-cols 1
                                ps/agenda-layout-category-name-cols))))
          (state (+ left cat-cols (if (> cat-cols 0) gap 0)))
-         (pri (+ state ps/agenda-layout-state-cols gap))
+         (pri (+ state (ps/agenda-layout--effective-state-cols) gap))
          (emoji (+ pri ps/agenda-layout-priority-cols gap))
          (title (+ emoji ps/agenda-layout-emoji-cols gap)))
     (list :cat left :state state :pri pri :emoji emoji :title title)))
@@ -324,31 +321,36 @@ matching the alist key as a substring of TYPE."
                     ps/agenda-layout-category-fallback-icon)))
       (and name (ps/material-icons-image name)))))
 
-(defun ps/agenda-layout--state-pill (state)
-  "Return a pill image for TODO keyword STATE."
-  (let ((colors (or (cdr (assoc state ps/agenda-layout-state-colors))
-                    ps/agenda-layout-state-default-colors)))
-    (ps/agenda-pills-image (ps/agenda-layout--state-label state)
-                           :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
+(defun ps/agenda-layout--state-text (state)
+  "Return propertized badge text for TODO keyword STATE.
+Uses `org-modern-done' for done keywords and `org-modern-todo' otherwise,
+matching the badge style org-modern applies in org buffers."
+  (let* ((label (ps/agenda-layout--state-label state))
+         (done-p (and (boundp 'org-done-keywords)
+                      (member state org-done-keywords)))
+         (face (if done-p 'org-modern-done 'org-modern-todo)))
+    (propertize (concat " " label " ") 'face face)))
 
-(defun ps/agenda-layout--priority-pill (char)
-  "Return a pill image for priority CHAR (e.g. ?A)."
-  (let ((colors (or (cdr (assq char ps/agenda-layout-priority-colors))
-                    ps/agenda-layout-priority-default-colors)))
-    (ps/agenda-pills-image (format "#%c" char)
-                           :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
+(defun ps/agenda-layout--priority-text (char)
+  "Return propertized badge text for priority CHAR (e.g. ?A), or nil."
+  (when char
+    (propertize (format " #%c " char) 'face 'org-modern-priority)))
 
-(defun ps/agenda-layout--reldate-pill (text tint)
-  "Return a pill image for scheduling TEXT with color TINT."
-  (let ((colors (or (cdr (assq tint ps/agenda-layout-reldate-colors))
-                    ps/agenda-layout-state-default-colors)))
-    (ps/agenda-pills-image text :bg (car colors) :fg (cdr colors) :stroke (cdr colors))))
+(defun ps/agenda-layout--reldate-text (text tint)
+  "Return propertized badge text for reldate TEXT with color TINT symbol.
+TINT is one of `overdue', `today', `future', or `time' (timed events)."
+  (propertize (concat " " text " ")
+              'face (pcase tint
+                      ('overdue 'ps/agenda-layout-reldate-overdue)
+                      ('today   'ps/agenda-layout-reldate-today)
+                      ('future  'ps/agenda-layout-reldate-future)
+                      (_        'ps/agenda-layout-reldate-time))))
 
 (defun ps/agenda-layout--tags-string (tags)
   "Return a propertized inline tag string for TAGS, or empty string."
   (if (and tags (consp tags))
       (concat " " (propertize (concat ":" (mapconcat #'identity tags ":") ":")
-                              'face 'ps/agenda-layout-tags-face))
+                              'face 'org-modern-tag))
     ""))
 
 (defun ps/agenda-layout--reldate-here ()
@@ -368,21 +370,19 @@ matching the alist key as a substring of TYPE."
                   (ps/agenda-layout--reldate-tint days))))))))
 
 (defun ps/agenda-layout--right-element (schedule-compact tod dur)
-  "Return (COLS . STRING) for the right-hand pill, or (0 . nil) when absent.
-When SCHEDULE-COMPACT and TOD is set, the pill is the time range; otherwise it
+  "Return (COLS . STRING) for the right-hand badge, or (0 . nil) when absent.
+When SCHEDULE-COMPACT and TOD is set, the badge is the time range; otherwise it
 is the relative deadline/scheduled date."
   (cond
    ((and schedule-compact tod)
-    (let ((txt (ps/agenda-layout--time-range tod dur)))
-      (cons (ps/agenda-pills-columns txt)
-            (ps/agenda-layout--image-cell
-             (ps/agenda-layout--reldate-pill txt 'time)))))
+    (let* ((txt (ps/agenda-layout--time-range tod dur))
+           (badge (ps/agenda-layout--reldate-text txt 'time)))
+      (cons (string-width badge) badge)))
    (t
     (let ((rd (ps/agenda-layout--reldate-here)))
       (if rd
-          (cons (ps/agenda-pills-columns (car rd))
-                (ps/agenda-layout--image-cell
-                 (ps/agenda-layout--reldate-pill (car rd) (cdr rd))))
+          (let ((badge (ps/agenda-layout--reldate-text (car rd) (cdr rd))))
+            (cons (string-width badge) badge))
         (cons 0 nil))))))
 
 (defun ps/agenda-layout--render-category (cols)
@@ -430,10 +430,10 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
          (parts (list (ps/agenda-layout--render-category cols))))
     (push (ps/agenda-layout--space-to (plist-get cols :state)) parts)
     (when state
-      (push (ps/agenda-layout--image-cell (ps/agenda-layout--state-pill state)) parts))
+      (push (ps/agenda-layout--state-text state) parts))
     (push (ps/agenda-layout--space-to (plist-get cols :pri)) parts)
     (when pri
-      (push (ps/agenda-layout--image-cell (ps/agenda-layout--priority-pill pri)) parts))
+      (push (ps/agenda-layout--priority-text pri) parts))
     (push (ps/agenda-layout--space-to (plist-get cols :emoji)) parts)
     (when emoji
       (push (if ps/agenda-layout-emoji-face
@@ -471,7 +471,7 @@ without also dragging along the original line's own display/face/tooltip."
 (defun ps/agenda-layout--replace-line (bol eol display)
   "Replace the item line [BOL, EOL) with DISPLAY.
 DISPLAY is a propertized string (its own `display'/`face'/`help-echo' text
-properties are kept verbatim, e.g. pill images and `(space :align-to …)'
+properties are kept verbatim, e.g. badge faces and `(space :align-to …)'
 spacers).  The original line's org-agenda navigation properties
 (`org-marker', `org-hd-marker', `type', `todo-state', …) are reapplied across
 the whole replacement, so RET/TAB/bulk commands and `org-get-at-bol' keep

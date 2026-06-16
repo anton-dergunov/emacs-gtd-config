@@ -132,9 +132,9 @@
   (should (equal (ps/agenda-layout--tags-string nil) ""))
   (let ((s (ps/agenda-layout--tags-string '("work" "home"))))
     (should (string-match-p ":work:home:" s))
-    ;; carries the tags face on the tag text
+    ;; carries org-modern-tag face on the tag text, matching org-buffer style
     (should (eq (get-text-property (1+ (string-match ":" s)) 'face s)
-                'ps/agenda-layout-tags-face))))
+                'org-modern-tag))))
 
 ;;; -------------------------------------------------------
 ;;; buffer-text replacement
@@ -163,5 +163,58 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
     (should (eq (get-text-property (point-min) 'face) 'shadow))
     ;; the original line's navigation property is preserved
     (should (eq (get-text-property (point-min) 'org-marker) 'MARK))))
+
+;;; -------------------------------------------------------
+;;; state-cols auto-compute
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-layout--effective-state-cols-integer-override ()
+  (let ((ps/agenda-layout-state-cols 10))
+    (should (= (ps/agenda-layout--effective-state-cols) 10))))
+
+(ert-deftest ps/agenda-layout--effective-state-cols-auto ()
+  "Auto-compute returns max keyword length + 2 padding spaces."
+  (let ((ps/agenda-layout-state-cols nil)
+        (org-todo-all-keywords '("TODO" "NEXT" "DONE")))
+    (should (= (ps/agenda-layout--effective-state-cols) 6))))
+
+;;; -------------------------------------------------------
+;;; badge text functions
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-layout--state-text-active ()
+  (let ((ps/agenda-layout-state-labels nil)
+        (org-done-keywords nil))
+    (let ((s (ps/agenda-layout--state-text "INPR")))
+      (should (equal s " INPR "))
+      (should (eq (get-text-property 0 'face s) 'org-modern-todo)))))
+
+(ert-deftest ps/agenda-layout--state-text-done ()
+  (let ((ps/agenda-layout-state-labels nil)
+        (org-done-keywords '("DONE")))
+    (let ((s (ps/agenda-layout--state-text "DONE")))
+      (should (equal s " DONE "))
+      (should (eq (get-text-property 0 'face s) 'org-modern-done)))))
+
+(ert-deftest ps/agenda-layout--priority-text-face ()
+  (let ((s (ps/agenda-layout--priority-text ?A)))
+    (should (equal s " #A "))
+    (should (eq (get-text-property 0 'face s) 'org-modern-priority))))
+
+(ert-deftest ps/agenda-layout--priority-text-nil ()
+  (should (null (ps/agenda-layout--priority-text nil))))
+
+(ert-deftest ps/agenda-layout--reldate-text-tints ()
+  (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "3d ago" 'overdue))
+              'ps/agenda-layout-reldate-overdue))
+  (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "today" 'today))
+              'ps/agenda-layout-reldate-today))
+  (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "in 5d" 'future))
+              'ps/agenda-layout-reldate-future))
+  (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "9:00" 'time))
+              'ps/agenda-layout-reldate-time)))
+
+(ert-deftest ps/agenda-layout--reldate-text-content ()
+  (should (equal (ps/agenda-layout--reldate-text "in 5d" 'future) " in 5d ")))
 
 ;;; test-ps-agenda-layout.el ends here
