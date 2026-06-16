@@ -168,8 +168,7 @@ Each column position from `ps/agenda-layout--columns' is offset by
 \\(prefix-width − left-margin), placing :cat at column
 `ps/schedule-view--prefix-width'."
   (let* ((base  (ps/agenda-layout--columns))
-         (delta (- ps/schedule-view--prefix-width
-                   ps/agenda-layout-left-margin-cols))
+         (delta ps/schedule-view--prefix-width)
          result)
     (cl-do ((l base (cddr l)))
         ((null l) (nreverse result))
@@ -193,36 +192,40 @@ Each column position from `ps/agenda-layout--columns' is offset by
 
 (defun ps/schedule-view--now-line-str (hhmm win-cols)
   "Full-width now-line string for HHMM with window width WIN-COLS.
-┄ fills both sides; `now · HH:MM' is centred in the right portion
-\\(column 13 onward).  Dashes and bar in `ps/schedule-view-grid' face;
+Starts with `ps/agenda-layout-left-margin-cols' spaces so it aligns with
+item and grid lines.  The `now · HH:MM' label is centred across the full
+usable width.  ┆ is fixed at column (left-margin + time-col-width + 1)
+within the string.  Dashes and bar in `ps/schedule-view-grid' face;
 label in `ps/schedule-view-now' face."
-  (let* (;; ┆ is at column (time-col-width + 1) = 12, so bar-col = 12
-         (bar-col    (1+ ps/schedule-view--time-col-width))
-         (right-start (1+ bar-col))               ; column 13
-         (right-w    (max 0 (- win-cols right-start)))
-         (label      (format " now · %s " (ps/schedule-view--fmt-tod hhmm)))
-         (label-w    (string-width label))
-         (pad-total  (max 0 (- right-w label-w)))
-         (pad-l      (/ pad-total 2))
-         (pad-r      (- pad-total pad-l))
+  (let* ((margin      (make-string ps/agenda-layout-left-margin-cols ?\s))
+         (usable      (- win-cols ps/agenda-layout-left-margin-cols))
+         ;; ┆ lands at usable-col = time-col-width + 1 = 12
+         (bar-col     (1+ ps/schedule-view--time-col-width))
+         (label       (format " now · %s " (ps/schedule-view--fmt-tod hhmm)))
+         (label-w     (string-width label))
+         (total-fill  (max 0 (- usable label-w)))
+         (left-fill   (/ total-fill 2))
+         (right-fill  (- total-fill left-fill))
+         ;; bar-col dashes left of ┆, then mid-fill dashes right of ┆ before label
          (left-dashes  (make-string bar-col ?┄))
-         (right-dash-l (make-string pad-l  ?┄))
-         (right-dash-r (make-string pad-r  ?┄)))
+         (mid-fill    (max 0 (- left-fill (1+ bar-col))))
+         (mid-dashes  (make-string mid-fill ?┄))
+         (right-dashes (make-string right-fill ?┄)))
     (concat
+     margin
      (propertize left-dashes  'face 'ps/schedule-view-grid)
      (propertize "┆"          'face 'ps/schedule-view-grid)
-     (propertize right-dash-l 'face 'ps/schedule-view-grid)
-     (if (> label-w 0)
-         (propertize label 'face 'ps/schedule-view-now)
-       "")
-     (propertize right-dash-r 'face 'ps/schedule-view-grid))))
+     (propertize mid-dashes   'face 'ps/schedule-view-grid)
+     (propertize label        'face 'ps/schedule-view-now)
+     (propertize right-dashes 'face 'ps/schedule-view-grid))))
 
 ;;; Item body rendering
 
-(defun ps/schedule-view--render-item-body (cols overlap-p)
+(defun ps/schedule-view--render-item-body (cols overlap-p &optional title-face)
   "Propertized task-body string for the schedule item at point.
 COLS is the shifted column plist.  Appends a right-aligned ⚠ overlap
-indicator when OVERLAP-P is non-nil."
+indicator when OVERLAP-P is non-nil.  TITLE-FACE, when non-nil, is applied
+to the title text (preserving the theme's scheduled-task colour)."
   (let* ((title      (ps/agenda-layout--title))
          (state      (org-get-at-bol 'todo-state))
          (tags       (org-get-at-bol 'tags))
@@ -255,25 +258,30 @@ indicator when OVERLAP-P is non-nil."
               emoji)
             parts))
     (push (ps/agenda-layout--space-to title-col) parts)
-    (push (propertize title-text 'help-echo (or title title-text)) parts)
+    (push (propertize title-text
+                      'face (or title-face 'default)
+                      'help-echo (or title title-text)) parts)
     (when (> (length tag-str) 0) (push tag-str parts))
     (when overlap-str
-      (push (ps/agenda-layout--space-to-right right-cols) parts)
+      (push (ps/agenda-layout--space-to-right
+             (+ right-cols ps/agenda-layout-right-margin-cols)) parts)
       (push overlap-str parts))
     (apply #'concat (nreverse parts))))
 
-(defun ps/schedule-view--render-item-line (cols tod dur overlap-p)
+(defun ps/schedule-view--render-item-line (cols tod dur overlap-p &optional title-face)
   "Display string for a schedule item at TOD (HHMM) with DUR minutes.
-OVERLAP-P adds the ⚠ overlap indicator."
+OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
   (concat
+   (make-string ps/agenda-layout-left-margin-cols ?\s)
    (propertize (ps/schedule-view--time-range-str tod dur)
                'face 'ps/schedule-view-grid)
    (propertize ps/schedule-view--bar 'face 'ps/schedule-view-grid)
-   (ps/schedule-view--render-item-body cols overlap-p)))
+   (ps/schedule-view--render-item-body cols overlap-p title-face)))
 
 (defun ps/schedule-view--render-grid-line (hhmm)
   "Display string for a grid-tick row (no task) at HHMM."
-  (propertize (concat (ps/schedule-view--grid-str hhmm)
+  (propertize (concat (make-string ps/agenda-layout-left-margin-cols ?\s)
+                      (ps/schedule-view--grid-str hhmm)
                       ps/schedule-view--bar)
               'face 'ps/schedule-view-grid))
 
@@ -327,22 +335,32 @@ OVERLAP-P adds the ⚠ overlap indicator."
                 (cond
                  ;; Task/event item.
                  ((ps/agenda-layout--item-p)
-                  (let* ((tod      (org-get-at-bol 'time-of-day))
-                         (dur      (org-get-at-bol 'duration))
-                         (m        (org-get-at-bol 'org-marker))
-                         (overlap-p (and m (memq m overlapping))))
+                  (let* ((tod        (org-get-at-bol 'time-of-day))
+                         (dur        (org-get-at-bol 'duration))
+                         (m          (org-get-at-bol 'org-marker))
+                         (overlap-p  (and m (memq m overlapping)))
+                         ;; Preserve the theme's scheduled-task face (e.g. the
+                         ;; blue org-scheduled colour in solarized) from the
+                         ;; original line, before ps/agenda-layout--strip-display-props
+                         ;; removes it.
+                         (title-face (get-text-property bol 'face)))
                     (ps/agenda-layout--replace-line
                      bol eol
-                     (ps/schedule-view--render-item-line cols tod dur overlap-p))))
+                     (ps/schedule-view--render-item-line
+                      cols tod dur overlap-p title-face))))
                  ;; Grid filler or now-line (no org-marker, has time-of-day).
                  ((org-get-at-bol 'time-of-day)
                   (let ((hhmm (org-get-at-bol 'time-of-day)))
                     (cond
                      ;; Current-time indicator: always shown.
+                     ;; Use (ps/schedule-view--now-hhmm) for the label so
+                     ;; it shows the real current time, not the stale grid-tick
+                     ;; value stored in the `time-of-day' text property.
                      ((ps/schedule-view--is-now-line-p bol eol)
                       (ps/agenda-layout--replace-line
                        bol eol
-                       (ps/schedule-view--now-line-str hhmm win-cols)))
+                       (ps/schedule-view--now-line-str
+                        (ps/schedule-view--now-hhmm) win-cols)))
                      ;; Grid tick: shown in timeline mode, hidden in events mode.
                      ((eq style 'timeline)
                       (ps/agenda-layout--replace-line
@@ -367,21 +385,44 @@ OVERLAP-P adds the ⚠ overlap indicator."
 
 (defun ps/schedule-view--refresh-agenda ()
   "Refresh *Org Agenda*, preserving cursor and scroll position."
-  (let ((buf (get-buffer "*Org Agenda*")))
+  (let* ((buf (get-buffer "*Org Agenda*")))
     (when (buffer-live-p buf)
-      (with-current-buffer buf
-        (let* ((win (get-buffer-window buf t))
-               (pt  (point))
-               (ws  (and win (window-start win))))
-          (ignore-errors (org-agenda-redo))
-          (goto-char (min pt (point-max)))
-          (when (and win ws (window-live-p win))
+      (let* ((win (get-buffer-window buf t))
+             (pt  (with-current-buffer buf (point)))
+             (ws  (and win (window-start win))))
+        (condition-case err
+            ;; org-agenda-redo calls recenter internally, which requires
+            ;; the selected window to display the current buffer.  When the
+            ;; timer fires while focus is elsewhere, with-current-buffer
+            ;; alone is not enough — we must also select the agenda window.
+            ;; Suppress the "Rebuilding agenda buffer…done" echo-area/Messages
+            ;; noise that fires on every auto-refresh.
+            (let ((inhibit-message t)
+                  (message-log-max nil))
+              (if win
+                  (with-selected-window win (org-agenda-redo))
+                (with-current-buffer buf  (org-agenda-redo))))
+          (error
+           (message "ps/schedule-view: redo error: %s" (error-message-string err))
+           (ignore-errors
+             (with-current-buffer buf
+               (let ((inhibit-read-only t))
+                 (run-hooks 'org-agenda-finalize-hook))))))
+        (ignore-errors
+          (with-current-buffer buf (goto-char (min pt (point-max)))))
+        (when (and win (window-live-p win))
+          (ignore-errors
             (with-selected-window win
-              (set-window-start win ws t))))))))
+              (set-window-start win (min ws (point-max)) t))))))))
 
 (defun ps/schedule-view--do-refresh ()
   "Timer callback: refresh agenda and schedule the next fire."
-  (ps/schedule-view--refresh-agenda)
+  ;; Wrap the whole refresh so any unexpected error can't stop the timer.
+  (condition-case err
+      (ps/schedule-view--refresh-agenda)
+    (error (message "ps/schedule-view: refresh error: %s"
+                    (error-message-string err))))
+  ;; Always reschedule — even after errors — so the timer never stops silently.
   (ps/schedule-view--schedule-next-refresh))
 
 (defun ps/schedule-view--schedule-next-refresh ()

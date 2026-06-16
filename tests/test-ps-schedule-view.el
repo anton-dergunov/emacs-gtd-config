@@ -143,11 +143,13 @@
 ;;; ------------------------------------------------------------------
 ;;; ps/schedule-view--cols
 
-(ert-deftest ps/schedule-view--cols/shifts-by-prefix-minus-margin ()
+(ert-deftest ps/schedule-view--cols/shifts-by-prefix-width ()
+  ;; delta = prefix-width (not prefix-width - left-margin) because left-margin
+  ;; is physically prepended to the rendered string, so :cat lands at
+  ;; left-margin + prefix-width = 15 (with stub left-margin=1, prefix-width=14).
   (let* ((cols (ps/schedule-view--cols))
-         (delta (- ps/schedule-view--prefix-width ps/agenda-layout-left-margin-cols)))
-    ;; :cat was 1, now should be 1 + delta = prefix-width
-    (should (= ps/schedule-view--prefix-width (plist-get cols :cat)))))
+         (expected (+ ps/schedule-view--prefix-width ps/agenda-layout-left-margin-cols)))
+    (should (= expected (plist-get cols :cat)))))
 
 ;;; ------------------------------------------------------------------
 ;;; ps/schedule-view--now-line-str
@@ -156,11 +158,14 @@
   (let ((s (ps/schedule-view--now-line-str 1347 80)))
     (should (string-match-p "13:47" s))))
 
-(ert-deftest ps/schedule-view--now-line-str/bar-at-col-12 ()
-  ;; Strip face properties to check raw characters.
+(ert-deftest ps/schedule-view--now-line-str/bar-at-col ()
+  ;; ┆ is at column (left-margin + time-col-width + 1).
+  ;; With stub left-margin=1 and time-col-width=11, expected col = 13.
   (let* ((s (ps/schedule-view--now-line-str 900 80))
-         (plain (substring-no-properties s)))
-    (should (= ?┆ (aref plain 12)))))
+         (plain (substring-no-properties s))
+         (expected-col (+ ps/agenda-layout-left-margin-cols
+                          (1+ ps/schedule-view--time-col-width))))
+    (should (= ?┆ (aref plain expected-col)))))
 
 (ert-deftest ps/schedule-view--now-line-str/narrow-window ()
   ;; Should not error even with a very narrow window.

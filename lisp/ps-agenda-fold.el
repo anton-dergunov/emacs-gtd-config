@@ -185,6 +185,23 @@ region never ends at the same position as the next header's indicator."
     (setq ps/agenda-fold--collapsed
           (copy-sequence ps/agenda-fold-default-collapsed))))
 
+(defun ps/agenda-fold--save-restore-around-redo (fn &rest args)
+  "Save/restore `ps/agenda-fold--collapsed' around `org-agenda-redo'.
+`org-agenda-redo' evaluates a redo-cmd that rebuilds the buffer, which
+calls `org-agenda-mode' and thus `kill-all-local-variables', resetting
+buffer-local vars including `ps/agenda-fold--collapsed'.  If the value
+was non-nil before the redo but is nil afterwards, restore it so the
+finalize hook can re-collapse the remembered sections."
+  (let ((buf (get-buffer "*Org Agenda*")))
+    (if (buffer-live-p buf)
+        (let ((saved (buffer-local-value 'ps/agenda-fold--collapsed buf)))
+          (apply fn args)
+          (when (and saved
+                     (null (buffer-local-value 'ps/agenda-fold--collapsed buf)))
+            (with-current-buffer buf
+              (setq ps/agenda-fold--collapsed saved))))
+      (apply fn args))))
+
 (defun ps/agenda-fold--after-layout-refresh (&rest _)
   "Re-apply fold indicators after `ps/agenda-layout-refresh'.
 `ps/agenda-layout-refresh' re-renders buffer text (changing line lengths),
@@ -210,6 +227,12 @@ org-agenda / org-super-agenda are loaded."
     (define-key org-super-agenda-header-map [mouse-1] #'ps/agenda-fold-mouse-toggle))
   (add-hook 'org-agenda-finalize-hook #'ps/agenda-fold--init-buffer t)
   (add-hook 'org-agenda-finalize-hook #'ps/agenda-fold--apply t)
+  ;; Preserve collapsed state across org-agenda-redo (which calls
+  ;; kill-all-local-variables via org-agenda-mode, resetting the buffer-local var).
+  (with-eval-after-load 'org-agenda
+    (advice-add 'org-agenda-redo :around
+                #'ps/agenda-fold--save-restore-around-redo
+                '((name . ps/agenda-fold))))
   ;; Re-apply fold indicators after the layout-refresh path (window resize etc.)
   ;; which re-renders buffer text but does not run the full finalize hook.
   (with-eval-after-load 'ps-agenda-layout
