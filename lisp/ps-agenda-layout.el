@@ -156,23 +156,23 @@ TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
 ;;; Faces
 
 (defface ps/agenda-layout-reldate-overdue
-  '((t :inherit (org-warning org-modern-label) :inverse-video t))
-  "Badge face for overdue relative dates."
+  '((t :inherit (org-warning org-modern-label) :weight semibold))
+  "Face for overdue relative-date text.  Colored text at label scale; no fill."
   :group 'ps-agenda-layout)
 
 (defface ps/agenda-layout-reldate-today
-  '((t :inherit (org-scheduled-today org-modern-label) :inverse-video t))
-  "Badge face for today's relative dates."
+  '((t :inherit (org-scheduled-today org-modern-label)))
+  "Face for today's relative-date text.  Colored text at label scale; no fill."
   :group 'ps-agenda-layout)
 
 (defface ps/agenda-layout-reldate-future
-  '((t :inherit (shadow org-modern-label) :inverse-video t))
-  "Badge face for future relative dates."
+  '((t :inherit (shadow org-modern-label)))
+  "Face for future relative-date text."
   :group 'ps-agenda-layout)
 
 (defface ps/agenda-layout-reldate-time
-  '((t :inherit (shadow org-modern-label) :inverse-video t))
-  "Badge face for time-range badges (compact Schedule events)."
+  '((t :inherit (shadow org-modern-label)))
+  "Face for time-range text (compact Schedule events)."
   :group 'ps-agenda-layout)
 
 ;;; Line classification and source reads

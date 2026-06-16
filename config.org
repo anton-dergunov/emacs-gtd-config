@@ -730,6 +730,13 @@ function cell can't satisfy a runtime function call.
     ;; Disable modern bullets
     (setq org-modern-star nil)
 
+    ;; Tone down priority badges: use light weight instead of semibold so the
+    ;; colored fill is less visually dominant.  Color still comes from the theme's
+    ;; `org-priority' face, so this adapts automatically across themes.
+    (custom-set-faces
+     '(org-modern-priority
+       ((t :inherit (org-priority org-modern-label) :inverse-video t :weight light))))
+
     ;; TODO keyword + struck-through DONE headline. Solarized keeps the original
     ;; monochrome badge; other themes let the theme colour the TODO keyword and
     ;; derive the dim DONE colour from the `shadow' face.
