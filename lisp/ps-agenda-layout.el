@@ -194,7 +194,7 @@ TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
     (when (and m (markerp m) (marker-buffer m))
       (let ((title (org-with-point-at m (org-get-heading t t t t))))
         (and (stringp title) (> (length (string-trim title)) 0)
-             (string-trim title))))))
+             (string-trim (substring-no-properties title)))))))
 
 (defun ps/agenda-layout--priority-char ()
   "Return the priority character (e.g. ?A) for the item line at point, or nil."
