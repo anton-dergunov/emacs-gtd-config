@@ -430,6 +430,7 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
          (right (ps/agenda-layout--right-element schedule-compact tod dur))
          (right-cols (car right))
          (right-str (cdr right))
+         (reldate-tint (cdr (ps/agenda-layout--reldate-here)))
          (tag-str (ps/agenda-layout--tags-string tags))
          (title-col (plist-get cols :title))
          (avail (max 4 (- (ps/agenda-layout--window-cols) title-col
@@ -452,7 +453,10 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
               emoji)
             parts))
     (push (ps/agenda-layout--space-to title-col) parts)
-    (push (propertize title-text 'help-echo (or title title-text)) parts)
+    (push (propertize title-text
+                      'help-echo (or title title-text)
+                      'face (and (eq reldate-tint 'overdue) 'org-warning))
+          parts)
     (when (> (length tag-str) 0) (push tag-str parts))
     (when right-str
       (push (ps/agenda-layout--space-to-right right-cols) parts)
