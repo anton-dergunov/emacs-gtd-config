@@ -292,14 +292,45 @@ it is honoured verbatim; on non-graphical frames the character-count estimate
                (apply #'max 0 (mapcar #'string-width org-todo-all-keywords))
              4)))))
 
+(defvar ps/agenda-layout--reserve-priority t
+  "When nil, the priority column is collapsed to zero width.
+Let-bound per render scope (Schedule vs. the rest) so that a scope with no
+prioritised tasks leaves only the two surrounding gaps instead of an empty pill
+slot.  See `ps/agenda-layout--scope-has-priority-p'.")
+
 (defun ps/agenda-layout--effective-priority-cols ()
   "Return the priority-column width in character-width units.
-Graphical frames use the measured width of the rendered \" A \" pill (condensed,
-≈2 cols); other frames fall back to `ps/agenda-layout-priority-cols'."
-  (if (display-graphic-p)
-      (/ (string-pixel-width (ps/agenda-layout--priority-text ?A))
-         (float (frame-char-width)))
-    ps/agenda-layout-priority-cols))
+Zero when `ps/agenda-layout--reserve-priority' is nil (no prioritised task in
+scope).  Otherwise, graphical frames use the measured width of the rendered
+\" A \" pill (condensed, ≈2 cols); other frames fall back to
+`ps/agenda-layout-priority-cols'."
+  (cond
+   ((not ps/agenda-layout--reserve-priority) 0)
+   ((display-graphic-p)
+    (/ (string-pixel-width (ps/agenda-layout--priority-text ?A))
+       (float (frame-char-width))))
+   (t ps/agenda-layout-priority-cols)))
+
+(defun ps/agenda-layout--scope-has-priority-p (schedule-scope)
+  "Non-nil if any agenda item in scope carries an explicit priority cookie.
+SCHEDULE-SCOPE non-nil restricts the scan to the Schedule section; nil restricts
+it to every other section.  Short-circuits on the first match."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((header "") found)
+      (while (and (not found) (not (eobp)))
+        (cond
+         ((ps/agenda-layout--header-p)
+          (setq header (string-trim (buffer-substring-no-properties
+                                     (line-beginning-position)
+                                     (line-end-position)))))
+         ((and (ps/agenda-layout--item-p)
+               (eq (and (ps/agenda-layout--header-schedule-p header) t)
+                   (and schedule-scope t))
+               (ps/agenda-layout--priority-char))
+          (setq found t)))
+        (forward-line 1))
+      found)))
 
 (defun ps/agenda-layout--icon-cols ()
   "Return the category-icon width in character-width units.
@@ -567,10 +598,12 @@ working anywhere on the line.  Point ends at the end of the inserted text."
 (defun ps/agenda-layout--apply ()
   "Reformat the agenda task lines in the current buffer."
   (when (and ps/agenda-layout-enabled (derived-mode-p 'org-agenda-mode))
-    (let ((inhibit-read-only t)
-          (cols (ps/agenda-layout--columns))
-          (style ps/agenda-layout-schedule-style)
-          (header ""))
+    (let* ((inhibit-read-only t)
+           (ps/agenda-layout--reserve-priority
+            (ps/agenda-layout--scope-has-priority-p nil))
+           (cols (ps/agenda-layout--columns))
+           (style ps/agenda-layout-schedule-style)
+           (header ""))
       (ps/agenda-layout--clear)
       (save-excursion
         (goto-char (point-min))

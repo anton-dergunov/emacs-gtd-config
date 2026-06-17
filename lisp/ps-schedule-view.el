@@ -41,6 +41,8 @@
 (declare-function ps/agenda-layout--space-to       "ps-agenda-layout" (col))
 (declare-function ps/agenda-layout--space-to-right "ps-agenda-layout" (cols))
 (declare-function ps/agenda-layout--space-before-right "ps-agenda-layout" (badge cols))
+(declare-function ps/agenda-layout--scope-has-priority-p "ps-agenda-layout" (schedule-scope))
+(defvar ps/agenda-layout--reserve-priority)
 (declare-function ps/agenda-layout--state-text     "ps-agenda-layout" (state))
 (declare-function ps/agenda-layout--priority-text  "ps-agenda-layout" (char))
 (declare-function ps/agenda-layout--tags-string    "ps-agenda-layout" (tags))
@@ -82,14 +84,32 @@ Cursor and scroll position are preserved across refreshes."
 
 ;;; Faces
 
+(defface ps/schedule-view-small
+  '((t :height 0.9))
+  "Base face holding the (slightly smaller) size of schedule time labels.
+The single place to tune the time-column/now font size; other faces inherit it
+so there is no per-face hardcoded number."
+  :group 'ps-schedule-view)
+
 (defface ps/schedule-view-grid
   '((t :inherit shadow))
-  "Face for the time column, grid ticks, and the ┆ bar."
+  "Face for the ┆ bar and the now-line dashes (kept at full size)."
+  :group 'ps-schedule-view)
+
+(defface ps/schedule-view-time
+  '((t :inherit (org-scheduled-today ps/schedule-view-small)))
+  "Face for the HH:MM-HH:MM range of a scheduled task (blue, slightly smaller)."
+  :group 'ps-schedule-view)
+
+(defface ps/schedule-view-tick
+  '((t :inherit (ps/schedule-view-grid ps/schedule-view-small)))
+  "Face for a grid-tick time label (grey, slightly smaller)."
   :group 'ps-schedule-view)
 
 (defface ps/schedule-view-now
-  '((t :inherit shadow :weight bold))
-  "Face for the `now · HH:MM' label on the current-time line."
+  '((t :inherit shadow :height 0.8))
+  "Face for the `now · HH:MM' label on the current-time line.
+Smaller than the time labels and not bold, so it stays unobtrusive."
   :group 'ps-schedule-view)
 
 (defface ps/schedule-view-overlap
@@ -105,58 +125,18 @@ Inherits `org-modern-label' so it renders at the same scale as reldate badges."
 
 (defconst ps/schedule-view--bar " ┆ "
   "Three-character separator between the time field and the task body.
-The ┆ lands at column (ps/schedule-view--time-col-width + 1) = 12.")
+A thin dotted vertical line (U+2506); the ┆ lands at column
+\(ps/schedule-view--time-col-width + 1) = 12.")
 
 (defconst ps/schedule-view--prefix-width
   (+ ps/schedule-view--time-col-width (string-width ps/schedule-view--bar))
-  "Total columns consumed by \"HH:MM-HH:MM ┆ \" = 14.")
+  "Total columns consumed by \"HH:MM-HH:MM │ \" = 14.")
 
-;;; Separator bar image
-
-(defvar ps/schedule-view--bar-image-cache nil
-  "Cons of (KEY . IMAGE) caching the dotted vertical-separator image.
-KEY is (CHAR-WIDTH CHAR-HEIGHT COLOR) so the image is rebuilt after a font or
-theme change.")
-
-(defun ps/schedule-view--bar-image ()
-  "Return a 1-column dotted vertical-line image for the ┆ separator, or nil.
-Returns nil in non-graphical frames so the ┆ glyph is used as-is.  Its height
-equals the text-cell height, so it neither grows the row nor alters the
-existing line spacing; its colour is the `ps/schedule-view-grid' foreground
-(the same dimmed grey the glyph uses now)."
-  (when (display-graphic-p)
-    (let* ((w     (frame-char-width))
-           (h     (frame-char-height))
-           (color (or (face-foreground 'ps/schedule-view-grid nil t) "gray"))
-           (key   (list w h color)))
-      (unless (equal (car ps/schedule-view--bar-image-cache) key)
-        (setq ps/schedule-view--bar-image-cache
-              (cons key
-                    (create-image
-                     (format
-                      (concat "<svg xmlns='http://www.w3.org/2000/svg' "
-                              "width='%d' height='%d'>"
-                              "<line x1='%s' y1='0' x2='%s' y2='%d' "
-                              "stroke='%s' stroke-width='1' "
-                              "stroke-dasharray='2,2'/></svg>")
-                      w h (/ w 2.0) (/ w 2.0) h color)
-                     'svg t :ascent 'center))))
-      (cdr ps/schedule-view--bar-image-cache))))
-
-(defun ps/schedule-view--bar-glyph ()
-  "Return the ┆ separator glyph, drawn as a dotted-line image when graphical.
-The underlying character stays ┆ (only a `display' image is added), so column
-geometry and `substring-no-properties' are unchanged."
-  (let ((img (ps/schedule-view--bar-image)))
-    (if img
-        (propertize "┆" 'face 'ps/schedule-view-grid 'display img)
-      (propertize "┆" 'face 'ps/schedule-view-grid))))
-
-(defun ps/schedule-view--bar-string ()
-  "Return the \" ┆ \" separator (3 columns) with the dotted-line bar image."
-  (concat (propertize " " 'face 'ps/schedule-view-grid)
-          (ps/schedule-view--bar-glyph)
-          (propertize " " 'face 'ps/schedule-view-grid)))
+(defun ps/schedule-view--bar-col ()
+  "Absolute column (char-width units) where the ┆ separator is drawn.
+One column past the time field, matching the now-line's ┆ so every row's bar
+lines up vertically regardless of the time label's font size."
+  (+ ps/agenda-layout-left-margin-cols (1+ ps/schedule-view--time-col-width)))
 
 ;;; Pure time utilities (unit-tested in test-ps-schedule-view.el)
 
@@ -269,11 +249,12 @@ label in `ps/schedule-view-now' face."
          (left-dashes  (make-string bar-col ?┄))
          (mid-fill    (max 0 (- left-fill (1+ bar-col))))
          (mid-dashes  (make-string mid-fill ?┄))
-         (right-dashes (make-string right-fill ?┄)))
+         ;; One dash shorter on the right so the rule does not crowd the edge.
+         (right-dashes (make-string (max 0 (1- right-fill)) ?┄)))
     (concat
      margin
      (propertize left-dashes  'face 'ps/schedule-view-grid)
-     (ps/schedule-view--bar-glyph)
+     (propertize "┆"          'face 'ps/schedule-view-grid)
      (propertize mid-dashes   'face 'ps/schedule-view-grid)
      (propertize label        'face 'ps/schedule-view-now)
      (propertize right-dashes 'face 'ps/schedule-view-grid))))
@@ -335,16 +316,55 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
   (concat
    (make-string ps/agenda-layout-left-margin-cols ?\s)
    (propertize (ps/schedule-view--time-range-str tod dur)
-               'face 'org-scheduled-today)
-   (ps/schedule-view--bar-string)
+               'face 'ps/schedule-view-time)
+   ;; Place the ┆ at an absolute column so it stays aligned with the now-line and
+   ;; the grid ticks even when the (smaller) time label renders narrower.
+   (ps/agenda-layout--space-to (ps/schedule-view--bar-col))
+   (propertize "┆" 'face 'ps/schedule-view-grid)
    (ps/schedule-view--render-item-body cols overlap-p title-face)))
 
 (defun ps/schedule-view--render-grid-line (hhmm)
   "Display string for a grid-tick row (no task) at HHMM."
   (concat (propertize (concat (make-string ps/agenda-layout-left-margin-cols ?\s)
                               (ps/schedule-view--grid-str hhmm))
-                      'face 'ps/schedule-view-grid)
-          (ps/schedule-view--bar-string)))
+                      'face 'ps/schedule-view-tick)
+          (ps/agenda-layout--space-to (ps/schedule-view--bar-col))
+          (propertize "┆" 'face 'ps/schedule-view-grid)))
+
+;;; Line-height equalisation
+
+(defun ps/schedule-view--equalize-heights ()
+  "Give every Schedule line the height of the tallest task row.
+Task rows are taller than timeline rows because the emoji glyph inflates the
+line; this measures the tallest rendered Schedule item line and applies it as a
+`line-height' text property to all Schedule lines so they share one height.  The
+measured height adapts to the font automatically (no hard-coded number) and
+re-applies on every refresh, so it survives later changes to the emoji glyph.
+No-op when the buffer is not shown in a window (e.g. batch)."
+  (let ((win (get-buffer-window (current-buffer))))
+    (when win
+      (condition-case nil
+          (let ((header "") (h 0) lines)
+            (save-excursion
+              (goto-char (point-min))
+              (while (not (eobp))
+                (let ((bol (line-beginning-position))
+                      (eol (line-end-position)))
+                  (cond
+                   ((ps/agenda-layout--header-p)
+                    (setq header (string-trim
+                                  (buffer-substring-no-properties bol eol))))
+                   ((ps/agenda-layout--header-schedule-p header)
+                    (push (cons bol eol) lines)
+                    (when (ps/agenda-layout--item-p)
+                      (setq h (max h (cdr (window-text-pixel-size win bol eol)))))))
+                  (forward-line 1))))
+            (when (> h 0)
+              (let ((inhibit-read-only t))
+                (dolist (l lines)
+                  (when (> (cdr l) (car l))
+                    (put-text-property (car l) (cdr l) 'line-height h))))))
+        (error nil)))))
 
 ;;; Main apply pass
 
@@ -352,6 +372,8 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
   "Render the Schedule section with the timeline or events layout."
   (when (derived-mode-p 'org-agenda-mode)
     (let* ((inhibit-read-only t)
+           (ps/agenda-layout--reserve-priority
+            (ps/agenda-layout--scope-has-priority-p t))
            (cols     (ps/schedule-view--cols))
            (win-cols (ps/agenda-layout--window-cols))
            (style    ps/schedule-view-style)
@@ -454,7 +476,9 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
         (when (and now-bottom-str last-vis-eol)
           (let ((ov (make-overlay last-vis-eol last-vis-eol)))
             (overlay-put ov 'ps/agenda-layout t)
-            (overlay-put ov 'after-string (concat "\n" now-bottom-str))))))))
+            (overlay-put ov 'after-string (concat "\n" now-bottom-str)))))
+      ;; Make every Schedule line the same height (task rows are taller).
+      (ps/schedule-view--equalize-heights))))
 
 ;;; Auto-refresh timer
 

@@ -215,6 +215,15 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
 (ert-deftest ps/agenda-layout--priority-text-nil ()
   (should (null (ps/agenda-layout--priority-text nil))))
 
+(ert-deftest ps/agenda-layout--effective-priority-cols-collapsed ()
+  "Priority column collapses to zero width when no task in scope is prioritised."
+  (let ((ps/agenda-layout-priority-cols 3))
+    (let ((ps/agenda-layout--reserve-priority nil))
+      (should (= 0 (ps/agenda-layout--effective-priority-cols))))
+    ;; With the flag set, the batch fallback is the configured width.
+    (let ((ps/agenda-layout--reserve-priority t))
+      (should (= 3 (ps/agenda-layout--effective-priority-cols))))))
+
 (ert-deftest ps/agenda-layout--reldate-text-tints ()
   (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "3d ago" 'overdue))
               'ps/agenda-layout-reldate-overdue))
