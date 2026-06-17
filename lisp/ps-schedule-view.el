@@ -331,6 +331,27 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
           (ps/agenda-layout--space-to (ps/schedule-view--bar-col))
           (propertize "┆" 'face 'ps/schedule-view-grid)))
 
+;;; Empty-section handling
+
+(defun ps/schedule-view--schedule-region ()
+  "Return (HEADER-BOL . END) spanning the Schedule section, or nil.
+END is the beginning of the next section header (or `point-max').  Used to hide
+the whole section on days whose only Schedule content is the empty time axis."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((header "") start)
+      (catch 'done
+        (while (not (eobp))
+          (let ((bol (line-beginning-position)))
+            (when (ps/agenda-layout--header-p)
+              (setq header (string-trim (buffer-substring-no-properties
+                                         bol (line-end-position))))
+              (cond
+               (start (throw 'done (cons start bol)))
+               ((ps/agenda-layout--header-schedule-p header) (setq start bol)))))
+          (forward-line 1))
+        (and start (cons start (point-max)))))))
+
 ;;; Line-height equalisation
 
 (defun ps/schedule-view--equalize-heights ()
@@ -400,7 +421,15 @@ No-op when the buffer is not shown in a window (e.g. batch)."
           (forward-line 1)))
       ;; Clear hiding overlays left by a previous pass.
       (ps/agenda-layout--clear)
-      (let ((overlapping (ps/schedule-view--find-overlaps items))
+      ;; No timed task this day → hide the whole (empty) Schedule section instead
+      ;; of showing a bare time axis; otherwise render it normally.
+      (if (null items)
+          (when-let ((region (ps/schedule-view--schedule-region)))
+            (let ((ov (make-overlay (car region) (cdr region))))
+              (overlay-put ov 'ps/agenda-layout t)
+              (overlay-put ov 'evaporate t)
+              (overlay-put ov 'invisible t)))
+        (let ((overlapping (ps/schedule-view--find-overlaps items))
             last-vis-eol
             now-bottom-str)
         ;; Pass 2: render lines.
@@ -477,8 +506,8 @@ No-op when the buffer is not shown in a window (e.g. batch)."
           (let ((ov (make-overlay last-vis-eol last-vis-eol)))
             (overlay-put ov 'ps/agenda-layout t)
             (overlay-put ov 'after-string (concat "\n" now-bottom-str)))))
-      ;; Make every Schedule line the same height (task rows are taller).
-      (ps/schedule-view--equalize-heights))))
+        ;; Make every Schedule line the same height (task rows are taller).
+        (ps/schedule-view--equalize-heights)))))
 
 ;;; Auto-refresh timer
 
