@@ -44,7 +44,6 @@ so the two modules don't reformat the same lines.")
 (declare-function ps/material-icons-image "ps-material-icons" (name &optional ascent height))
 (declare-function ps/material-icons-available-p "ps-material-icons" ())
 (declare-function ps/agenda-emoji-lookup "ps-agenda-emoji" (title))
-(declare-function org-agenda-format-date-aligned "org-agenda" (date))
 (declare-function org-agenda-earlier "org-agenda" (arg))
 (declare-function org-agenda-later "org-agenda" (arg))
 (declare-function org-agenda-redo "org-agenda" (&optional all))
@@ -645,37 +644,52 @@ runs CMD on click/RET, with tooltip HELP."
       (when img (put-text-property 0 1 'display img s))
       s)))
 
-(defun ps/agenda-layout--date-window-cols ()
-  "Width (columns) to centre the date header in.
-Uses the agenda window when it is displayed (the accurate case on redo /
-navigation), else falls back to the frame width."
-  (let* ((buf (or (get-buffer "*Org Agenda*") (current-buffer)))
-         (win (get-buffer-window buf t)))
-    (if win (window-text-width win) (frame-text-cols))))
-
-(defun ps/agenda-layout-format-date (date)
-  "Build the agenda date header for DATE: centred `Weekday · D Month YYYY'.
-Suitable as `org-agenda-format-date'.  org applies the day face and the
-date-navigation text properties to the returned string itself, so day
-navigation (B/F/.), the buttons and today's highlight keep working and the line
-needs no post-finalize rewrite.  The prev/next chevrons and refresh icon are
-clickable Material-Symbol buttons."
-  (let* ((dotted (ps/agenda-layout--date-dotted (org-agenda-format-date-aligned date)))
-         (win    (ps/agenda-layout--date-window-cols))
+(defun ps/agenda-layout--reformat-date-header (bol eol)
+  "Rewrite the date-header line [BOL, EOL) as a centred `Weekday · D Month YYYY'
+with clickable prev / next chevrons hugging it and a refresh button after the
+next chevron.
+Centred within the content area (respecting the left/right margins, so it lines
+up with the rest of the agenda).
+The original date text and its org day face are stashed on the line
+\(`ps/date-text' / `ps/date-face') and reused on every re-decoration, so a resize
+re-centres for the new width without re-reading the already-rewritten line (no
+flash, no lost styling).  The day face is applied to the date text only, so
+today's highlight / weekend underline cover just the date.  Inserted via
+`ps/agenda-layout--replace-line', which carries org's navigation properties
+\(`day', `org-day-cnt', `org-last-args', `org-today', …) plus the stashed props,
+so B / F / . and the buttons keep working."
+  (let* ((stored (get-text-property bol 'ps/date-text))
+         (text   (or stored (string-trim (buffer-substring-no-properties bol eol))))
+         (face   (if stored (get-text-property bol 'ps/date-face)
+                   (get-text-property bol 'face)))
+         (dotted (ps/agenda-layout--date-dotted text))
          (tw     (string-width dotted))
-         (tstart (max 4 (/ (- win tw) 2))))
-    (concat
-     (ps/agenda-layout--space-to (max 0 (- tstart 2)))
-     (ps/agenda-layout--date-button "chevron_left" "‹"
-                                    #'ps/agenda-layout-date-prev "Previous day")
-     (ps/agenda-layout--space-to tstart)
-     dotted
-     (ps/agenda-layout--space-to (+ tstart tw 1))
-     (ps/agenda-layout--date-button "chevron_right" "›"
-                                    #'ps/agenda-layout-date-next "Next day")
-     (ps/agenda-layout--space-to (+ tstart tw 4))
-     (ps/agenda-layout--date-button "refresh" "⟳"
-                                    #'ps/agenda-layout-date-refresh "Reload agenda"))))
+         (win    (ps/agenda-layout--window-cols))
+         ;; Centre within the content area [left-margin, win - right-margin], so
+         ;; the date lines up with the rest of the agenda rather than the raw
+         ;; window edges.
+         (tstart (max ps/agenda-layout-left-margin-cols
+                      (+ ps/agenda-layout-left-margin-cols
+                         (/ (- (- win ps/agenda-layout-left-margin-cols
+                                  ps/agenda-layout-right-margin-cols)
+                               tw)
+                            2))))
+         (display
+          (concat
+           (ps/agenda-layout--space-to (max 0 (- tstart 2)))
+           (ps/agenda-layout--date-button "chevron_left" "‹"
+                                          #'ps/agenda-layout-date-prev "Previous day")
+           (ps/agenda-layout--space-to tstart)
+           (propertize dotted 'face face 'help-echo text)
+           (ps/agenda-layout--space-to (+ tstart tw 1))
+           (ps/agenda-layout--date-button "chevron_right" "›"
+                                          #'ps/agenda-layout-date-next "Next day")
+           (ps/agenda-layout--space-to (+ tstart tw 4))
+           (ps/agenda-layout--date-button "refresh" "⟳"
+                                          #'ps/agenda-layout-date-refresh "Reload agenda"))))
+    (ps/agenda-layout--replace-line bol eol display)
+    (put-text-property bol (point) 'ps/date-text text)
+    (put-text-property bol (point) 'ps/date-face face)))
 
 ;;; Main pass
 
@@ -695,6 +709,8 @@ clickable Material-Symbol buttons."
           (let ((bol (line-beginning-position))
                 (eol (line-end-position)))
             (cond
+             ((org-get-at-bol 'org-agenda-date-header)
+              (ps/agenda-layout--reformat-date-header bol eol))
              ((ps/agenda-layout--header-p)
               (setq header (string-trim (buffer-substring-no-properties bol eol))))
              ((ps/agenda-layout--item-p)

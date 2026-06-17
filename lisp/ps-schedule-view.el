@@ -258,8 +258,7 @@ label in `ps/schedule-view-now' face."
          (left-dashes  (make-string bar-col ?┄))
          (mid-fill    (max 0 (- left-fill (1+ bar-col))))
          (mid-dashes  (make-string mid-fill ?┄))
-         ;; One dash shorter on the right so the rule does not crowd the edge.
-         (right-dashes (make-string (max 0 (1- right-fill)) ?┄)))
+         (right-dashes (make-string (max 0 right-fill) ?┄)))
     (concat
      margin
      (propertize left-dashes  'face 'ps/schedule-view-grid)

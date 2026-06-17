@@ -644,9 +644,7 @@ preference and stays here.
           org-agenda-compact-blocks nil
           org-agenda-start-day nil ;; i.e. today
           org-agenda-span 1
-          org-agenda-start-on-weekday nil
-          ;; Centred "Weekday · D Month YYYY" header with prev/next/refresh buttons.
-          org-agenda-format-date #'ps/agenda-layout-format-date)
+          org-agenda-start-on-weekday nil)
 
     (setq org-agenda-custom-commands
           '(("c" "Super Agenda"
