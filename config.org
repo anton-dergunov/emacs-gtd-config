@@ -313,9 +313,9 @@ would overflow.
         ps/agenda-layout-schedule-style   'grid   ; grid | compact
         ps/agenda-layout-state-labels     nil     ; e.g. '(("WAIT" . "W"))
         ps/agenda-layout-truncate         t
-        ps/agenda-layout-priority-cols    4
+        ps/agenda-layout-priority-cols    3
         ps/agenda-layout-emoji-cols       2
-        ps/agenda-layout-category-cols    3
+        ps/agenda-layout-category-cols    2
         ps/agenda-layout-right-margin-cols 1)
 #+end_src
 
@@ -761,6 +761,15 @@ function cell can't satisfy a runtime function call.
     (custom-set-faces
      '(org-modern-priority
        ((t :inherit (org-priority org-modern-label) :inverse-video t :weight light))))
+
+    ;; Show priorities as a compact " A " pill (drop the "#"), matching the
+    ;; agenda badge.  Mapping each priority char to a propertized label makes
+    ;; org-modern replace the whole [#A] cookie with it via `display', keeping
+    ;; the green `org-modern-priority' fill.
+    (setq org-modern-priority
+          (cl-loop for c from org-highest-priority to org-lowest-priority
+                   collect (cons c (propertize (format " %c " c)
+                                               'face 'org-modern-priority))))
 
     ;; TODO keyword + struck-through DONE headline. Solarized keeps the original
     ;; monochrome badge; other themes let the theme colour the TODO keyword and

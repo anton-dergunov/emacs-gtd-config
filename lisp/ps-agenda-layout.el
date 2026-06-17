@@ -272,28 +272,64 @@ matching the alist key as a substring of TYPE."
 ;;; Column geometry
 
 (defun ps/agenda-layout--effective-state-cols ()
-  "Return the effective state-column width in character columns.
-Uses `ps/agenda-layout-state-cols' when set to a non-nil integer; otherwise
-derives the width from the longest keyword in `org-todo-all-keywords' plus
-2 padding spaces (one on each side of the label)."
-  (or ps/agenda-layout-state-cols
-      (+ 2 (if (boundp 'org-todo-all-keywords)
+  "Return the effective state-column width in character-width units.
+On graphical frames this is the *measured* rendered width of the widest TODO
+badge (the badges render condensed via `org-modern-label', so their pixel width
+is narrower than their character count); the result may be fractional so the
+residual gap to the next field is exactly one space.  When `state-cols' is set
+it is honoured verbatim; on non-graphical frames the character-count estimate
+\(longest keyword + 2 padding) is used so batch tests stay deterministic."
+  (cond
+   (ps/agenda-layout-state-cols ps/agenda-layout-state-cols)
+   ((display-graphic-p)
+    (let ((kws (if (boundp 'org-todo-all-keywords) org-todo-all-keywords '("TODO"))))
+      (/ (apply #'max 1 (mapcar (lambda (kw)
+                                  (string-pixel-width
+                                   (ps/agenda-layout--state-text kw)))
+                                kws))
+         (float (frame-char-width)))))
+   (t (+ 2 (if (boundp 'org-todo-all-keywords)
                (apply #'max 0 (mapcar #'string-width org-todo-all-keywords))
-             4))))
+             4)))))
+
+(defun ps/agenda-layout--effective-priority-cols ()
+  "Return the priority-column width in character-width units.
+Graphical frames use the measured width of the rendered \" A \" pill (condensed,
+≈2 cols); other frames fall back to `ps/agenda-layout-priority-cols'."
+  (if (display-graphic-p)
+      (/ (string-pixel-width (ps/agenda-layout--priority-text ?A))
+         (float (frame-char-width)))
+    ps/agenda-layout-priority-cols))
+
+(defun ps/agenda-layout--icon-cols ()
+  "Return the category-icon width in character-width units.
+Graphical frames derive it from the icon's natural pixel size (the Material
+SVG's 24×20 aspect at the configured pixel height); other frames fall back to
+`ps/agenda-layout-category-cols'."
+  (if (and (display-graphic-p) (fboundp 'ps/material-icons--pixel-height))
+      (/ (* (ps/material-icons--pixel-height) (/ 24.0 20.0))
+         (float (frame-char-width)))
+    ps/agenda-layout-category-cols))
+
+(defun ps/agenda-layout--effective-category-cols ()
+  "Return the category-column width in character-width units."
+  (pcase ps/agenda-layout-category-display
+    ('none 0)
+    ('name ps/agenda-layout-category-name-cols)
+    ('both (+ (ps/agenda-layout--icon-cols) 1 ps/agenda-layout-category-name-cols))
+    (_     (ps/agenda-layout--icon-cols))))
 
 (defun ps/agenda-layout--columns ()
-  "Return a plist of column start positions (in columns) from the settings."
+  "Return a plist of column start positions (in character-width units).
+Widths are the fields' measured rendered sizes on graphical frames, so every
+inter-field gap is exactly `ps/agenda-layout-gap-cols' (one space) while columns
+still line up across rows.  Positions may be fractional."
   (let* ((left ps/agenda-layout-left-margin-cols)
          (gap ps/agenda-layout-gap-cols)
-         (cat-cols (pcase ps/agenda-layout-category-display
-                     ('none 0)
-                     ('icon ps/agenda-layout-category-cols)
-                     ('name ps/agenda-layout-category-name-cols)
-                     ('both (+ ps/agenda-layout-category-cols 1
-                               ps/agenda-layout-category-name-cols))))
+         (cat-cols (ps/agenda-layout--effective-category-cols))
          (state (+ left cat-cols (if (> cat-cols 0) gap 0)))
          (pri (+ state (ps/agenda-layout--effective-state-cols) gap))
-         (emoji (+ pri ps/agenda-layout-priority-cols gap))
+         (emoji (+ pri (ps/agenda-layout--effective-priority-cols) gap))
          (title (+ emoji ps/agenda-layout-emoji-cols gap)))
     (list :cat left :state state :pri pri :emoji emoji :title title)))
 
@@ -355,9 +391,17 @@ identically to org-modern's own keyword badges."
         s))))
 
 (defun ps/agenda-layout--priority-text (char)
-  "Return propertized badge text for priority CHAR (e.g. ?A), or nil."
+  "Return propertized badge text for priority CHAR (e.g. ?A), or nil.
+The badge's real text is just the letter; the surrounding pill padding is
+applied via a `display' property on that one char (mirroring
+`ps/agenda-layout--state-text'), so it renders as \" A \" with the green
+`org-modern-priority' fill yet navigates as a single character — matching how
+org-modern prettifies priorities in org files."
   (when char
-    (propertize (format " #%c " char) 'face 'org-modern-priority)))
+    (let ((s (string char)))
+      (put-text-property 0 1 'display (format " %c " char) s)
+      (put-text-property 0 1 'face 'org-modern-priority s)
+      s)))
 
 (defun ps/agenda-layout--reldate-text (text tint)
   "Return propertized badge text for reldate TEXT with color TINT symbol.
@@ -445,10 +489,10 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
          (reldate-tint (cdr (ps/agenda-layout--reldate-here)))
          (tag-str (ps/agenda-layout--tags-string tags))
          (title-col (plist-get cols :title))
-         (avail (max 4 (- (ps/agenda-layout--window-cols) title-col
-                          ps/agenda-layout-right-margin-cols
-                          (if right-str right-cols 0)
-                          (string-width tag-str))))
+         (avail (max 4 (floor (- (ps/agenda-layout--window-cols) title-col
+                                 ps/agenda-layout-right-margin-cols
+                                 (if right-str right-cols 0)
+                                 (string-width tag-str)))))
          (title-text (if ps/agenda-layout-truncate
                          (ps/agenda-layout--truncate (or title "") avail)
                        (or title "")))

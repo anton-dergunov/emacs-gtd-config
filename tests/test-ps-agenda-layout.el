@@ -206,8 +206,10 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
       (should (eq (get-text-property 0 'face s) 'org-modern-done)))))
 
 (ert-deftest ps/agenda-layout--priority-text-face ()
+  "Priority badge is the bare letter, padded to \" A \" via a display property."
   (let ((s (ps/agenda-layout--priority-text ?A)))
-    (should (equal s " #A "))
+    (should (equal s "A"))
+    (should (equal (get-text-property 0 'display s) " A "))
     (should (eq (get-text-property 0 'face s) 'org-modern-priority))))
 
 (ert-deftest ps/agenda-layout--priority-text-nil ()

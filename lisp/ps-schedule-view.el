@@ -111,6 +111,53 @@ The ┆ lands at column (ps/schedule-view--time-col-width + 1) = 12.")
   (+ ps/schedule-view--time-col-width (string-width ps/schedule-view--bar))
   "Total columns consumed by \"HH:MM-HH:MM ┆ \" = 14.")
 
+;;; Separator bar image
+
+(defvar ps/schedule-view--bar-image-cache nil
+  "Cons of (KEY . IMAGE) caching the dotted vertical-separator image.
+KEY is (CHAR-WIDTH CHAR-HEIGHT COLOR) so the image is rebuilt after a font or
+theme change.")
+
+(defun ps/schedule-view--bar-image ()
+  "Return a 1-column dotted vertical-line image for the ┆ separator, or nil.
+Returns nil in non-graphical frames so the ┆ glyph is used as-is.  Its height
+equals the text-cell height, so it neither grows the row nor alters the
+existing line spacing; its colour is the `ps/schedule-view-grid' foreground
+(the same dimmed grey the glyph uses now)."
+  (when (display-graphic-p)
+    (let* ((w     (frame-char-width))
+           (h     (frame-char-height))
+           (color (or (face-foreground 'ps/schedule-view-grid nil t) "gray"))
+           (key   (list w h color)))
+      (unless (equal (car ps/schedule-view--bar-image-cache) key)
+        (setq ps/schedule-view--bar-image-cache
+              (cons key
+                    (create-image
+                     (format
+                      (concat "<svg xmlns='http://www.w3.org/2000/svg' "
+                              "width='%d' height='%d'>"
+                              "<line x1='%s' y1='0' x2='%s' y2='%d' "
+                              "stroke='%s' stroke-width='1' "
+                              "stroke-dasharray='2,2'/></svg>")
+                      w h (/ w 2.0) (/ w 2.0) h color)
+                     'svg t :ascent 'center))))
+      (cdr ps/schedule-view--bar-image-cache))))
+
+(defun ps/schedule-view--bar-glyph ()
+  "Return the ┆ separator glyph, drawn as a dotted-line image when graphical.
+The underlying character stays ┆ (only a `display' image is added), so column
+geometry and `substring-no-properties' are unchanged."
+  (let ((img (ps/schedule-view--bar-image)))
+    (if img
+        (propertize "┆" 'face 'ps/schedule-view-grid 'display img)
+      (propertize "┆" 'face 'ps/schedule-view-grid))))
+
+(defun ps/schedule-view--bar-string ()
+  "Return the \" ┆ \" separator (3 columns) with the dotted-line bar image."
+  (concat (propertize " " 'face 'ps/schedule-view-grid)
+          (ps/schedule-view--bar-glyph)
+          (propertize " " 'face 'ps/schedule-view-grid)))
+
 ;;; Pure time utilities (unit-tested in test-ps-schedule-view.el)
 
 (defun ps/schedule-view--to-mins (hhmm)
@@ -226,7 +273,7 @@ label in `ps/schedule-view-now' face."
     (concat
      margin
      (propertize left-dashes  'face 'ps/schedule-view-grid)
-     (propertize "┆"          'face 'ps/schedule-view-grid)
+     (ps/schedule-view--bar-glyph)
      (propertize mid-dashes   'face 'ps/schedule-view-grid)
      (propertize label        'face 'ps/schedule-view-now)
      (propertize right-dashes 'face 'ps/schedule-view-grid))))
@@ -252,11 +299,11 @@ to the title text (preserving the theme's scheduled-task colour)."
                                        'face 'ps/schedule-view-overlap)))
          (right-cols (if overlap-str (string-width overlap-str) 0))
          (title-col  (plist-get cols :title))
-         (avail (max 4 (- (ps/agenda-layout--window-cols)
-                          title-col
-                          ps/agenda-layout-right-margin-cols
-                          (if overlap-str right-cols 0)
-                          (string-width tag-str))))
+         (avail (max 4 (floor (- (ps/agenda-layout--window-cols)
+                                 title-col
+                                 ps/agenda-layout-right-margin-cols
+                                 (if overlap-str right-cols 0)
+                                 (string-width tag-str)))))
          (title-text (if ps/agenda-layout-truncate
                          (ps/agenda-layout--truncate (or title "") avail)
                        (or title "")))
@@ -289,15 +336,15 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
    (make-string ps/agenda-layout-left-margin-cols ?\s)
    (propertize (ps/schedule-view--time-range-str tod dur)
                'face 'org-scheduled-today)
-   (propertize ps/schedule-view--bar 'face 'ps/schedule-view-grid)
+   (ps/schedule-view--bar-string)
    (ps/schedule-view--render-item-body cols overlap-p title-face)))
 
 (defun ps/schedule-view--render-grid-line (hhmm)
   "Display string for a grid-tick row (no task) at HHMM."
-  (propertize (concat (make-string ps/agenda-layout-left-margin-cols ?\s)
-                      (ps/schedule-view--grid-str hhmm)
-                      ps/schedule-view--bar)
-              'face 'ps/schedule-view-grid))
+  (concat (propertize (concat (make-string ps/agenda-layout-left-margin-cols ?\s)
+                              (ps/schedule-view--grid-str hhmm))
+                      'face 'ps/schedule-view-grid)
+          (ps/schedule-view--bar-string)))
 
 ;;; Main apply pass
 
