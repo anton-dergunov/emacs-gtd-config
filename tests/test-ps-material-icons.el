@@ -1,6 +1,7 @@
 ;;; test-ps-material-icons.el --- ERT tests for ps-material-icons -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-material-icons)
 
@@ -69,17 +70,21 @@
 
 (ert-deftest ps/material-icons--image-honors-ascent-and-height ()
   "An explicit ascent and height are passed to the image."
-  (ps/material-icons-test--fresh-table
-   (let ((img (ps/material-icons-image "folder" 90 17)))
-     (should (eq (car img) 'image))
-     (should (equal (image-property img :ascent) 90))
-     (should (equal (image-property img :height) 17)))
-   ;; default ascent is center
-   (should (equal (image-property (ps/material-icons-image "folder" nil 17)
-                                  :ascent)
-                  'center))
-   ;; unknown name -> nil
-   (should (null (ps/material-icons-image "no_such_icon_xyz")))))
+  ;; Stub create-image to avoid SVG dependency in batch Emacs.
+  (cl-letf (((symbol-function 'create-image)
+             (lambda (data &optional type data-p &rest props)
+               (apply #'list 'image :type type (if data-p :data :file) data props))))
+    (ps/material-icons-test--fresh-table
+     (let ((img (ps/material-icons-image "folder" 90 17)))
+       (should (eq (car img) 'image))
+       (should (equal (image-property img :ascent) 90))
+       (should (equal (image-property img :height) 17)))
+     ;; default ascent is center
+     (should (equal (image-property (ps/material-icons-image "folder" nil 17)
+                                    :ascent)
+                    'center))
+     ;; unknown name -> nil
+     (should (null (ps/material-icons-image "no_such_icon_xyz"))))))
 
 ;;; -------------------------------------------------------
 ;;; pixel height
