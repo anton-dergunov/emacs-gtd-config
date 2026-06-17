@@ -92,8 +92,9 @@ Cursor and scroll position are preserved across refreshes."
   :group 'ps-schedule-view)
 
 (defface ps/schedule-view-overlap
-  '((t :inherit org-warning))
-  "Face for the ⚠ overlap indicator on colliding tasks."
+  '((t :inherit (org-warning org-modern-label) :weight semibold))
+  "Face for the ⚠ overlap indicator on colliding tasks.
+Inherits `org-modern-label' so it renders at the same scale as reldate badges."
   :group 'ps-schedule-view)
 
 ;;; Layout constants
@@ -146,18 +147,19 @@ Returns \"HH:MM\" padded to `ps/schedule-view--time-col-width' with spaces."
 ;;; Overlap detection (unit-tested)
 
 (defun ps/schedule-view--find-overlaps (items)
-  "Return markers of ITEMS that overlap with at least one other item.
-ITEMS is a list of (start-mins end-mins marker) triples.
-Two events overlap when start1 < end2 AND start2 < end1."
+  "Return markers of items that start during another earlier item's duration.
+Only the later-starting task in an overlapping pair is flagged; the task
+already running when the conflict begins does not get an indicator.
+ITEMS is a list of (start-mins end-mins marker) triples."
   (let (result)
-    (dolist (i items)
-      (let ((s1 (nth 0 i)) (e1 (nth 1 i)) (m1 (nth 2 i)))
-        (when (cl-some (lambda (j)
-                         (and (not (eq m1 (nth 2 j)))
-                              (< s1 (nth 1 j))
-                              (< (nth 0 j) e1)))
+    (dolist (j items)
+      (let ((s-j (nth 0 j)) (m-j (nth 2 j)))
+        (when (cl-some (lambda (i)
+                         (and (not (eq m-j (nth 2 i)))
+                              (< (nth 0 i) s-j)    ; i starts strictly before j
+                              (> (nth 1 i) s-j)))   ; i still running at j's start
                        items)
-          (push m1 result))))
+          (push m-j result))))
     result))
 
 ;;; Column geometry
@@ -181,6 +183,15 @@ Each column position from `ps/agenda-layout--columns' is offset by
   "Return the current time as an HHMM integer."
   (let ((d (decode-time (current-time))))
     (+ (* (nth 2 d) 100) (nth 1 d))))
+
+(defun ps/schedule-view--is-past-midnight-p (now-hhmm)
+  "Non-nil when NOW-HHMM falls in the `org-extend-today-until' window.
+When active, today's agenda shows yesterday's date and the current time
+is before the first grid entry, so the now-line belongs at the bottom."
+  (and (boundp 'org-extend-today-until)
+       (integerp org-extend-today-until)
+       (> org-extend-today-until 0)
+       (< now-hhmm (* org-extend-today-until 100))))
 
 (defun ps/schedule-view--is-now-line-p (bol eol)
   "Non-nil when the agenda line [BOL, EOL) is org's current-time marker."
@@ -232,8 +243,11 @@ to the title text (preserving the theme's scheduled-task colour)."
          (pri        (ps/agenda-layout--priority-char))
          (emoji      (ps/agenda-layout--emoji title))
          (tag-str    (ps/agenda-layout--tags-string tags))
+         ;; U+FE0E (text variation selector) keeps ⚠ a narrow monochrome glyph
+         ;; instead of a wide color emoji, so its width matches the reldate
+         ;; glyphs and the badge right edge lines up with the reldate badges.
          (overlap-str (and overlap-p
-                           (propertize " ⚠ overlap"
+                           (propertize " ⚠︎ overlap "
                                        'face 'ps/schedule-view-overlap)))
          (right-cols (if overlap-str (string-width overlap-str) 0))
          (title-col  (plist-get cols :title))
@@ -263,8 +277,7 @@ to the title text (preserving the theme's scheduled-task colour)."
                       'help-echo (or title title-text)) parts)
     (when (> (length tag-str) 0) (push tag-str parts))
     (when overlap-str
-      (push (ps/agenda-layout--space-to-right
-             (+ right-cols ps/agenda-layout-right-margin-cols)) parts)
+      (push (ps/agenda-layout--space-to-right right-cols) parts)
       (push overlap-str parts))
     (apply #'concat (nreverse parts))))
 
@@ -274,7 +287,7 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
   (concat
    (make-string ps/agenda-layout-left-margin-cols ?\s)
    (propertize (ps/schedule-view--time-range-str tod dur)
-               'face 'ps/schedule-view-grid)
+               'face 'org-scheduled-today)
    (propertize ps/schedule-view--bar 'face 'ps/schedule-view-grid)
    (ps/schedule-view--render-item-body cols overlap-p title-face)))
 
@@ -317,7 +330,9 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
           (forward-line 1)))
       ;; Clear hiding overlays left by a previous pass.
       (ps/agenda-layout--clear)
-      (let ((overlapping (ps/schedule-view--find-overlaps items)))
+      (let ((overlapping (ps/schedule-view--find-overlaps items))
+            last-vis-eol
+            now-bottom-str)
         ;; Pass 2: render lines.
         (setq header "")
         (save-excursion
@@ -339,15 +354,20 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
                          (dur        (org-get-at-bol 'duration))
                          (m          (org-get-at-bol 'org-marker))
                          (overlap-p  (and m (memq m overlapping)))
-                         ;; Preserve the theme's scheduled-task face (e.g. the
-                         ;; blue org-scheduled colour in solarized) from the
-                         ;; original line, before ps/agenda-layout--strip-display-props
-                         ;; removes it.
-                         (title-face (get-text-property bol 'face)))
+                         ;; Use the standard org scheduled-task face.  All
+                         ;; time-grid items in the Schedule section are today's
+                         ;; events, so org-scheduled-today is always correct.
+                         ;; Past-scheduled items get org-warning (red/orange),
+                         ;; matching how the layout module treats overdue items.
+                         (title-face
+                          (if (string= (org-get-at-bol 'type) "past-scheduled")
+                              'org-warning
+                            'org-scheduled-today)))
                     (ps/agenda-layout--replace-line
                      bol eol
                      (ps/schedule-view--render-item-line
-                      cols tod dur overlap-p title-face))))
+                      cols tod dur overlap-p title-face))
+                    (setq last-vis-eol (point))))
                  ;; Grid filler or now-line (no org-marker, has time-of-day).
                  ((org-get-at-bol 'time-of-day)
                   (let ((hhmm (org-get-at-bol 'time-of-day)))
@@ -357,18 +377,36 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
                      ;; it shows the real current time, not the stale grid-tick
                      ;; value stored in the `time-of-day' text property.
                      ((ps/schedule-view--is-now-line-p bol eol)
-                      (ps/agenda-layout--replace-line
-                       bol eol
-                       (ps/schedule-view--now-line-str
-                        (ps/schedule-view--now-hhmm) win-cols)))
+                      (let ((now-hhmm (ps/schedule-view--now-hhmm)))
+                        (if (ps/schedule-view--is-past-midnight-p now-hhmm)
+                            ;; Past midnight (org-extend-today-until active):
+                            ;; hide in-place, then render at bottom after loop.
+                            (progn
+                              (ps/agenda-layout--hide-line bol eol)
+                              (setq now-bottom-str
+                                    (ps/schedule-view--now-line-str now-hhmm win-cols)))
+                          (progn
+                            (ps/agenda-layout--replace-line
+                             bol eol
+                             (ps/schedule-view--now-line-str now-hhmm win-cols))
+                            (setq last-vis-eol (point))))))
                      ;; Grid tick: shown in timeline mode, hidden in events mode.
                      ((eq style 'timeline)
                       (ps/agenda-layout--replace-line
                        bol eol
-                       (ps/schedule-view--render-grid-line hhmm)))
+                       (ps/schedule-view--render-grid-line hhmm))
+                      (setq last-vis-eol (point)))
                      (t
                       (ps/agenda-layout--hide-line bol eol))))))))
-            (forward-line 1))))))))
+            (forward-line 1))))
+        ;; When past midnight the original now-line was hidden at the top of the
+        ;; grid; re-attach it as a normal line right after the last visible
+        ;; schedule line via an `after-string' overlay (stays inside the section,
+        ;; renders with its own grid/now faces).  Tagged so --clear removes it.
+        (when (and now-bottom-str last-vis-eol)
+          (let ((ov (make-overlay last-vis-eol last-vis-eol)))
+            (overlay-put ov 'ps/agenda-layout t)
+            (overlay-put ov 'after-string (concat "\n" now-bottom-str))))))))
 
 ;;; Auto-refresh timer
 

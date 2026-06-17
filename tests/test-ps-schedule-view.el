@@ -110,22 +110,37 @@
     (should (null (ps/schedule-view--find-overlaps items)))))
 
 (ert-deftest ps/schedule-view--find-overlaps/overlap ()
-  ;; 08:00-09:30 and 09:00-10:00 — overlap from 09:00-09:30
+  ;; 08:00-09:30 (m1) and 09:00-10:00 (m2).
+  ;; m2 starts during m1 → m2 flagged; m1 is already running → not flagged.
   (let* ((m1 (cons 'marker 1))
          (m2 (cons 'marker 2))
          (items (list (list 480 570 m1) (list 540 600 m2)))
          (result (ps/schedule-view--find-overlaps items)))
-    (should (memq m1 result))
-    (should (memq m2 result))))
+    (should-not (memq m1 result))
+    (should     (memq m2 result))))
 
 (ert-deftest ps/schedule-view--find-overlaps/contained ()
-  ;; 08:00-10:00 contains 08:30-09:00
+  ;; 08:00-10:00 (m1) contains 08:30-09:00 (m2).
+  ;; m2 starts during m1 → m2 flagged; m1 not flagged.
   (let* ((m1 (cons 'marker 1))
          (m2 (cons 'marker 2))
          (items (list (list 480 600 m1) (list 510 540 m2)))
          (result (ps/schedule-view--find-overlaps items)))
-    (should (memq m1 result))
-    (should (memq m2 result))))
+    (should-not (memq m1 result))
+    (should     (memq m2 result))))
+
+(ert-deftest ps/schedule-view--find-overlaps/three-way ()
+  ;; 10:00-12:00 (mA), 10:15-10:30 (mB), 11:00-11:15 (mC).
+  ;; B and C start during A; A is not flagged.
+  ;; B and C do not overlap each other (B ends before C starts).
+  (let* ((mA (cons 'marker 'A))
+         (mB (cons 'marker 'B))
+         (mC (cons 'marker 'C))
+         (items (list (list 600 720 mA) (list 615 630 mB) (list 660 675 mC)))
+         (result (ps/schedule-view--find-overlaps items)))
+    (should-not (memq mA result))
+    (should     (memq mB result))
+    (should     (memq mC result))))
 
 (ert-deftest ps/schedule-view--find-overlaps/no-self-overlap ()
   ;; A single item cannot overlap with itself.
@@ -139,6 +154,27 @@
          ;; 08:00-08:30 and 09:00-09:30 — gap between
          (items (list (list 480 510 m1) (list 540 570 m2))))
     (should (null (ps/schedule-view--find-overlaps items)))))
+
+;;; ------------------------------------------------------------------
+;;; ps/schedule-view--is-past-midnight-p
+
+(ert-deftest ps/schedule-view--is-past-midnight-p/nil-when-not-set ()
+  (let ((org-extend-today-until nil))
+    (should-not (ps/schedule-view--is-past-midnight-p 6))))
+
+(ert-deftest ps/schedule-view--is-past-midnight-p/nil-when-zero ()
+  (let ((org-extend-today-until 0))
+    (should-not (ps/schedule-view--is-past-midnight-p 6))))
+
+(ert-deftest ps/schedule-view--is-past-midnight-p/nil-past-window ()
+  ;; 05:00 (HHMM=500) is not in the window when today-until=4 (threshold=400).
+  (let ((org-extend-today-until 4))
+    (should-not (ps/schedule-view--is-past-midnight-p 500))))
+
+(ert-deftest ps/schedule-view--is-past-midnight-p/t-in-window ()
+  ;; 00:06 (HHMM=6) is inside the window (6 < 400).
+  (let ((org-extend-today-until 4))
+    (should (ps/schedule-view--is-past-midnight-p 6))))
 
 ;;; ------------------------------------------------------------------
 ;;; ps/schedule-view--cols
