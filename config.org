@@ -653,23 +653,34 @@ preference and stays here.
     (setq org-agenda-custom-commands
           '(("c" "Super Agenda"
              ((agenda "" ((org-agenda-overriding-header "")
-                          (org-super-agenda-groups
-                           '((:name "Due today:"
-                                    :deadline today
+                          ;; NOTE: org-super-agenda matches groups in LIST
+                         ;; ORDER (first matching group claims the item); the
+                         ;; :order keyword only sorts where sections are
+                         ;; displayed.  ":scheduled today" matches both timed
+                         ;; and untimed scheduled-today tasks, while ":time-grid
+                         ;; t" matches only items that have a time-of-day.  So
+                         ;; "Schedule:" must come BEFORE "Scheduled today:" in
+                         ;; the list, so timed tasks stay in the grid and only
+                         ;; untimed ones fall through to "Scheduled today:".
+                         (org-super-agenda-groups
+                           '((:name "Schedule:"
+                                    :time-grid t
+                                    :order 1)
+                             (:name "Scheduled today:"
+                                    :scheduled today
                                     :order 2)
+                             (:name "Due today:"
+                                    :deadline today
+                                    :order 3)
                              (:name "Overdue:"
                                     :deadline past
-                                    :order 3)
+                                    :order 4)
                              (:name "Scheduled earlier:"
                                     :scheduled past
-                                    :order 4)
+                                    :order 5)
                              (:name "Due soon:"
                                     :deadline future
-                                    :order 5)
-                             (:name "Schedule:"
-                                    :time-grid t
-                                    :date today
-                                    :order 1)))))
+                                    :order 6)))))
               (tags-todo "+PRIORITY=\"A\""
                          ((org-agenda-overriding-header " High-priority:")))
               (todo "INPR"
@@ -852,7 +863,16 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
 #+begin_src emacs-lisp
   ;; Auto-save all Org buffers
   ;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
-  (add-hook 'auto-save-hook 'org-save-all-org-buffers)
+  ;; Save quietly: `org-save-all-org-buffers' echoes "Saving all Org
+  ;; buffers... done" on every auto-save, which both flashes in the echo
+  ;; area and piles up in *Messages* when Emacs runs for days.  Binding
+  ;; `inhibit-message' suppresses the echo-area flash and `message-log-max'
+  ;; nil keeps it out of *Messages*; the save itself is unchanged.
+  (defun ps/org-save-all-org-buffers-quietly ()
+    "Save all Org buffers without echoing/logging the save message."
+    (let ((inhibit-message t) (message-log-max nil))
+      (org-save-all-org-buffers)))
+  (add-hook 'auto-save-hook #'ps/org-save-all-org-buffers-quietly)
 
   ;; Automatically revert buffers when files change on disk.
   ;; Rely on file-system notifications instead of the default ~5s polling

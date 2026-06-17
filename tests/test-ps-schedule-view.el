@@ -83,6 +83,20 @@
   (should (= 11 (length (ps/schedule-view--time-range-str 800 15))))
   (should (= 11 (length (ps/schedule-view--time-range-str 1730 90)))))
 
+(ert-deftest ps/schedule-view--time-range-str/nil-tod-is-blank ()
+  ;; Regression: an untimed item (time-of-day = nil) must yield a blank,
+  ;; correctly-padded time column instead of signalling
+  ;; "Wrong type argument: number-or-marker-p, nil".
+  (let ((s (ps/schedule-view--time-range-str nil nil)))
+    (should (equal 11 (length s)))
+    (should (string-blank-p s))))
+
+(ert-deftest ps/schedule-view--time-range-str/nil-tod-ignores-duration ()
+  ;; A nil time-of-day stays blank even if a duration is somehow present.
+  (let ((s (ps/schedule-view--time-range-str nil 60)))
+    (should (equal 11 (length s)))
+    (should (string-blank-p s))))
+
 ;;; ------------------------------------------------------------------
 ;;; ps/schedule-view--grid-str
 

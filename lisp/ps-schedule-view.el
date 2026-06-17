@@ -179,14 +179,18 @@ Returns start minutes when DUR is nil or non-positive (zero-length event)."
 (defun ps/schedule-view--time-range-str (tod dur)
   "Time column string for a task at TOD with DUR minutes duration.
 Returns \"HH:MM-HH:MM\" when DUR > 0, otherwise \"HH:MM\" padded to
-`ps/schedule-view--time-col-width' with spaces."
+`ps/schedule-view--time-col-width' with spaces.  When TOD is nil (an
+untimed item) the time column is left blank so the renderer never
+performs arithmetic on a nil time-of-day."
+  (if (null tod)
+      (make-string ps/schedule-view--time-col-width ?\s)
   (let* ((start (ps/schedule-view--fmt-tod tod))
          (s (if (and dur (numberp dur) (> dur 0))
                 (let* ((end-m (ps/schedule-view--end-mins tod dur))
                        (end   (format "%02d:%02d" (/ end-m 60) (% end-m 60))))
                   (concat start "-" end))
               start)))
-    (truncate-string-to-width s ps/schedule-view--time-col-width nil ?\s)))
+    (truncate-string-to-width s ps/schedule-view--time-col-width nil ?\s))))
 
 (defun ps/schedule-view--grid-str (hhmm)
   "Time column string for a grid tick (no task) at HHMM.
