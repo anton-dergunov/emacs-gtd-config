@@ -644,7 +644,11 @@ preference and stays here.
           org-agenda-compact-blocks nil
           org-agenda-start-day nil ;; i.e. today
           org-agenda-span 1
-          org-agenda-start-on-weekday nil)
+          org-agenda-start-on-weekday nil
+          ;; Timeline grid ticks: 10:00-18:00 only (drop 8:00 and 20:00).
+          org-agenda-time-grid '((daily today require-timed)
+                                 (1000 1200 1400 1600 1800)
+                                 "......" "----------------"))
 
     (setq org-agenda-custom-commands
           '(("c" "Super Agenda"

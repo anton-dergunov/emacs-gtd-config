@@ -91,6 +91,15 @@ it slightly if a hairline gap appears at the top of the line."
   :type 'integer
   :group 'ps-schedule-view)
 
+(defcustom ps/schedule-view-extra-margin-cols 1
+  "Extra left and right margin, in columns, applied to the Schedule section only.
+Indents the timeline (time column, ┆ bar, task bodies and the now-line) by this
+many columns on the left and pulls the right edge in by the same amount, so the
+Schedule block reads narrower than the other agenda sections without affecting
+them.  Set to 0 to use the same margins as the rest of the agenda."
+  :type 'integer
+  :group 'ps-schedule-view)
+
 ;;; Faces
 
 (defface ps/schedule-view-small
@@ -141,11 +150,15 @@ A thin dotted vertical line (U+2506); the ┆ lands at column
   (+ ps/schedule-view--time-col-width (string-width ps/schedule-view--bar))
   "Total columns consumed by \"HH:MM-HH:MM │ \" = 14.")
 
+(defun ps/schedule-view--left-cols ()
+  "Schedule-section left margin in columns: the agenda's plus the extra one."
+  (+ ps/agenda-layout-left-margin-cols ps/schedule-view-extra-margin-cols))
+
 (defun ps/schedule-view--bar-col ()
   "Absolute column (char-width units) where the ┆ separator is drawn.
 One column past the time field, matching the now-line's ┆ so every row's bar
 lines up vertically regardless of the time label's font size."
-  (+ ps/agenda-layout-left-margin-cols (1+ ps/schedule-view--time-col-width)))
+  (+ (ps/schedule-view--left-cols) (1+ ps/schedule-view--time-col-width)))
 
 ;;; Pure time utilities (unit-tested in test-ps-schedule-view.el)
 
@@ -207,7 +220,7 @@ Each column position from `ps/agenda-layout--columns' is offset by
 \\(prefix-width − left-margin), placing :cat at column
 `ps/schedule-view--prefix-width'."
   (let* ((base  (ps/agenda-layout--columns))
-         (delta ps/schedule-view--prefix-width)
+         (delta (+ ps/schedule-view--prefix-width ps/schedule-view-extra-margin-cols))
          result)
     (cl-do ((l base (cddr l)))
         ((null l) (nreverse result))
@@ -245,8 +258,10 @@ item and grid lines.  The `now · HH:MM' label is centred across the full
 usable width.  ┆ is fixed at column (left-margin + time-col-width + 1)
 within the string.  Dashes and bar in `ps/schedule-view-grid' face;
 label in `ps/schedule-view-now' face."
-  (let* ((margin      (make-string ps/agenda-layout-left-margin-cols ?\s))
-         (usable      (- win-cols ps/agenda-layout-left-margin-cols))
+  (let* ((left        (ps/schedule-view--left-cols))
+         (margin      (make-string left ?\s))
+         ;; Indent on the left and pull the right edge in by the extra margin too.
+         (usable      (- win-cols left ps/schedule-view-extra-margin-cols))
          ;; ┆ lands at usable-col = time-col-width + 1 = 12
          (bar-col     (1+ ps/schedule-view--time-col-width))
          (label       (format " now · %s " (ps/schedule-view--fmt-tod hhmm)))
@@ -291,6 +306,7 @@ to the title text (preserving the theme's scheduled-task colour)."
          (avail (max 4 (floor (- (ps/agenda-layout--window-cols)
                                  title-col
                                  ps/agenda-layout-right-margin-cols
+                                 ps/schedule-view-extra-margin-cols
                                  (if overlap-str right-cols 0)
                                  (string-width tag-str)))))
          (title-text (if ps/agenda-layout-truncate
@@ -314,7 +330,8 @@ to the title text (preserving the theme's scheduled-task colour)."
     (when (> (length tag-str) 0) (push tag-str parts))
     (when overlap-str
       (push (ps/agenda-layout--space-before-right
-             overlap-str ps/agenda-layout-right-margin-cols) parts)
+             overlap-str (+ ps/agenda-layout-right-margin-cols
+                            ps/schedule-view-extra-margin-cols)) parts)
       (push overlap-str parts))
     (apply #'concat (nreverse parts))))
 
@@ -322,7 +339,7 @@ to the title text (preserving the theme's scheduled-task colour)."
   "Display string for a schedule item at TOD (HHMM) with DUR minutes.
 OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
   (concat
-   (make-string ps/agenda-layout-left-margin-cols ?\s)
+   (make-string (ps/schedule-view--left-cols) ?\s)
    (propertize (ps/schedule-view--time-range-str tod dur)
                'face 'ps/schedule-view-time)
    ;; Place the ┆ at an absolute column so it stays aligned with the now-line and
@@ -333,7 +350,7 @@ OVERLAP-P adds the ⚠ overlap indicator.  TITLE-FACE is applied to the title."
 
 (defun ps/schedule-view--render-grid-line (hhmm)
   "Display string for a grid-tick row (no task) at HHMM."
-  (concat (propertize (concat (make-string ps/agenda-layout-left-margin-cols ?\s)
+  (concat (propertize (concat (make-string (ps/schedule-view--left-cols) ?\s)
                               (ps/schedule-view--grid-str hhmm))
                       'face 'ps/schedule-view-tick)
           (ps/agenda-layout--space-to (ps/schedule-view--bar-col))

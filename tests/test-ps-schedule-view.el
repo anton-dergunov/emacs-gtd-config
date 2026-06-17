@@ -180,11 +180,12 @@
 ;;; ps/schedule-view--cols
 
 (ert-deftest ps/schedule-view--cols/shifts-by-prefix-width ()
-  ;; delta = prefix-width (not prefix-width - left-margin) because left-margin
-  ;; is physically prepended to the rendered string, so :cat lands at
-  ;; left-margin + prefix-width = 15 (with stub left-margin=1, prefix-width=14).
+  ;; :cat lands at left-margin + prefix-width + extra-margin (the schedule block
+  ;; is indented by the extra margin on top of the time/bar prefix).
   (let* ((cols (ps/schedule-view--cols))
-         (expected (+ ps/schedule-view--prefix-width ps/agenda-layout-left-margin-cols)))
+         (expected (+ ps/schedule-view--prefix-width
+                      ps/agenda-layout-left-margin-cols
+                      ps/schedule-view-extra-margin-cols)))
     (should (= expected (plist-get cols :cat)))))
 
 ;;; ------------------------------------------------------------------
@@ -195,11 +196,11 @@
     (should (string-match-p "13:47" s))))
 
 (ert-deftest ps/schedule-view--now-line-str/bar-at-col ()
-  ;; ┆ is at column (left-margin + time-col-width + 1).
-  ;; With stub left-margin=1 and time-col-width=11, expected col = 13.
+  ;; ┆ is at column (left-margin + extra-margin + time-col-width + 1).
   (let* ((s (ps/schedule-view--now-line-str 900 80))
          (plain (substring-no-properties s))
          (expected-col (+ ps/agenda-layout-left-margin-cols
+                          ps/schedule-view-extra-margin-cols
                           (1+ ps/schedule-view--time-col-width))))
     (should (= ?┆ (aref plain expected-col)))))
 
