@@ -234,6 +234,19 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
   (should (eq (get-text-property 0 'face (ps/agenda-layout--reldate-text "9:00" 'time))
               'ps/agenda-layout-reldate-time)))
 
+(ert-deftest ps/agenda-layout--date-dotted-inserts-dot ()
+  (should (equal (ps/agenda-layout--date-dotted "Wednesday  17 June 2026")
+                 "Wednesday · 17 June 2026"))
+  (should (equal (ps/agenda-layout--date-dotted "Tuesday   16 June 2026")
+                 "Tuesday · 16 June 2026")))
+
+(ert-deftest ps/agenda-layout--date-dotted-trims-and-noops ()
+  ;; Leading/trailing space trimmed; a single-spaced string is left as-is.
+  (should (equal (ps/agenda-layout--date-dotted "  Friday  1 May 2026  ")
+                 "Friday · 1 May 2026"))
+  (should (equal (ps/agenda-layout--date-dotted "Monday")
+                 "Monday")))
+
 (ert-deftest ps/agenda-layout--reldate-text-content ()
   (should (equal (ps/agenda-layout--reldate-text "in 5d" 'future) " in 5d")))
 

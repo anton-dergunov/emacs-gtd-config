@@ -82,6 +82,15 @@ Cursor and scroll position are preserved across refreshes."
   :type 'boolean
   :group 'ps-schedule-view)
 
+(defcustom ps/schedule-view-bar-ascent 82
+  "Vertical alignment (`:ascent', 0-100) of the dotted separator image.
+The image is as tall as the tallest Schedule row, so it both draws the dotted
+line and sets the row height.  `center' (50) pushes half of it below the
+baseline and inflates rows; a text-baseline-ish value keeps rows compact.  Lower
+it slightly if a hairline gap appears at the top of the line."
+  :type 'integer
+  :group 'ps-schedule-view)
+
 ;;; Faces
 
 (defface ps/schedule-view-small
@@ -352,16 +361,42 @@ the whole section on days whose only Schedule content is the empty time axis."
           (forward-line 1))
         (and start (cons start (point-max)))))))
 
-;;; Line-height equalisation
+;;; Drawn dotted separator + row-height equalisation
 
-(defun ps/schedule-view--equalize-heights ()
-  "Give every Schedule line the height of the tallest task row.
-Task rows are taller than timeline rows because the emoji glyph inflates the
-line; this measures the tallest rendered Schedule item line and applies it as a
-`line-height' text property to all Schedule lines so they share one height.  The
-measured height adapts to the font automatically (no hard-coded number) and
-re-applies on every refresh, so it survives later changes to the emoji glyph.
-No-op when the buffer is not shown in a window (e.g. batch)."
+(defvar ps/schedule-view--bar-image-cache nil
+  "Cons (KEY . IMAGE) caching the dotted separator image.
+KEY is (CHAR-WIDTH HEIGHT COLOR) so it rebuilds after a font/theme/height change.")
+
+(defun ps/schedule-view--bar-image (height)
+  "Return a dotted vertical-line image HEIGHT pixels tall, or nil.
+Nil on non-graphical frames so the ┆ glyph is used as-is.  One character wide,
+coloured with the `ps/schedule-view-grid' foreground.  Because the image is as
+tall as the tallest Schedule row, placing it on every row both draws a
+continuous dotted line and forces uniform row heights."
+  (when (and (display-graphic-p) (> height 0))
+    (let* ((w     (frame-char-width))
+           (color (or (face-foreground 'ps/schedule-view-grid nil t) "gray"))
+           (key   (list w height color ps/schedule-view-bar-ascent)))
+      (unless (equal (car ps/schedule-view--bar-image-cache) key)
+        (setq ps/schedule-view--bar-image-cache
+              (cons key
+                    (create-image
+                     (format
+                      (concat "<svg xmlns='http://www.w3.org/2000/svg' "
+                              "width='%d' height='%d'>"
+                              "<line x1='%s' y1='0' x2='%s' y2='%d' "
+                              "stroke='%s' stroke-width='1' "
+                              "stroke-dasharray='2,2'/></svg>")
+                      w height (/ w 2.0) (/ w 2.0) height color)
+                     'svg t :ascent ps/schedule-view-bar-ascent))))
+      (cdr ps/schedule-view--bar-image-cache))))
+
+(defun ps/schedule-view--draw-bars ()
+  "Draw the dotted separator on every Schedule line and even their heights.
+Measures the tallest Schedule row, builds the dotted-line image at that height,
+and replaces each row's ┆ glyph `display' with it.  The equal-height image draws
+a continuous dotted line and forces all rows (task, timeline, now) to one height.
+No-op without a window (e.g. batch) — the plain ┆ glyph is kept."
   (let ((win (get-buffer-window (current-buffer))))
     (when win
       (condition-case nil
@@ -377,14 +412,16 @@ No-op when the buffer is not shown in a window (e.g. batch)."
                                   (buffer-substring-no-properties bol eol))))
                    ((ps/agenda-layout--header-schedule-p header)
                     (push (cons bol eol) lines)
-                    (when (ps/agenda-layout--item-p)
-                      (setq h (max h (cdr (window-text-pixel-size win bol eol)))))))
+                    (setq h (max h (cdr (window-text-pixel-size win bol eol))))))
                   (forward-line 1))))
-            (when (> h 0)
-              (let ((inhibit-read-only t))
-                (dolist (l lines)
-                  (when (> (cdr l) (car l))
-                    (put-text-property (car l) (cdr l) 'line-height h))))))
+            (let ((img (ps/schedule-view--bar-image h)))
+              (when img
+                (let ((inhibit-read-only t))
+                  (dolist (l lines)
+                    (save-excursion
+                      (goto-char (car l))
+                      (when (search-forward "┆" (cdr l) t)
+                        (put-text-property (1- (point)) (point) 'display img))))))))
         (error nil)))))
 
 ;;; Main apply pass
@@ -506,8 +543,8 @@ No-op when the buffer is not shown in a window (e.g. batch)."
           (let ((ov (make-overlay last-vis-eol last-vis-eol)))
             (overlay-put ov 'ps/agenda-layout t)
             (overlay-put ov 'after-string (concat "\n" now-bottom-str)))))
-        ;; Make every Schedule line the same height (task rows are taller).
-        (ps/schedule-view--equalize-heights)))))
+        ;; Draw the dotted separator and even out the row heights.
+        (ps/schedule-view--draw-bars)))))
 
 ;;; Auto-refresh timer
 

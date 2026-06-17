@@ -44,6 +44,10 @@ so the two modules don't reformat the same lines.")
 (declare-function ps/material-icons-image "ps-material-icons" (name &optional ascent height))
 (declare-function ps/material-icons-available-p "ps-material-icons" ())
 (declare-function ps/agenda-emoji-lookup "ps-agenda-emoji" (title))
+(declare-function org-agenda-format-date-aligned "org-agenda" (date))
+(declare-function org-agenda-earlier "org-agenda" (arg))
+(declare-function org-agenda-later "org-agenda" (arg))
+(declare-function org-agenda-redo "org-agenda" (&optional all))
 (defvar org-agenda-finalize-hook)
 (defvar org-done-keywords)
 (defvar org-todo-all-keywords)
@@ -592,6 +596,86 @@ working anywhere on the line.  Point ends at the end of the inserted text."
     (overlay-put ov 'ps/agenda-layout t)
     (overlay-put ov 'evaporate t)
     (overlay-put ov 'invisible t)))
+
+;;; Date header
+
+(defface ps/agenda-layout-date-button
+  '((t :inherit shadow))
+  "Face for the date-header navigation / refresh buttons."
+  :group 'ps-agenda-layout)
+
+(defun ps/agenda-layout--date-dotted (text)
+  "Turn an org date header into a `Weekday · rest' form.
+The run of spaces org inserts after the weekday (e.g.
+\"Wednesday  17 June 2026\") becomes \" · \"; TEXT is returned unchanged when
+there is no such run."
+  (let ((s (string-trim text)))
+    (if (string-match "\\`\\([^ \t]+\\)[ \t]\\{2,\\}\\(.+\\)\\'" s)
+        (concat (match-string 1 s) " · " (match-string 2 s))
+      s)))
+
+(defun ps/agenda-layout-date-prev ()
+  "Show the previous day in the agenda."
+  (interactive)
+  (when (fboundp 'org-agenda-earlier) (org-agenda-earlier 1)))
+
+(defun ps/agenda-layout-date-next ()
+  "Show the next day in the agenda."
+  (interactive)
+  (when (fboundp 'org-agenda-later) (org-agenda-later 1)))
+
+(defun ps/agenda-layout-date-refresh ()
+  "Reload the agenda."
+  (interactive)
+  (when (fboundp 'org-agenda-redo) (org-agenda-redo)))
+
+(defun ps/agenda-layout--date-button (icon-name fallback cmd help)
+  "Return a clickable one-column button.
+Shows Material Symbol ICON-NAME (or FALLBACK glyph on non-graphical frames),
+runs CMD on click/RET, with tooltip HELP."
+  (let ((img (and (display-graphic-p)
+                  (fboundp 'ps/material-icons-image)
+                  (ps/material-icons-image icon-name)))
+        (map (make-sparse-keymap)))
+    (define-key map [mouse-1] cmd)
+    (define-key map (kbd "RET") cmd)
+    (let ((s (propertize (if img " " fallback)
+                         'keymap map 'mouse-face 'highlight
+                         'help-echo help 'face 'ps/agenda-layout-date-button)))
+      (when img (put-text-property 0 1 'display img s))
+      s)))
+
+(defun ps/agenda-layout--date-window-cols ()
+  "Width (columns) to centre the date header in.
+Uses the agenda window when it is displayed (the accurate case on redo /
+navigation), else falls back to the frame width."
+  (let* ((buf (or (get-buffer "*Org Agenda*") (current-buffer)))
+         (win (get-buffer-window buf t)))
+    (if win (window-text-width win) (frame-text-cols))))
+
+(defun ps/agenda-layout-format-date (date)
+  "Build the agenda date header for DATE: centred `Weekday · D Month YYYY'.
+Suitable as `org-agenda-format-date'.  org applies the day face and the
+date-navigation text properties to the returned string itself, so day
+navigation (B/F/.), the buttons and today's highlight keep working and the line
+needs no post-finalize rewrite.  The prev/next chevrons and refresh icon are
+clickable Material-Symbol buttons."
+  (let* ((dotted (ps/agenda-layout--date-dotted (org-agenda-format-date-aligned date)))
+         (win    (ps/agenda-layout--date-window-cols))
+         (tw     (string-width dotted))
+         (tstart (max 4 (/ (- win tw) 2))))
+    (concat
+     (ps/agenda-layout--space-to (max 0 (- tstart 2)))
+     (ps/agenda-layout--date-button "chevron_left" "‹"
+                                    #'ps/agenda-layout-date-prev "Previous day")
+     (ps/agenda-layout--space-to tstart)
+     dotted
+     (ps/agenda-layout--space-to (+ tstart tw 1))
+     (ps/agenda-layout--date-button "chevron_right" "›"
+                                    #'ps/agenda-layout-date-next "Next day")
+     (ps/agenda-layout--space-to (+ tstart tw 4))
+     (ps/agenda-layout--date-button "refresh" "⟳"
+                                    #'ps/agenda-layout-date-refresh "Reload agenda"))))
 
 ;;; Main pass
 
