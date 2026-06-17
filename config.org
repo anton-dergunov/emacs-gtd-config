@@ -315,7 +315,8 @@ would overflow.
         ps/agenda-layout-truncate         t
         ps/agenda-layout-priority-cols    4
         ps/agenda-layout-emoji-cols       2
-        ps/agenda-layout-category-cols    3)
+        ps/agenda-layout-category-cols    3
+        ps/agenda-layout-right-margin-cols 1)
 #+end_src
 
 ** Schedule view (ps-schedule-view.el)

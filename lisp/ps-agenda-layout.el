@@ -312,6 +312,13 @@ derives the width from the longest keyword in `org-todo-all-keywords' plus
   "A blank that stretches to COLS columns from the right window edge."
   (propertize " " 'display `(space :align-to (- right ,cols))))
 
+(defun ps/agenda-layout--space-before-right (badge cols)
+  "Spacer placing BADGE so its right edge sits COLS columns from the right edge.
+Uses BADGE's actual pixel width (`string-pixel-width'), so condensed/scaled
+`org-modern-label' faces still align exactly with full-scale text."
+  (propertize " " 'display
+              `(space :align-to (- right ,cols (,(string-pixel-width badge))))))
+
 (defun ps/agenda-layout--image-cell (image)
   "A single character displaying IMAGE."
   (propertize " " 'display image))
@@ -355,7 +362,7 @@ identically to org-modern's own keyword badges."
 (defun ps/agenda-layout--reldate-text (text tint)
   "Return propertized badge text for reldate TEXT with color TINT symbol.
 TINT is one of `overdue', `today', `future', or `time' (timed events)."
-  (propertize (concat " " text " ")
+  (propertize (concat " " text)
               'face (pcase tint
                       ('overdue 'ps/agenda-layout-reldate-overdue)
                       ('today   'ps/agenda-layout-reldate-today)
@@ -439,7 +446,8 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
          (tag-str (ps/agenda-layout--tags-string tags))
          (title-col (plist-get cols :title))
          (avail (max 4 (- (ps/agenda-layout--window-cols) title-col
-                          (if right-str (+ right-cols ps/agenda-layout-right-margin-cols) 0)
+                          ps/agenda-layout-right-margin-cols
+                          (if right-str right-cols 0)
                           (string-width tag-str))))
          (title-text (if ps/agenda-layout-truncate
                          (ps/agenda-layout--truncate (or title "") avail)
@@ -464,7 +472,8 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
           parts)
     (when (> (length tag-str) 0) (push tag-str parts))
     (when right-str
-      (push (ps/agenda-layout--space-to-right right-cols) parts)
+      (push (ps/agenda-layout--space-before-right
+             right-str ps/agenda-layout-right-margin-cols) parts)
       (push right-str parts))
     (apply #'concat (nreverse parts))))
 

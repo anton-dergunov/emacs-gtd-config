@@ -40,6 +40,7 @@
 (declare-function ps/agenda-layout--render-category "ps-agenda-layout" (cols))
 (declare-function ps/agenda-layout--space-to       "ps-agenda-layout" (col))
 (declare-function ps/agenda-layout--space-to-right "ps-agenda-layout" (cols))
+(declare-function ps/agenda-layout--space-before-right "ps-agenda-layout" (badge cols))
 (declare-function ps/agenda-layout--state-text     "ps-agenda-layout" (state))
 (declare-function ps/agenda-layout--priority-text  "ps-agenda-layout" (char))
 (declare-function ps/agenda-layout--tags-string    "ps-agenda-layout" (tags))
@@ -247,15 +248,14 @@ to the title text (preserving the theme's scheduled-task colour)."
          ;; instead of a wide color emoji, so its width matches the reldate
          ;; glyphs and the badge right edge lines up with the reldate badges.
          (overlap-str (and overlap-p
-                           (propertize " ⚠︎ overlap "
+                           (propertize " ⚠︎ overlap"
                                        'face 'ps/schedule-view-overlap)))
          (right-cols (if overlap-str (string-width overlap-str) 0))
          (title-col  (plist-get cols :title))
          (avail (max 4 (- (ps/agenda-layout--window-cols)
                           title-col
-                          (if overlap-str
-                              (+ right-cols ps/agenda-layout-right-margin-cols)
-                            0)
+                          ps/agenda-layout-right-margin-cols
+                          (if overlap-str right-cols 0)
                           (string-width tag-str))))
          (title-text (if ps/agenda-layout-truncate
                          (ps/agenda-layout--truncate (or title "") avail)
@@ -277,7 +277,8 @@ to the title text (preserving the theme's scheduled-task colour)."
                       'help-echo (or title title-text)) parts)
     (when (> (length tag-str) 0) (push tag-str parts))
     (when overlap-str
-      (push (ps/agenda-layout--space-to-right right-cols) parts)
+      (push (ps/agenda-layout--space-before-right
+             overlap-str ps/agenda-layout-right-margin-cols) parts)
       (push overlap-str parts))
     (apply #'concat (nreverse parts))))
 

@@ -224,6 +224,6 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
               'ps/agenda-layout-reldate-time)))
 
 (ert-deftest ps/agenda-layout--reldate-text-content ()
-  (should (equal (ps/agenda-layout--reldate-text "in 5d" 'future) " in 5d ")))
+  (should (equal (ps/agenda-layout--reldate-text "in 5d" 'future) " in 5d")))
 
 ;;; test-ps-agenda-layout.el ends here
