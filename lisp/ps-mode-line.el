@@ -27,6 +27,8 @@
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-up-heading-safe "org" ())
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
+;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
+(defvar ps/agenda-emoji-enabled)
 
 ;;; Customization
 
@@ -68,9 +70,9 @@ Each title is cleaned of TODO keyword, priority, tags, and comment markers."
         (widen)
         (unless (org-before-first-heading-p)
           (org-back-to-heading t)
-          (let ((titles (list (org-get-heading t t t t))))
+          (let ((titles (list (substring-no-properties (org-get-heading t t t t)))))
             (while (org-up-heading-safe)
-              (push (org-get-heading t t t t) titles))
+              (push (substring-no-properties (org-get-heading t t t t)) titles))
             titles))))))
 
 (defun ps/mode-line--join-titles (titles)
@@ -120,42 +122,72 @@ breadcrumb is returned unchanged."
 
 ;;; Org-buffer mode line
 
-(defvar-local ps/mode-line--heading-cache nil
-  "Cached list of clean outline titles for the current buffer.")
-
-(defun ps/mode-line--update-heading-cache ()
-  "Refresh `ps/mode-line--heading-cache' from point's outline position."
-  (when (derived-mode-p 'org-mode)
-    (setq ps/mode-line--heading-cache (ps/mode-line--outline-titles))))
+(defun ps/mode-line--escape (s)
+  "Escape % in S so it survives mode-line %-construct expansion.
+A `:eval' result is itself processed for %-constructs, so a literal % must
+be doubled or it (and the following character) is swallowed."
+  (replace-regexp-in-string "%" "%%" s))
 
 (defun ps/mode-line--render ()
-  "Return the Org-buffer mode-line string."
+  "Return the Org-buffer mode-line string.
+Computed live (no cache) so it tracks point on every redisplay."
   (let* ((sep ps/mode-line-separator)
-         (prefix (concat " " (ps/mode-line--buffer-name)
-                         sep (ps/mode-line--percent)))
-         (titles ps/mode-line--heading-cache))
+         (name (ps/mode-line--buffer-name))
+         (pct (ps/mode-line--percent))
+         (titles (ps/mode-line--outline-titles))
+         (prefix (concat " "
+                         (propertize (ps/mode-line--escape name)
+                                     'face 'mode-line-emphasis)
+                         sep (ps/mode-line--escape pct))))
     (if titles
-        (let ((avail (- (window-body-width)
-                        (string-width prefix)
-                        (string-width sep))))
-          (concat prefix sep
-                  (ps/mode-line--truncate-segments titles avail)))
+        ;; Width math uses the unescaped strings (escaping does not widen).
+        (let* ((used (+ (string-width (concat " " name sep pct)) (string-width sep)))
+               (avail (- (window-body-width) used))
+               (crumb (ps/mode-line--escape
+                       (ps/mode-line--truncate-segments titles avail))))
+          (concat prefix sep crumb))
       prefix)))
 
 ;;; Agenda mode line
 
+(defvar ps/mode-line--building-view nil
+  "View name (\"Agenda\"/\"Tasks\") dynamically bound while an agenda builds.
+Read by `ps/mode-line--agenda-finalize' to label the buffer; nil on a
+rebuild/redo, where the existing `permanent-local' title is preserved.")
+
 (defvar-local ps/mode-line--agenda-title nil
-  "Mode-line title for this agenda buffer, set by the launching command.")
+  "Mode-line title for this agenda buffer.")
+;; Survive `kill-all-local-variables', which `org-agenda-mode' calls on redo.
+(put 'ps/mode-line--agenda-title 'permanent-local t)
 
 (defvar-local ps/mode-line--agenda-show-position nil
   "When non-nil, the agenda mode line appends point's percentage.")
 
 (defun ps/mode-line--agenda-render ()
   "Return the agenda mode-line string."
-  (let ((title (or ps/mode-line--agenda-title "Agenda")))
+  (let ((title (propertize (or ps/mode-line--agenda-title "Agenda")
+                           'face 'mode-line-emphasis)))
     (if ps/mode-line--agenda-show-position
-        (concat " " title ps/mode-line-separator (ps/mode-line--percent))
+        (concat " " title ps/mode-line-separator
+                (ps/mode-line--escape (ps/mode-line--percent)))
       (concat " " title))))
+
+(defun ps/mode-line--agenda-finalize ()
+  "Apply per-view mode line/chrome to the agenda buffer on every build.
+Runs from `org-agenda-finalize-hook' at a negative depth, before the
+emoji/layout hooks, so the emoji toggle takes effect for this render."
+  (when (derived-mode-p 'org-agenda-mode)
+    (when ps/mode-line--building-view
+      (setq-local ps/mode-line--agenda-title ps/mode-line--building-view))
+    (let ((tasks (equal ps/mode-line--agenda-title "Tasks")))
+      (setq-local ps/mode-line--agenda-show-position tasks)
+      ;; Disable the semantic-emoji decoration in the (long) Tasks view.
+      (setq-local ps/agenda-emoji-enabled (not tasks))
+      ;; Line-number gutter only in Tasks; re-applied so a redo can't drop it.
+      (display-line-numbers-mode (if tasks 1 0))
+      ;; Agenda buffers are regenerated — never accumulate undo data.
+      (setq buffer-undo-list t)
+      (setq-local mode-line-format '((:eval (ps/mode-line--agenda-render)))))))
 
 ;;; Frame title
 
@@ -167,19 +199,14 @@ breadcrumb is returned unchanged."
 
 (defun ps/mode-line--org-setup ()
   "Install the planning mode line in the current Org buffer."
-  (setq-local mode-line-format '((:eval (ps/mode-line--render))))
-  (add-hook 'post-command-hook #'ps/mode-line--update-heading-cache nil t)
-  (ps/mode-line--update-heading-cache))
-
-(defun ps/mode-line--agenda-setup ()
-  "Install the planning mode line in the current agenda buffer."
-  (setq-local mode-line-format '((:eval (ps/mode-line--agenda-render)))))
+  (setq-local mode-line-format '((:eval (ps/mode-line--render)))))
 
 ;;;###autoload
 (defun ps/mode-line-setup ()
   "Enable the planning-focused mode line and frame title."
   (add-hook 'org-mode-hook #'ps/mode-line--org-setup)
-  (add-hook 'org-agenda-mode-hook #'ps/mode-line--agenda-setup)
+  ;; Negative depth: run before the emoji/layout finalize hooks.
+  (add-hook 'org-agenda-finalize-hook #'ps/mode-line--agenda-finalize -90)
   (setq frame-title-format '(:eval (ps/mode-line--frame-title))))
 
 (provide 'ps-mode-line)

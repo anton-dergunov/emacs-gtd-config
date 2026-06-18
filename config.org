@@ -695,9 +695,7 @@ preference and stays here.
               (tags-todo "+PRIORITY=\"A\""
                          ((org-agenda-overriding-header " High-priority:")))
               (todo "INPR"
-                    ((org-agenda-overriding-header " In progress:")))))
-            ("n" "Tasks"
-             ((alltodo "")))))
+                    ((org-agenda-overriding-header " In progress:")))))))
 
     :config
     (org-super-agenda-mode))
@@ -1177,17 +1175,18 @@ Logic lives in =lisp/ps-blank-lines.el=.
 #+begin_src emacs-lisp
   ;; Show the Tasks view (all open tasks across the agenda files) and delete
   ;; other windows, keeping the file tree visible (delete-other-windows would
-  ;; otherwise close it).  This view shows the line-number gutter and a "Tasks"
-  ;; mode line with position; filter it live with / (tag), = (regexp), etc.
+  ;; otherwise close it).  Uses `org-todo-list' so the native keyword-selector
+  ;; header is shown (press e.g. `1 r' to switch keyword); filter live with
+  ;; / (tag), = (regexp), < (category), _ (effort).  The mode line, line-number
+  ;; gutter, and emoji-off are applied by `ps/mode-line--agenda-finalize', keyed
+  ;; off the dynamically-bound view name below.
   (defun ps/show-tasks ()
-    "Open the Tasks view (custom command \"n\": all open tasks)."
+    "Open the Tasks view: all open tasks (`org-todo-list')."
     (interactive)
-    (let ((open (ps/file-tree-window-exists-p)))
+    (let ((open (ps/file-tree-window-exists-p))
+          (ps/mode-line--building-view "Tasks"))
       (when open (ps/file-tree-hide))
-      (org-agenda nil "n")
-      (setq-local ps/mode-line--agenda-title "Tasks")
-      (setq-local ps/mode-line--agenda-show-position t)
-      (display-line-numbers-mode 1)
+      (org-todo-list)
       (delete-other-windows)
       (when open (ps/file-tree-show))))
 
@@ -1275,12 +1274,11 @@ muscle memory; remove them later if you outgrow them.
   (defun ps/show-agenda ()
     "Open the Agenda — the main planning view (custom command =c=).
 Shows the daily schedule, deadlines, high-priority and in-progress
-tasks.  Compact by design: no position indicator, no line-number gutter."
+tasks.  Compact by design: no position indicator, no line-number gutter.
+The mode line is applied by `ps/mode-line--agenda-finalize'."
     (interactive)
-    (org-agenda nil "c")
-    (setq-local ps/mode-line--agenda-title "Agenda")
-    (setq-local ps/mode-line--agenda-show-position nil)
-    (display-line-numbers-mode 0))
+    (let ((ps/mode-line--building-view "Agenda"))
+      (org-agenda nil "c")))
 
   (define-obsolete-function-alias 'ps/show-super-agenda 'ps/show-agenda "2026-06")
 

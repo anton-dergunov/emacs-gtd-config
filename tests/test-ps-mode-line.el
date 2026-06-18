@@ -22,6 +22,18 @@
     (should (equal (ps/mode-line--buffer-name) "scratch"))))
 
 ;;; -------------------------------------------------------
+;;; ps/mode-line--escape
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--escape-doubles-percent ()
+  "A literal % is doubled so it survives mode-line %-construct expansion."
+  (should (equal (ps/mode-line--escape "57%") "57%%"))
+  (should (equal (ps/mode-line--escape "a%b%c") "a%%b%%c")))
+
+(ert-deftest ps/mode-line--escape-noop-without-percent ()
+  (should (equal (ps/mode-line--escape "Photo") "Photo")))
+
+;;; -------------------------------------------------------
 ;;; ps/mode-line--percent
 ;;; -------------------------------------------------------
 

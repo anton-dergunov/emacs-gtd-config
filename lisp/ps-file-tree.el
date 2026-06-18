@@ -23,7 +23,6 @@
 ;; Optional: git-sync status is appended to the file-tree mode line when the
 ;; module is loaded.  Guarded with `fboundp', so this file stays standalone.
 (declare-function ps/git-sync--modeline "ps-git-sync" ())
-(defvar ps/mode-line-separator)
 (require 'subr-x)
 
 ;;; Customization
@@ -308,10 +307,10 @@ status (text label + tooltip) is appended when `ps-git-sync' is loaded."
                        (define-key map [mode-line mouse-3] #'ignore)
                        map)))
         (sync (and (fboundp 'ps/git-sync--modeline)
-                   (ps/git-sync--modeline)))
-        (sep (if (boundp 'ps/mode-line-separator) ps/mode-line-separator " · ")))
+                   (ps/git-sync--modeline))))
+    ;; No separator before the sync status: the `▾' already separates it.
     (if (and sync (> (length sync) 0))
-        (concat fileset sep sync)
+        (concat fileset " " sync)
       fileset)))
 
 ;;; Expand / collapse all
