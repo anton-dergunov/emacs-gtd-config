@@ -10,10 +10,10 @@
 
 ;;; Icons
 
-(defvar ps/git-sync--icon-ok "⇅")
+(defvar ps/git-sync--icon-ok "✓")
 (defvar ps/git-sync--icon-syncing "↻")
-(defvar ps/git-sync--icon-offline "◌")
-(defvar ps/git-sync--icon-error "×")
+(defvar ps/git-sync--icon-offline "⊘")
+(defvar ps/git-sync--icon-error "⚠")
 
 ;;; State
 
@@ -30,14 +30,37 @@ It is also set automatically by `ps/git-sync--handle-conflict' on a merge
 conflict, and cleared by `ps/git-sync-resume'.")
 (defvar ps/git-sync--last-status ps/git-sync--icon-offline)
 (defvar ps/git-sync--last-message "")
+(defvar ps/git-sync--last-success-time nil
+  "Clock time (\"HH:MM\") of the last successful sync, or nil.
+Surfaced in the mode-line tooltip rather than the bar itself.")
 
 ;;; Modeline
 
+(defun ps/git-sync--label ()
+  "Return the text label for the current sync status, e.g. \"✓ Sync\"."
+  (cond
+   ((equal ps/git-sync--last-status ps/git-sync--icon-syncing)
+    (concat ps/git-sync--icon-syncing " Syncing"))
+   ((equal ps/git-sync--last-status ps/git-sync--icon-error)
+    (concat ps/git-sync--icon-error " Sync Failed"))
+   ((equal ps/git-sync--last-status ps/git-sync--icon-ok)
+    (concat ps/git-sync--icon-ok " Sync"))
+   (t
+    (concat ps/git-sync--icon-offline " Sync Off"))))
+
+(defun ps/git-sync--help-echo ()
+  "Return the mode-line tooltip: last message plus last successful sync time."
+  (if ps/git-sync--last-success-time
+      (concat ps/git-sync--last-message
+              "\nLast successful sync: " ps/git-sync--last-success-time)
+    ps/git-sync--last-message))
+
 (defun ps/git-sync--modeline ()
-  "Return the propertized git-sync status indicator for the mode line."
+  "Return the propertized git-sync status label for the mode line.
+Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
   (propertize
-   (format " %s" ps/git-sync--last-status)
-   'help-echo ps/git-sync--last-message
+   (ps/git-sync--label)
+   'help-echo (ps/git-sync--help-echo)
    'face
    (cond
     (ps/git-sync-paused
@@ -152,10 +175,13 @@ conflict, and cleared by `ps/git-sync-resume'.")
              (if (= (process-exit-status proc) 0)
 
                  ;; Success
-                 (ps/git-sync--set-status
-                  ps/git-sync--icon-ok
-                  (format "Git sync OK (%s)"
-                          (format-time-string "%H:%M:%S")))
+                 (progn
+                   (setq ps/git-sync--last-success-time
+                         (format-time-string "%H:%M"))
+                   (ps/git-sync--set-status
+                    ps/git-sync--icon-ok
+                    (format "Git sync OK (%s)"
+                            (format-time-string "%H:%M:%S"))))
 
                ;; Failure
                (if (string-match-p
@@ -183,14 +209,11 @@ conflict, and cleared by `ps/git-sync-resume'.")
 
 (defun ps/git-sync-start (directory)
   "Begin background git sync in DIRECTORY (a path inside a git repo).
-Registers the mode-line indicator and starts the periodic timer."
+Starts the periodic timer.  The status indicator is rendered in the file
+tree mode line (see `ps/file-tree--modeline'); it is intentionally not
+injected into `global-mode-string', so it does not appear in every window."
   (setq ps/git-sync--directory directory)
   (when (ps/git-sync--inside-repo-p)
-    ;; Register the mode-line indicator once.
-    (unless (member '(:eval (ps/git-sync--modeline)) global-mode-string)
-      (setq global-mode-string
-            (append global-mode-string
-                    '((:eval (ps/git-sync--modeline))))))
     ;; (Re)start the timer.
     (when ps/git-sync--timer
       (cancel-timer ps/git-sync--timer))

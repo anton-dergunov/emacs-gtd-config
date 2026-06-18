@@ -20,6 +20,10 @@
 (declare-function treemacs-canonical-path "treemacs-core-utils")
 (declare-function treemacs--filename "treemacs-core-utils")
 (declare-function org-find-exact-headline-in-buffer "org")
+;; Optional: git-sync status is appended to the file-tree mode line when the
+;; module is loaded.  Guarded with `fboundp', so this file stays standalone.
+(declare-function ps/git-sync--modeline "ps-git-sync" ())
+(defvar ps/mode-line-separator)
 (require 'subr-x)
 
 ;;; Customization
@@ -288,18 +292,27 @@ See `ps/file-tree-set-applies-to-agenda'."
       (ps/file-tree-set-file-set choice))))
 
 (defun ps/file-tree--modeline ()
-  "Return the propertized file-set indicator for the file tree mode line."
-  (propertize (format " [%s ▾]%s" ps/file-tree-current-set
-                       (if ps/file-tree-set-applies-to-agenda " 📅" ""))
-              'face 'mode-line-emphasis
-              'mouse-face 'mode-line-highlight
-              'help-echo "mouse-1: switch file set"
-              'local-map
-              (let ((map (make-sparse-keymap)))
-                (define-key map [mode-line mouse-1] #'ps/file-tree--modeline-click)
-                (define-key map [mode-line down-mouse-3] #'ignore)
-                (define-key map [mode-line mouse-3] #'ignore)
-                map)))
+  "Return the file-tree mode line: file-set selector + git-sync status.
+The file-set selector is clickable (mouse-1 switches sets).  The git-sync
+status (text label + tooltip) is appended when `ps-git-sync' is loaded."
+  (let ((fileset
+         (propertize (format " %s ▾%s" ps/file-tree-current-set
+                             (if ps/file-tree-set-applies-to-agenda " 📅" ""))
+                     'face 'mode-line-emphasis
+                     'mouse-face 'mode-line-highlight
+                     'help-echo "mouse-1: switch file set"
+                     'local-map
+                     (let ((map (make-sparse-keymap)))
+                       (define-key map [mode-line mouse-1] #'ps/file-tree--modeline-click)
+                       (define-key map [mode-line down-mouse-3] #'ignore)
+                       (define-key map [mode-line mouse-3] #'ignore)
+                       map)))
+        (sync (and (fboundp 'ps/git-sync--modeline)
+                   (ps/git-sync--modeline)))
+        (sep (if (boundp 'ps/mode-line-separator) ps/mode-line-separator " · ")))
+    (if (and sync (> (length sync) 0))
+        (concat fileset sep sync)
+      fileset)))
 
 ;;; Expand / collapse all
 

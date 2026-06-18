@@ -69,6 +69,26 @@ Skipped when git is unavailable. Cleans up the repo afterward."
     (should (string-match-p (regexp-quote ps/git-sync--icon-ok)
                             (ps/git-sync--modeline)))))
 
+(ert-deftest ps/git-sync--label-text-per-status ()
+  "Each status maps to its documented text label."
+  (let ((ps/git-sync--last-status ps/git-sync--icon-ok))
+    (should (equal (ps/git-sync--label) (concat ps/git-sync--icon-ok " Sync"))))
+  (let ((ps/git-sync--last-status ps/git-sync--icon-syncing))
+    (should (equal (ps/git-sync--label) (concat ps/git-sync--icon-syncing " Syncing"))))
+  (let ((ps/git-sync--last-status ps/git-sync--icon-error))
+    (should (equal (ps/git-sync--label) (concat ps/git-sync--icon-error " Sync Failed"))))
+  (let ((ps/git-sync--last-status ps/git-sync--icon-offline))
+    (should (equal (ps/git-sync--label) (concat ps/git-sync--icon-offline " Sync Off")))))
+
+(ert-deftest ps/git-sync--help-echo-appends-success-time ()
+  "The tooltip appends the last successful sync time when known."
+  (let ((ps/git-sync--last-message "Git sync OK")
+        (ps/git-sync--last-success-time "21:13"))
+    (should (string-match-p "Last successful sync: 21:13" (ps/git-sync--help-echo))))
+  (let ((ps/git-sync--last-message "msg")
+        (ps/git-sync--last-success-time nil))
+    (should (equal (ps/git-sync--help-echo) "msg"))))
+
 (ert-deftest ps/git-sync--modeline-help-echo ()
   "The modeline string carries the last message as a help-echo property."
   (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
@@ -210,7 +230,9 @@ This is the toggle the dev script relies on to disable sync during testing."
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/git-sync--start-sets-directory-and-timer ()
-  "start records the directory and creates a repeating timer in a repo."
+  "start records the directory and creates a repeating timer in a repo.
+It must NOT touch `global-mode-string' — the indicator now lives in the
+file-tree mode line, not in every window."
   (ps/git-sync-test--with-repo
     (let ((ps/git-sync--timer nil)
           (global-mode-string nil))
@@ -218,8 +240,7 @@ This is the toggle the dev script relies on to disable sync during testing."
           (progn
             (ps/git-sync-start ps/git-sync--directory)
             (should (timerp ps/git-sync--timer))
-            ;; Modeline indicator registered exactly once.
-            (should (member '(:eval (ps/git-sync--modeline)) global-mode-string)))
+            (should (null global-mode-string)))
         (when (timerp ps/git-sync--timer)
           (cancel-timer ps/git-sync--timer))))))
 

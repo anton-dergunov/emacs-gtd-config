@@ -79,6 +79,11 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-file-tree-icons)
   (require 'ps-typo)
   (require 'ps-org-src-comment)
+  (require 'ps-mode-line)
+
+  ;; Install the planning-focused mode line and frame title (org-mode-hook,
+  ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
+  (ps/mode-line-setup)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -165,6 +170,12 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 #+begin_src emacs-lisp
   (setq ps/conflicts-gap-minutes    15
         ps/conflicts-include-past   nil)
+#+end_src
+
+** Mode line (ps-mode-line.el)
+Separator placed between mode-line components (filename · position · heading).
+#+begin_src emacs-lisp
+  (setq ps/mode-line-separator " · ")
 #+end_src
 
 ** Material icons (ps-material-icons.el)
@@ -651,7 +662,7 @@ preference and stays here.
                                  "......" "----------------"))
 
     (setq org-agenda-custom-commands
-          '(("c" "Super Agenda"
+          '(("c" "Agenda"
              ((agenda "" ((org-agenda-overriding-header "")
                           ;; NOTE: org-super-agenda matches groups in LIST
                          ;; ORDER (first matching group claims the item); the
@@ -685,8 +696,8 @@ preference and stays here.
                          ((org-agenda-overriding-header " High-priority:")))
               (todo "INPR"
                     ((org-agenda-overriding-header " In progress:")))))
-            ("n" "NEXT tasks"
-             ((todo "NEXT")))))
+            ("n" "Tasks"
+             ((alltodo "")))))
 
     :config
     (org-super-agenda-mode))
@@ -1162,19 +1173,25 @@ Logic lives in =lisp/ps-blank-lines.el=.
   (global-set-key [f8] #'ps/file-tree-toggle)
 #+end_src
 
-** F9 — show agenda
+** F9 — show Tasks
 #+begin_src emacs-lisp
-  ;; Show the agenda with the "NEXT" tasks and delete other windows, keeping
-  ;; the file tree visible (delete-other-windows would otherwise close it).
-  (defun ps/show-agenda ()
+  ;; Show the Tasks view (all open tasks across the agenda files) and delete
+  ;; other windows, keeping the file tree visible (delete-other-windows would
+  ;; otherwise close it).  This view shows the line-number gutter and a "Tasks"
+  ;; mode line with position; filter it live with / (tag), = (regexp), etc.
+  (defun ps/show-tasks ()
+    "Open the Tasks view (custom command \"n\": all open tasks)."
     (interactive)
     (let ((open (ps/file-tree-window-exists-p)))
       (when open (ps/file-tree-hide))
-      (org-todo-list "NEXT")
+      (org-agenda nil "n")
+      (setq-local ps/mode-line--agenda-title "Tasks")
+      (setq-local ps/mode-line--agenda-show-position t)
+      (display-line-numbers-mode 1)
       (delete-other-windows)
       (when open (ps/file-tree-show))))
 
-  (global-set-key [f9] 'ps/show-agenda)
+  (global-set-key [f9] 'ps/show-tasks)
 #+end_src
 
 ** F10 — open this config file
@@ -1255,10 +1272,17 @@ muscle memory; remove them later if you outgrow them.
   (define-key global-map [menu-bar tools]   nil)
 
   ;; Tiny wrapper around the agenda custom command "c" so we can bind/menu it.
-  (defun ps/show-super-agenda ()
-    "Open the Super Agenda custom command (the one normally launched by =C-c a c=)."
+  (defun ps/show-agenda ()
+    "Open the Agenda — the main planning view (custom command =c=).
+Shows the daily schedule, deadlines, high-priority and in-progress
+tasks.  Compact by design: no position indicator, no line-number gutter."
     (interactive)
-    (org-agenda nil "c"))
+    (org-agenda nil "c")
+    (setq-local ps/mode-line--agenda-title "Agenda")
+    (setq-local ps/mode-line--agenda-show-position nil)
+    (display-line-numbers-mode 0))
+
+  (define-obsolete-function-alias 'ps/show-super-agenda 'ps/show-agenda "2026-06")
 
   ;; Productivity prefix keymap (mnemonic suffixes under C-c p).
   (defvar ps/productivity-keymap (make-sparse-keymap)
@@ -1266,9 +1290,9 @@ muscle memory; remove them later if you outgrow them.
   (global-set-key (kbd "C-c p") ps/productivity-keymap)
   (let ((m ps/productivity-keymap))
     ;; Plan & review
-    (define-key m (kbd "a") #'ps/show-super-agenda)         ; a → "agenda"
+    (define-key m (kbd "a") #'ps/show-agenda)               ; a → Agenda
     (define-key m (kbd "A") #'org-agenda)                   ; A → full chooser
-    (define-key m (kbd "n") #'ps/show-agenda)               ; n → NEXT
+    (define-key m (kbd "n") #'ps/show-tasks)                ; n → Tasks (all open)
     (define-key m (kbd "v") #'ps/org-show-availability)     ; v → aVailability
     (define-key m (kbd "x") #'ps/show-conflicts)            ; x → conflicts/clashes
     ;; Capture & notes
@@ -1305,8 +1329,8 @@ muscle memory; remove them later if you outgrow them.
     "Productivity tools menu (Org planning, links, sync, etc.)."
     '("Productivity"
       ("Plan & Review"
-       ["Super Agenda"        ps/show-super-agenda     :keys "C-c a c"]
-       ["Show NEXT Tasks"     ps/show-agenda           :keys "C-c p n"]
+       ["Agenda"              ps/show-agenda           :keys "C-c p a"]
+       ["Tasks"               ps/show-tasks            :keys "C-c p n   /   F9"]
        ["Full Agenda…"        org-agenda               :keys "C-c a"]
        ["Show Availability"   ps/org-show-availability :keys "C-c p v"]
        ["Check Conflicts"     ps/show-conflicts        :keys "C-c p x"])
