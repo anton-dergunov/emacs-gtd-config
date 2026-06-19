@@ -250,4 +250,33 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
 (ert-deftest ps/agenda-layout--reldate-text-content ()
   (should (equal (ps/agenda-layout--reldate-text "in 5d" 'future) " in 5d")))
 
+;;; -------------------------------------------------------
+;;; go-to-today button
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-layout-date-today-is-a-command ()
+  (should (fboundp 'ps/agenda-layout-date-today))
+  (should (commandp 'ps/agenda-layout-date-today)))
+
+(ert-deftest ps/agenda-layout--date-is-today-p-matches-day-prop ()
+  (with-temp-buffer
+    (insert (propertize "today" 'day (org-today)))
+    (insert " ")
+    (insert (propertize "other" 'day (1- (org-today))))
+    (insert " plain")
+    (goto-char (point-min))
+    ;; First word carries today's absolute day → today.
+    (should (ps/agenda-layout--date-is-today-p (point)))
+    ;; Second word carries a different day → not today.
+    (should-not (ps/agenda-layout--date-is-today-p (+ (point) 6)))
+    ;; Last word has no `day' property → not today.
+    (should-not (ps/agenda-layout--date-is-today-p (1- (point-max))))))
+
+(ert-deftest ps/agenda-layout--date-button-today-has-keymap-and-help ()
+  (let ((btn (ps/agenda-layout--date-button "today" "⊙"
+                                            #'ps/agenda-layout-date-today "Go to today")))
+    (should (stringp btn))
+    (should (keymapp (get-text-property 0 'keymap btn)))
+    (should (equal (get-text-property 0 'help-echo btn) "Go to today"))))
+
 ;;; test-ps-agenda-layout.el ends here

@@ -628,6 +628,16 @@ there is no such run."
   (interactive)
   (when (fboundp 'org-agenda-redo) (org-agenda-redo)))
 
+(defun ps/agenda-layout-date-today ()
+  "Show today in the agenda."
+  (interactive)
+  (when (fboundp 'org-agenda-goto-today) (org-agenda-goto-today)))
+
+(defun ps/agenda-layout--date-is-today-p (pos)
+  "Return non-nil when the agenda date header at POS is today."
+  (let ((day (get-text-property pos 'day)))
+    (and day (fboundp 'org-today) (= day (org-today)))))
+
 (defun ps/agenda-layout--date-button (icon-name fallback cmd help)
   "Return a clickable one-column button.
 Shows Material Symbol ICON-NAME (or FALLBACK glyph on non-graphical frames),
@@ -676,6 +686,12 @@ so B / F / . and the buttons keep working."
                             2))))
          (display
           (concat
+           ;; "Go to today" — only when the shown day is not today.
+           (when (not (ps/agenda-layout--date-is-today-p bol))
+             (concat
+              (ps/agenda-layout--space-to (max 0 (- tstart 4)))
+              (ps/agenda-layout--date-button "today" "⊙"
+                                             #'ps/agenda-layout-date-today "Go to today")))
            (ps/agenda-layout--space-to (max 0 (- tstart 2)))
            (ps/agenda-layout--date-button "chevron_left" "‹"
                                           #'ps/agenda-layout-date-prev "Previous day")
