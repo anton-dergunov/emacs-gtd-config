@@ -934,6 +934,17 @@ aligned in a single column the way =comment-region= does.
 #+begin_src emacs-lisp
   ;; https://emacs.stackexchange.com/questions/42571/org-agenda-date-prompt-mini-calendar-start-week-on-monday
   (setq calendar-week-start-day 1)
+
+  ;; With two windows side by side, the date-entry calendar (org-read-date)
+  ;; would otherwise pop up by reusing the other content window, clobbering the
+  ;; buffer the date is being inserted into. Route *Calendar* to a short,
+  ;; full-width transient window at the bottom of the frame instead, so the
+  ;; existing windows stay put. (org-read-date restores the layout on exit.)
+  (add-to-list 'display-buffer-alist
+               '("\\*Calendar\\*"
+                 (display-buffer-at-bottom)
+                 (window-height . fit-window-to-buffer)
+                 (dedicated . t)))
 #+end_src
 
 *** Typo / spell checking (ps-typo.el)
