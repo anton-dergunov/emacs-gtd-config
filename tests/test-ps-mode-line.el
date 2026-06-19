@@ -135,5 +135,19 @@
 (ert-deftest ps/mode-line--truncate-empty-list ()
   (should (equal (ps/mode-line--truncate-segments nil 10) "")))
 
+;;; -------------------------------------------------------
+;;; destructive mouse clicks disabled
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--disable-destructive-mouse-binds-ignore ()
+  "mouse-2 (delete-other-windows) and mouse-3 (delete-window) become no-ops."
+  (let ((global-map (make-sparse-keymap)))
+    ;; Seed the destructive defaults, then confirm they are neutralized.
+    (define-key global-map [mode-line mouse-2] #'mouse-delete-other-windows)
+    (define-key global-map [mode-line mouse-3] #'mouse-delete-window)
+    (ps/mode-line--disable-destructive-mouse)
+    (should (eq (lookup-key global-map [mode-line mouse-2]) #'ignore))
+    (should (eq (lookup-key global-map [mode-line mouse-3]) #'ignore))))
+
 (provide 'test-ps-mode-line)
 ;;; test-ps-mode-line.el ends here

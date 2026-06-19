@@ -197,6 +197,16 @@ triggered (wrapper, dispatcher, `g'/redo)."
   "Return the current buffer's name without a trailing \".org\"."
   (ps/mode-line--buffer-name))
 
+;;; Mouse
+
+(defun ps/mode-line--disable-destructive-mouse ()
+  "Disable the old-school destructive mode-line mouse clicks (global).
+By default mouse-2 closes the other windows and mouse-3 closes the
+window — both are easy to trigger by accident in a planning UI.  Left
+click (select window) and drag-to-resize are left untouched."
+  (define-key global-map [mode-line mouse-2] #'ignore)
+  (define-key global-map [mode-line mouse-3] #'ignore))
+
 ;;; Setup
 
 (defun ps/mode-line--org-setup ()
@@ -213,6 +223,7 @@ mode line, so the live percentage/breadcrumb would otherwise look stale."
   (add-hook 'org-mode-hook #'ps/mode-line--org-setup)
   ;; Negative depth: run before the emoji/layout finalize hooks.
   (add-hook 'org-agenda-finalize-hook #'ps/mode-line--agenda-finalize -90)
+  (ps/mode-line--disable-destructive-mouse)
   (setq frame-title-format '(:eval (ps/mode-line--frame-title))))
 
 (provide 'ps-mode-line)

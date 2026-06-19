@@ -301,10 +301,10 @@ status (text label + tooltip) is appended when `ps-git-sync' is loaded."
                      'mouse-face 'mode-line-highlight
                      'help-echo "mouse-1: switch file set"
                      'local-map
+                     ;; mouse-3 (and mouse-2) are disabled globally by
+                     ;; `ps/mode-line--disable-destructive-mouse'.
                      (let ((map (make-sparse-keymap)))
                        (define-key map [mode-line mouse-1] #'ps/file-tree--modeline-click)
-                       (define-key map [mode-line down-mouse-3] #'ignore)
-                       (define-key map [mode-line mouse-3] #'ignore)
                        map)))
         (sync (and (fboundp 'ps/git-sync--modeline)
                    (ps/git-sync--modeline))))
