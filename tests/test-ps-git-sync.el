@@ -108,32 +108,32 @@ Skipped when git is unavailable. Cleans up the repo afterward."
       (should (equal (get-text-property (1- (length s)) 'help-echo s)
                      "hello there")))))
 
-(ert-deftest ps/git-sync--modeline-paused-face ()
-  "When paused, the modeline uses the firebrick face."
+(ert-deftest ps/git-sync--modeline-error-face ()
+  "An error status uses the firebrick (red) face."
   (let ((ps/git-sync--last-status ps/git-sync--icon-error)
-        (ps/git-sync--last-message "paused")
+        (ps/git-sync--last-message "failed")
         (ps/git-sync-paused t))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:inherit mode-line :foreground "firebrick"))))))
+      (should (equal face '(:foreground "firebrick"))))))
 
 (ert-deftest ps/git-sync--modeline-ok-face ()
-  "An OK status (not paused) uses the gray40 face."
+  "An OK status uses the gray40 face."
   (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
         (ps/git-sync--last-message "ok")
         (ps/git-sync-paused nil))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:inherit mode-line :foreground "gray40"))))))
+      (should (equal face '(:foreground "gray40"))))))
 
-(ert-deftest ps/git-sync--modeline-default-face ()
-  "A non-OK, non-paused status uses the gray60 face."
+(ert-deftest ps/git-sync--modeline-off-face ()
+  "The off/paused (offline) status is neutral gray, not red."
   (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
         (ps/git-sync--last-message "off")
-        (ps/git-sync-paused nil))
+        (ps/git-sync-paused t))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:inherit mode-line :foreground "gray60"))))))
+      (should (equal face '(:foreground "gray60"))))))
 
 ;;; -------------------------------------------------------
 ;;; conflict handling

@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 Three focused tools help you plan around your scheduled time: find free slots,
 spot conflicts, and move events between timezones. Each opens its own buffer
 with on-screen controls, so you can adjust options without remembering any

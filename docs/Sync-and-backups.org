@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 Your Org files are valuable — this config works to keep them saved, synced
 across machines, and recoverable.
 
@@ -17,7 +19,7 @@ stay in step across devices without you running any Git commands.
 
 The sync is intentionally quiet and won't commit while you're mid-edit. (It is
 also disabled automatically when running the dev launcher — see
-[[file:developing.org][Developing & extending]].)
+[[file:Developing.org][Developing & extending]].)
 
 * Auto-save and auto-revert
 You rarely need to press save:

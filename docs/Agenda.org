@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 The agenda is the heart of this config: a single, calm view of what matters
 today, built from all the tasks across your =Areas/= files. This page explains
 how to open it, how to read it, and the visual touches that make it pleasant to
@@ -37,7 +39,7 @@ mark what's important with priority =A=, mark what you're actively doing as
 Each task line is laid out in aligned columns so it scans cleanly:
 
 - a *category icon* for the file the task came from (e.g. a briefcase for
-  =Work.org=) — see [[file:customization.org][Customization & appearance]] to map your own;
+  =Work.org=) — see [[file:Customization.org][Customization & appearance]] to map your own;
 - the *category name*;
 - compact *pills* for the TODO state and priority;
 - the task text;
@@ -57,7 +59,7 @@ Schedule View*:
   compact list.
 
 Overlapping events are flagged with =⚠ overlap= at the right edge (the
-[[file:planning-tools.org][conflict checker]] does a more thorough pass).
+[[file:Planning-tools.org][conflict checker]] does a more thorough pass).
 
 *Auto-refresh* (on by default, toggle in the same menu) regenerates the agenda
 at the start of each minute so the now-indicator and DONE visibility stay
@@ -66,16 +68,16 @@ current; your cursor and scroll position are preserved.
 * Moving around in the agenda
 The agenda is read-only-ish — you act on tasks without leaving it:
 
-| Key       | Action                                            |
-|-----------+---------------------------------------------------|
-| =n= / =p=     | next / previous line                              |
-| =RET=       | jump to the task in its file                      |
-| =SPC= / =TAB= | peek at the task in another window                |
-| =t=         | change the task's TODO state                      |
-| =,=         | set its priority                                  |
-| =:=         | set its tags                                      |
-| =r= / =g=     | refresh the agenda                                |
-| =q=         | quit the agenda window                            |
+| Key       | Action                             |
+|-----------+------------------------------------|
+| n / p     | next / previous line               |
+| RET       | jump to the task in its file       |
+| SPC / TAB | peek at the task in another window |
+| t         | change the task's TODO state       |
+| ,         | set its priority                   |
+| :         | set its tags                       |
+| r / g     | refresh the agenda                 |
+| q         | quit the agenda window             |
 
 * Folding sections
 Agenda sections can be collapsed. Press =TAB= (or click a section header) to
@@ -89,7 +91,7 @@ planning environment rather than left at the Emacs default: it shows the file
 name, your position, and the current heading, separated by a thin =·=. Like
 =org-super-agenda= grouping and the layout pills, it's part of making the
 planning view readable — not a cosmetic theme choice. Its colors follow whatever
-[[file:customization.org][theme]] you pick.
+[[file:Customization.org][theme]] you pick.
 
 * Under the hood / Customize
 - The sections come from =org-super-agenda= and the custom command =c=, defined

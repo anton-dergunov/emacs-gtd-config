@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 This page walks through a full setup on macOS, Linux, and Windows. For a
 two-minute version, see the [[file:../README.md][README]].
 
@@ -41,7 +43,7 @@ On Windows the directory is usually
 #+begin_quote
 *Already have an `~/.emacs.d`?* Back it up first (=mv ~/.emacs.d ~/.emacs.d.bak=).
 You can also run this config from any directory without touching =~/.emacs.d= —
-see [[file:developing.org][Developing & extending]].
+see [[file:Developing.org][Developing & extending]].
 #+end_quote
 
 * 4. Point it at your Org files
@@ -59,7 +61,7 @@ To explore before committing to a layout, point it at the bundled example:
       (expand-file-name "samples/realistic/" user-emacs-directory))
 #+end_src
 
-See [[file:planning-setup.org][Planning setup]] for the folder layout the agenda expects.
+See [[file:Planning-setup.org][Planning setup]] for the folder layout the agenda expects.
 
 * 5. First launch
 Start Emacs. On the first run it downloads its packages into =elpa/= (this takes
@@ -89,7 +91,7 @@ each icon is a font glyph, sized to your text so it stays aligned everywhere.
 
 Without the font, everything still works — the file tree falls back to simple
 folder/file icons. Assigning icons to your own categories is covered in
-[[file:customization.org][Customization & appearance]].
+[[file:Customization.org][Customization & appearance]].
 
 * 7. Install spell-check libraries (optional)
 Org buffers get a quiet, multilingual typo checker. It needs the =enchant=
@@ -108,10 +110,10 @@ On macOS, English and several other languages work out of the box via the
 system speller; Russian and stricter checking need Hunspell dictionary files.
 If =enchant= isn't installed, the config still loads — typo checking simply
 stays off. Full details, including which languages are enabled and how to add
-dictionaries, are in [[file:customization.org][Customization & appearance]].
+dictionaries, are in [[file:Customization.org][Customization & appearance]].
 
 * Under the hood / Customize
 - The base directory and module loading happen in =config.org= ("Bootstrap"
   section) via =local.el=.
 - The dev launcher =scripts/run_emacs_dev.sh= sets all of this up automatically
-  for testing — see [[file:developing.org][Developing & extending]].
+  for testing — see [[file:Developing.org][Developing & extending]].

@@ -36,7 +36,7 @@ setup or borrow pieces for your own.
 
 ## Quick start
 
-> Full, per-OS instructions are in [docs/installation.org](docs/installation.org).
+> Full, per-OS instructions are in [docs/Installation.org](docs/Installation.org).
 
 1. Install [Emacs](https://www.gnu.org/software/emacs/download.html) (29+) and
    [ripgrep](https://github.com/BurntSushi/ripgrep) (used for searching).
@@ -52,24 +52,24 @@ setup or borrow pieces for your own.
    open the agenda.
 
 For the prettiest result, also install the **Material Symbols** icon font — see
-[docs/installation.org](docs/installation.org).
+[docs/Installation.org](docs/Installation.org).
 
 ## Documentation
 
-Start here: **[docs/index.org](docs/index.org)** — a guided table of contents.
+Start here: **[docs/Index.org](docs/Index.org)** — a guided table of contents.
 
 Jump straight to:
 
-- [Installation](docs/installation.org) — set it up on macOS, Linux, or Windows
-- [Emacs basics](docs/emacs-basics.org) — new to Emacs? essential editing and
+- [Installation](docs/Installation.org) — set it up on macOS, Linux, or Windows
+- [Emacs basics](docs/Emacs-basics.org) — new to Emacs? essential editing and
   navigation keys
-- [Planning setup](docs/planning-setup.org) — your Org files, task states, and
+- [Planning setup](docs/Planning-setup.org) — your Org files, task states, and
   the keys for editing tasks
-- [The Agenda](docs/agenda.org) — the heart of the system
-- [Customization & appearance](docs/customization.org) — themes, fonts, icons,
+- [The Agenda](docs/Agenda.org) — the heart of the system
+- [Customization & appearance](docs/Customization.org) — themes, fonts, icons,
   and settings
 
 ## Developing
 
 Run Emacs straight from this repo (no install), run the tests, and extend it
-with new modules — see [docs/developing.org](docs/developing.org).
+with new modules — see [docs/Developing.org](docs/Developing.org).

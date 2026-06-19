@@ -1,0 +1,49 @@
+#+TITLE: The Tasks view
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+Where [[file:Agenda.org][the Agenda]] answers "what matters today?", the *Tasks* view answers "show
+me everything that's still open." It's a single flat list of all unfinished
+tasks across your =Areas/= files, which you then slice down with filters.
+
+* Opening it
+Press =F9= or =C-c p n= (Productivity → Plan & Review → Tasks), or run
+=M-x ps/show-tasks=.
+
+* Switching which states are shown
+The view has a selector header for the TODO keywords. Press a number then =r= to
+show only that keyword's tasks, and =r= / =g= to rebuild the list:
+
+- =0 r=, =1 r=, … =6 r= — switch which TODO keyword is displayed.
+- =r= / =g= — rebuild / refresh.
+
+* Filtering the list
+These are Org's agenda filter keys, and they're what make the Tasks view
+powerful — combine them to drill down quickly:
+
+- =/= — filter by tag (prefix the tag with =-= to exclude it)
+- =\= — add another tag filter on top of the current one
+- === — filter by regexp
+- =<= — filter by the category at point
+- =_= — filter by effort
+- =|= — remove all filters
+
+* Working with tasks
+Navigation and editing match the rest of the agenda:
+
+| Key            | Action                             |
+|----------------+------------------------------------|
+| n / p / arrows | move between tasks                 |
+| RET            | jump to the task in its file       |
+| SPC / TAB      | peek at the task in another window |
+| t              | change the TODO state              |
+| ,              | set priority                       |
+| :              | set tags                           |
+| q              | quit                               |
+
+* Under the hood / Customize
+- =ps/show-tasks= is defined in =config.org= → /Keybindings & Menu → F9 — show
+  Tasks/. The filtering and navigation keys are Org's own
+  (=org-agenda-mode-map=), so they behave the same in any agenda buffer.

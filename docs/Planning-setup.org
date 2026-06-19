@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 This page explains how your Org files are organized, the task states and
 priorities this config uses, and the everyday Org-mode keys for editing tasks.
 
@@ -12,7 +14,7 @@ it as a calm, lightweight starting point you can shape to your own taste.
 
 * Your Org files
 Everything lives under the one base directory you set in =local.el=
-(=my-org-base-directory= — see [[file:installation.org][Installation]]). The recommended layout:
+(=my-org-base-directory= — see [[file:Installation.org][Installation]]). The recommended layout:
 
 #+begin_example
 <my-org-base-directory>/
@@ -29,7 +31,7 @@ Everything lives under the one base directory you set in =local.el=
 - =Vision/= and =Current/= are yours to use freely; the agenda doesn't scan
   them automatically.
 - =workspace.org= holds settings tied to /this/ data folder (your category
-  icons, your file-tree sets) — see [[file:customization.org][Customization & appearance]].
+  icons, your file-tree sets) — see [[file:Customization.org][Customization & appearance]].
 
 A working example of this whole layout ships in =samples/realistic/=.
 
@@ -86,14 +88,14 @@ with =M-↑= / =M-↓= — see the key table below.
 A task is a headline that starts with a keyword. This config uses a short
 sequence (kept to four characters so the agenda stays compact):
 
-| Keyword | Meaning                                              |
-|---------+------------------------------------------------------|
-| =TODO=    | something to do, not started                         |
-| =NEXT=    | a concrete next action                               |
-| =INPR=    | in progress right now                                |
-| =WAIT=    | blocked / waiting on someone or something            |
-| =MAYB=    | maybe / someday — not committed                      |
-| =DONE=    | finished (drops out of the active agenda)            |
+| Keyword | Meaning                                   |
+|---------+-------------------------------------------|
+| TODO    | something to do, not started              |
+| NEXT    | a concrete next action                    |
+| INPR    | in progress right now                     |
+| WAIT    | blocked / waiting on someone or something |
+| MAYB    | maybe / someday — not committed           |
+| DONE    | finished (drops out of the active agenda) |
 
 In practice many people lean on =INPR= plus *priorities* (below) rather than
 =NEXT= to decide what to work on — the agenda has dedicated /In progress/ and
@@ -133,17 +135,17 @@ delete the planning line.
 These are standard Org-mode bindings, used while editing an Org file (not the
 agenda). They're worth committing to muscle memory.
 
-| Key            | Action                                                    |
-|----------------+-----------------------------------------------------------|
-| =C-c C-t=        | change the TODO state (pick from the list)                |
-| =S-→= / =S-←=     | cycle the TODO state right / left without a menu          |
-| =C-c ,=          | set the priority (=A=/=B=/=C=, or =SPC= to clear)          |
-| =C-c C-s=        | add/edit a *SCHEDULED* date (calendar picker)             |
-| =C-c C-d=        | add/edit a *DEADLINE* date                                |
-| =M-RET=          | new headline/task at the same level, below the current   |
-| =M-→= / =M-←=     | demote / promote the heading (change its level)           |
-| =M-↑= / =M-↓=     | move the whole subtree up / down among its siblings       |
-| =C-c C-c=        | set tags on a heading (also: act on the thing at point)   |
+| Key       | Action                                                  |
+|-----------+---------------------------------------------------------|
+| C-c C-t   | change the TODO state (pick from the list)              |
+| S-→ / S-← | cycle the TODO state right / left without a menu        |
+| C-c ,     | set the priority (A/B/C, or SPC to clear)               |
+| C-c C-s   | add/edit a SCHEDULED date (calendar picker)             |
+| C-c C-d   | add/edit a DEADLINE date                                |
+| M-RET     | new headline/task at the same level, below the current  |
+| M-→ / M-← | demote / promote the heading (change its level)         |
+| M-↑ / M-↓ | move the whole subtree up / down among its siblings     |
+| C-c C-c   | set tags on a heading (also: act on the thing at point) |
 
 * Folding: see more or less
 Org files are outlines you can collapse and expand:
@@ -154,7 +156,7 @@ Org files are outlines you can collapse and expand:
 - =C-u C-u TAB= — reset the buffer to its startup folding.
 
 This config also fades and folds *DONE* tasks so finished work recedes visually
-— see [[file:files-and-navigation.org][Files & navigation]] and [[file:agenda.org][The Agenda]].
+— see [[file:Files-and-navigation.org][Files & navigation]] and [[file:Agenda.org][The Agenda]].
 
 * Under the hood / Customize
 - The task keywords are defined once in =config.org= → /Org Mode → Agenda →

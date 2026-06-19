@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 Good planning starts with getting things out of your head quickly. This page
 covers capturing tasks and notes, and keeping a journal.
 
@@ -37,7 +39,7 @@ This config uses [[https://github.com/bastibe/org-journal][org-journal]], organi
 * Storing links to come back to
 =C-c p l= (=org-store-link=) remembers a pointer to wherever you are — a file, a
 heading, an email — so you can paste it as a clickable link elsewhere. For
-inserting web and note links, see [[file:notes-and-links.org][Notes & links]].
+inserting web and note links, see [[file:Notes-and-links.org][Notes & links]].
 
 * Under the hood / Customize
 - Journal settings (folder, weekly files, date format) are in =config.org= →

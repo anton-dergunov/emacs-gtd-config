@@ -1249,12 +1249,41 @@ Logic lives in =lisp/ps-blank-lines.el=.
 ** Help — open the documentation in Emacs
 The user docs live in =docs/*.org=. =ps/help-open-doc= opens one (the index by
 default); the Productivity → Help menu and =C-c p h= use it.
+
+Docs are meant for *reading*, so any =.org= under =docs/= opens read-only and
+with the Org emphasis markers hidden (a clean, rendered look); inter-doc links
+then navigate in the same window, and each page carries a "back to index" link.
+To edit a doc from inside Emacs, toggle read-only with =C-x C-q=.
 #+begin_src emacs-lisp
+  (defun ps/help--docs-dir ()
+    "Absolute path of the documentation directory."
+    (expand-file-name "docs/" user-emacs-directory))
+
+  (defun ps/help--doc-buffer-p ()
+    "Non-nil if the current buffer visits a file under `docs/'."
+    (and buffer-file-name
+         (string-prefix-p (ps/help--docs-dir)
+                          (expand-file-name buffer-file-name))))
+
+  (defun ps/help--setup-doc-buffer ()
+    "Apply the read-only, cleanly-rendered reading view to a doc buffer."
+    (when (and (derived-mode-p 'org-mode) (ps/help--doc-buffer-p))
+      (setq-local org-hide-emphasis-markers t)
+      (font-lock-flush)
+      (read-only-mode 1)))
+  (add-hook 'org-mode-hook #'ps/help--setup-doc-buffer)
+
   (defun ps/help-open-doc (&optional file)
-    "Open documentation FILE (relative to docs/), defaulting to the index."
+    "Open documentation FILE (relative to docs/), defaulting to the index.
+Opens in a normal content window rather than the dedicated file-tree
+window, so the docs do not spawn an extra window."
     (interactive)
-    (find-file (expand-file-name (concat "docs/" (or file "index.org"))
-                                 user-emacs-directory)))
+    (let ((path (expand-file-name (concat "docs/" (or file "Index.org"))
+                                  user-emacs-directory))
+          (win (and (fboundp 'ps/file-tree--target-window)
+                    (ps/file-tree--target-window))))
+      (when win (select-window win))
+      (find-file path)))
 #+end_src
 
 ** Toggle horizontal/vertical split (=C-x |=)
@@ -1437,13 +1466,13 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])
       ("Help"
-       ["Documentation (Index)" (ps/help-open-doc "index.org") :keys "C-c p h"]
+       ["Documentation (Index)" (ps/help-open-doc "Index.org") :keys "C-c p h"]
        "---"
-       ["Keybinding Cheat Sheet" (ps/help-open-doc "keybindings.org") t]
-       ["The Agenda"            (ps/help-open-doc "agenda.org") t]
-       ["Planning Setup"        (ps/help-open-doc "planning-setup.org") t]
+       ["Keybinding Cheat Sheet" (ps/help-open-doc "Keybindings.org") t]
+       ["The Agenda"            (ps/help-open-doc "Agenda.org") t]
+       ["Planning Setup"        (ps/help-open-doc "Planning-setup.org") t]
        "---"
-       ["About this configuration" (ps/help-open-doc "about.org") t])))
+       ["About this configuration" (ps/help-open-doc "About.org") t])))
 
   ;; Pin the menu just before Help. Final-items is rendered in list order, so
   ;; prepending puts us to the left of help-menu (which stays last).

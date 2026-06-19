@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 This config is also a small codebase you can hack on — whether to fix something,
 add a feature, or borrow ideas for your own setup. This page covers the
 development loop: running it safely, running the tests, and adding a module.

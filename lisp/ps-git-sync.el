@@ -70,16 +70,20 @@ Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
    (ps/git-sync--label)
    'help-echo (ps/git-sync--help-echo)
    'face
-   ;; Inherit `mode-line' so the label uses the same font family/height as the
-   ;; rest of the file-tree mode line (e.g. the file-set selector); only the
-   ;; colour differs per status.
+   ;; Foreground-only: everything else (font family, background) falls through to
+   ;; the contextual mode-line face, so the label matches the rest of the mode
+   ;; line in both active and inactive windows.  Colour is keyed off the status,
+   ;; not the paused flag, so the normal off/paused state stays neutral and red
+   ;; is reserved for a genuine failure.
    (cond
-    (ps/git-sync-paused
-     '(:inherit mode-line :foreground "firebrick"))
+    ((equal ps/git-sync--last-status ps/git-sync--icon-error)
+     '(:foreground "firebrick"))
     ((equal ps/git-sync--last-status ps/git-sync--icon-ok)
-     '(:inherit mode-line :foreground "gray40"))
+     '(:foreground "gray40"))
+    ((equal ps/git-sync--last-status ps/git-sync--icon-syncing)
+     '(:foreground "gray40"))
     (t
-     '(:inherit mode-line :foreground "gray60")))))
+     '(:foreground "gray60")))))
 
 ;;; Git helpers
 

@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 Linking ties your tasks and notes to the things they're about — web pages, and
 notes in an [[https://obsidian.md/][Obsidian]] vault. This config adds a few conveniences on top of Org's
 own linking.

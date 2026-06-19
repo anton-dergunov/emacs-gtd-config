@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 * What it is
 A minimalist Emacs configuration for planning your work and life in plain-text
 [[https://orgmode.org/][Org Mode]] files, with a clean, visual *agenda* at its centre. The workflow is
@@ -17,7 +19,7 @@ The guiding ideas:
 - *Org-native.* It builds on Org and a few well-chosen packages instead of
   reinventing them.
 - *Minimal and yours.* Sensible defaults, with one obvious place to change each
-  setting (see [[file:customization.org][Customization & appearance]]).
+  setting (see [[file:Customization.org][Customization & appearance]]).
 
 * Built on
 This configuration stands on excellent free software. The main pieces:
@@ -38,18 +40,18 @@ This configuration stands on excellent free software. The main pieces:
 - *helpful* — richer help buffers.
 - *which-key* — the popup that lists what a key prefix can do.
 - A range of *color-theme* packages — Solarized, ef-themes, Doom, Catppuccin,
-  Tokyo Night, Gruvbox, Nord, and more (see [[file:customization.org][Customization & appearance]]).
+  Tokyo Night, Gruvbox, Nord, and more (see [[file:Customization.org][Customization & appearance]]).
 
 On top of these sit this project's own modules (the =ps/...= features:
 the agenda layout, schedule view, availability, conflicts, file tree, git sync,
-and so on) — see [[file:developing.org][Developing & extending]].
+and so on) — see [[file:Developing.org][Developing & extending]].
 
 * Requirements
 - *Emacs 29 or newer* (the config and its dev tooling use recent features such
   as =--init-directory=).
 - Optional: the *Material Symbols Outlined* font (for category icons) and the
   *enchant* library plus dictionaries (for typo checking). Both are covered in
-  [[file:installation.org][Installation]]; everything still loads without them.
+  [[file:Installation.org][Installation]]; everything still loads without them.
 
 * Version
 There is no formal release number yet — the configuration is versioned by its

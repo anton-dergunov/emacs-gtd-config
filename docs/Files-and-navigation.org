@@ -2,6 +2,8 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
+[[file:Index.org][↑ Back to the documentation index]]
+
 This page covers moving around your Org files: the file tree, named file sets,
 scoping the agenda, window management, and quick jumps.
 
@@ -14,7 +16,7 @@ in the agenda.
 - Click a file's *name* to open it; click a folder to expand/collapse it.
 
 If the Material Symbols font isn't installed, files fall back to simple
-folder/file icons — see [[file:installation.org][Installation]] and [[file:customization.org][Customization & appearance]].
+folder/file icons — see [[file:Installation.org][Installation]] and [[file:Customization.org][Customization & appearance]].
 
 ** Browse a file's outline in the tree
 The tree isn't just files and folders — you can drill into a file's *headings*
@@ -41,15 +43,15 @@ A *file set* is a named subset of your Org files — for example "Work" or
   in the current set. Turn it off to always see everything.
 
 File sets are defined per Org folder in =workspace.org= — see
-[[file:customization.org][Customization & appearance]].
+[[file:Customization.org][Customization & appearance]].
 
 * Window management
-| Key            | Action                                              |
-|----------------+-----------------------------------------------------|
-| =C-x 1=          | focus: keep only the current window                 |
-| =C-x 2= / =C-x 3=  | split horizontally / vertically                     |
-| =C-x 0=          | close the current window                            |
-| =C-x o=          | switch focus to the other window                    |
+| Key           | Action                              |
+|---------------+-------------------------------------|
+| C-x 1         | focus: keep only the current window |
+| C-x 2 / C-x 3 | split horizontally / vertically     |
+| C-x 0         | close the current window            |
+| C-x o         | switch focus to the other window    |
 
 This config also adds =C-x |= (also =C-c p |=, =ps/window-split-toggle=) to flip
 a split between horizontal and vertical — handy when the agenda and a file end
@@ -59,7 +61,7 @@ up stacked the wrong way round.
 - =C-c p f= — open a *recent file* (=recentf=).
 - =C-c p i= — *imenu*: jump to a heading in the current file by name.
 - =C-s= — *Swiper* incremental search within the current buffer (see
-  [[file:emacs-basics.org][Emacs basics]]).
+  [[file:Emacs-basics.org][Emacs basics]]).
 - =s-r= — search across the whole project with ripgrep
   (=counsel-projectile-rg=).
 
