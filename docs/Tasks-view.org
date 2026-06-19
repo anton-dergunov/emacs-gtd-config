@@ -33,15 +33,15 @@ powerful — combine them to drill down quickly:
 * Working with tasks
 Navigation and editing match the rest of the agenda:
 
-| Key            | Action                             |
-|----------------+------------------------------------|
-| n / p / arrows | move between tasks                 |
-| RET            | jump to the task in its file       |
-| SPC / TAB      | peek at the task in another window |
-| t              | change the TODO state              |
-| ,              | set priority                       |
-| :              | set tags                           |
-| q              | quit                               |
+| Key                | Action                             |
+|--------------------+------------------------------------|
+| =n= / =p= / arrows | move between tasks                 |
+| =RET=              | jump to the task in its file       |
+| =SPC= / =TAB=      | peek at the task in another window |
+| =t=                | change the TODO state              |
+| =,=                | set priority                       |
+| =:=                | set tags                           |
+| =q=                | quit                               |
 
 * Under the hood / Customize
 - =ps/show-tasks= is defined in =config.org= → /Keybindings & Menu → F9 — show

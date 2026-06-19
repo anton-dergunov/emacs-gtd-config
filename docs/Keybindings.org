@@ -10,75 +10,75 @@ are kept for muscle memory. Pause after =C-c p= and =which-key= will list every
 option.
 
 * Plan & review
-| Key          | Command                  | Action                    |
-|--------------+--------------------------+---------------------------|
-| C-c p a      | ps/show-agenda           | open the agenda           |
-| C-c p A      | org-agenda               | full agenda dispatcher    |
-| C-c p n / F9 | ps/show-tasks            | open the Tasks view       |
-| C-c p v      | ps/org-show-availability | availability (free slots) |
-| C-c p x      | ps/show-conflicts        | conflict check            |
+| Key              | Command                    | Action                    |
+|------------------+----------------------------+---------------------------|
+| =C-c p a=        | =ps/show-agenda=           | open the agenda           |
+| =C-c p A=        | =org-agenda=               | full agenda dispatcher    |
+| =C-c p n= / =F9= | =ps/show-tasks=            | open the Tasks view       |
+| =C-c p v=        | =ps/org-show-availability= | availability (free slots) |
+| =C-c p x=        | =ps/show-conflicts=        | conflict check            |
 
 * Capture & notes
-| Key     | Command               | Action            |
-|---------+-----------------------+-------------------|
-| C-c p k | org-capture           | capture an item   |
-| C-c p j | org-journal-new-entry | new journal entry |
-| C-c p l | org-store-link        | store a link      |
+| Key       | Command                 | Action            |
+|-----------+-------------------------+-------------------|
+| =C-c p k= | =org-capture=           | capture an item   |
+| =C-c p j= | =org-journal-new-entry= | new journal entry |
+| =C-c p l= | =org-store-link=        | store a link      |
 
 * Insert links
-| Key          | Command                                | Action                    |
-|--------------+----------------------------------------+---------------------------|
-| C-c p u / F6 | ps/org-insert-link-async               | web link with auto-title  |
-| C-c p o / F4 | ps/insert-obsidian-link-from-clipboard | Obsidian link (clipboard) |
-| C-c p O / F5 | ps/insert-obsidian-link-prompt         | Obsidian link (prompt)    |
+| Key              | Command                                  | Action                    |
+|------------------+------------------------------------------+---------------------------|
+| =C-c p u= / =F6= | =ps/org-insert-link-async=               | web link with auto-title  |
+| =C-c p o= / =F4= | =ps/insert-obsidian-link-from-clipboard= | Obsidian link (clipboard) |
+| =C-c p O= / =F5= | =ps/insert-obsidian-link-prompt=         | Obsidian link (prompt)    |
 
 * Edit Org
-| Key               | Command                    | Action                       |
-|-------------------+----------------------------+------------------------------|
-| C-c p d / C-c p D | ps/done-collapse / -expand | collapse / expand DONE tasks |
-| C-c p r / F7      | ps/blank-lines-reinsert    | normalize blank lines        |
-| C-c p t           | ps/shift-timezone          | shift timezones              |
+| Key                   | Command                        | Action                       |
+|-----------------------+--------------------------------+------------------------------|
+| =C-c p d= / =C-c p D= | =ps/done-collapse= / =-expand= | collapse / expand DONE tasks |
+| =C-c p r= / =F7=      | =ps/blank-lines-reinsert=      | normalize blank lines        |
+| =C-c p t=             | =ps/shift-timezone=            | shift timezones              |
 
 * Layout & navigation
-| Key             | Command                           | Action                    |
-|-----------------+-----------------------------------+---------------------------|
-| C-c p 1 / C-x 1 | delete-other-windows              | focus current buffer      |
-| F8              | ps/file-tree-toggle               | toggle file tree          |
-| C-c p F         | ps/file-tree-cycle-file-set       | cycle file set            |
-| C-c p g         | ps/file-tree-toggle-agenda-filter | file set restricts agenda |
-| C-c p f         | recentf-open-files                | recent files              |
-| C-c p i         | imenu                             | jump to a heading         |
+| Key                 | Command                             | Action                    |
+|---------------------+-------------------------------------+---------------------------|
+| =C-c p 1= / =C-x 1= | =delete-other-windows=              | focus current buffer      |
+| =F8=                | =ps/file-tree-toggle=               | toggle file tree          |
+| =C-c p F=           | =ps/file-tree-cycle-file-set=       | cycle file set            |
+| =C-c p g=           | =ps/file-tree-toggle-agenda-filter= | file set restricts agenda |
+| =C-c p f=           | =recentf-open-files=                | recent files              |
+| =C-c p i=           | =imenu=                             | jump to a heading         |
 
 Flip a split between horizontal and vertical (=ps/window-split-toggle=):
 =C-x |= (also =C-c p |=).
 
 * Sync & version control
-| Key     | Command            | Action          |
-|---------+--------------------+-----------------|
-| C-c p s | ps/git-sync-toggle | toggle Git sync |
-| C-c p S | ps/git-sync-resume | resume Git sync |
-| C-x g   | magit-status       | open Magit      |
+| Key       | Command              | Action          |
+|-----------+----------------------+-----------------|
+| =C-c p s= | =ps/git-sync-toggle= | toggle Git sync |
+| =C-c p S= | =ps/git-sync-resume= | resume Git sync |
+| =C-x g=   | =magit-status=       | open Magit      |
 
 * Config
-| Key               | Command                          | Action                      |
-|-------------------+----------------------------------+-----------------------------|
-| C-c p C / F10     | ps/open-config-file              | open config.org             |
-| C-c p R           | ps/reload-config                 | reload config.org           |
-| C-c p W / C-c p w | ps/open-/reload-workspace-config | open / reload workspace.org |
-| C-c p T           | ps/preview-theme                 | audition a color theme      |
-| C-c p h           | ps/help-open-doc                 | open this documentation     |
+| Key                   | Command                            | Action                        |
+|-----------------------+------------------------------------+-------------------------------|
+| =C-c p C= / =F10=     | =ps/open-config-file=              | open =config.org=             |
+| =C-c p R=             | =ps/reload-config=                 | reload =config.org=           |
+| =C-c p W= / =C-c p w= | =ps/open-/reload-workspace-config= | open / reload =workspace.org= |
+| =C-c p T=             | =ps/preview-theme=                 | audition a color theme        |
+| =C-c p h=             | =ps/help-open-doc=                 | open this documentation       |
 
 * Org task editing (in an Org file)
-| Key         | Action                                    |
-|-------------+-------------------------------------------|
-| C-c C-t     | change TODO state                         |
-| S-→ / S-←   | cycle TODO state                          |
-| C-c ,       | set priority                              |
-| C-c C-s     | set SCHEDULED date                        |
-| C-c C-d     | set DEADLINE date                         |
-| M-RET       | new task at the same level                |
-| M-→ / M-←   | demote / promote heading                  |
-| M-↑ / M-↓   | move subtree up / down                    |
-| TAB / S-TAB | fold subtree / cycle whole-buffer folding |
+| Key             | Action                                    |
+|-----------------+-------------------------------------------|
+| =C-c C-t=       | change TODO state                         |
+| =S-→= / =S-←=   | cycle TODO state                          |
+| =C-c ,=         | set priority                              |
+| =C-c C-s=       | set SCHEDULED date                        |
+| =C-c C-d=       | set DEADLINE date                         |
+| =M-RET=         | new task at the same level                |
+| =M-→= / =M-←=   | demote / promote heading                  |
+| =M-↑= / =M-↓=   | move subtree up / down                    |
+| =TAB= / =S-TAB= | fold subtree / cycle whole-buffer folding |
 
 For general Emacs keys (movement, files, windows), see [[file:Emacs-basics.org][Emacs basics]].

@@ -25,14 +25,14 @@ Emacs key notation is compact:
 - =C-/= — *undo* (also =C-x u=). Redo by undoing after a =C-g=, or use =C-?=.
 
 * Moving the cursor
-| Key       | Moves to                         |
-|-----------+----------------------------------|
-| C-f / C-b | forward / backward one character |
-| M-f / M-b | forward / backward one word      |
-| C-a / C-e | start / end of the line          |
-| C-n / C-p | next / previous line             |
-| M-< / M-> | beginning / end of the buffer    |
-| C-v / M-v | down / up one screen             |
+| Key           | Moves to                         |
+|---------------+----------------------------------|
+| =C-f= / =C-b= | forward / backward one character |
+| =M-f= / =M-b= | forward / backward one *word*    |
+| =C-a= / =C-e= | start / end of the line          |
+| =C-n= / =C-p= | next / previous line             |
+| =M-<= / =M->= | beginning / end of the buffer    |
+| =C-v= / =M-v= | down / up one screen             |
 
 The arrow keys, Home/End, and Page Up/Down all work too — the bindings above
 just keep your hands on the home row.
@@ -47,12 +47,12 @@ just keep your hands on the home row.
 - The usual =Cmd/Ctrl-C= / =Cmd/Ctrl-V= often work too, depending on your build.
 
 * Files
-| Key     | Action                  |
-|---------+-------------------------|
-| C-x C-f | open (find) a file      |
-| C-x C-s | save the current file   |
-| C-x s   | save all modified files |
-| C-x C-c | quit Emacs              |
+| Key       | Action                  |
+|-----------+-------------------------|
+| =C-x C-f= | open (find) a file      |
+| =C-x C-s= | save the current file   |
+| =C-x s=   | save all modified files |
+| =C-x C-c= | quit Emacs              |
 
 In this config, Org files auto-save and auto-revert, so you rarely press
 =C-x C-s= yourself — see [[file:Sync-and-backups.org][Sync & backups]].
@@ -61,14 +61,14 @@ In this config, Org files auto-save and auto-revert, so you rarely press
 A *buffer* is an open document; a *window* is a pane showing one. Splitting lets
 you see several at once.
 
-| Key   | Action                                        |
-|-------+-----------------------------------------------|
-| C-x 1 | keep only the current window (close the rest) |
-| C-x 2 | split horizontally (one above the other)      |
-| C-x 3 | split vertically (side by side)               |
-| C-x 0 | close the current window                      |
-| C-x o | move focus to the other window                |
-| C-x b | switch buffer                                 |
+| Key     | Action                                        |
+|---------+-----------------------------------------------|
+| =C-x 1= | keep only the current window (close the rest) |
+| =C-x 2= | split *horizontally* (one above the other)    |
+| =C-x 3= | split *vertically* (side by side)             |
+| =C-x 0= | close the current window                      |
+| =C-x o= | move focus to the other window                |
+| =C-x b= | switch buffer                                 |
 
 This config adds =C-x |= (also =C-c p |=) to flip an existing split between
 horizontal and vertical — handy when the agenda and a file end up stacked the

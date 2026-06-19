@@ -418,16 +418,44 @@ with nothing to open (project roots, plain directories)."
 
 (defun ps/file-tree--target-window ()
   "Return the window where file-tree clicks should open files.
-This is the most-recently-used window other than the file tree itself, so
-files open wherever the user was last working regardless of how many other
-windows are present. Returns nil if no such window exists."
-  (let ((others (remove (treemacs-get-local-window) (window-list))))
-    (car (cl-sort others #'> :key #'window-use-time))))
+This is the most-recently-used real editor window: never the file tree, a
+side window, or a dedicated window.  Excluding side/dedicated windows (rather
+than only the tree by identity) ensures files never land in a dedicated window,
+where Emacs would split off a new one — which is what made windows multiply and
+the target alternate.  Returns nil if no editor window exists yet."
+  (let ((cands (seq-filter
+                (lambda (w)
+                  (and (not (window-dedicated-p w))
+                       (not (window-parameter w 'window-side))))
+                (window-list nil 'no-mini))))
+    (car (sort cands (lambda (a b)
+                       (> (window-use-time a) (window-use-time b)))))))
+
+(defun ps/file-tree-visit-file (file &optional pos)
+  "Visit FILE in the most-recently-used editor window, then optionally go to POS.
+Reuses a window already showing FILE; otherwise the most-recently-used real
+editor window (never the file tree or any side/dedicated window), creating one
+only if none exists.  With POS, move point there (revealing it in Org buffers).
+
+Note: only consult `get-buffer-window' when FILE actually has a buffer — calling
+it on a nil buffer returns the *current* window (the tree at click time), which
+would make Emacs split a new window to escape the dedicated side window."
+  (let* ((buf (get-file-buffer file))
+         (win (or (and buf (get-buffer-window buf))
+                  (ps/file-tree--target-window))))
+    (when (window-live-p win) (select-window win))
+    (find-file file)
+    (when pos
+      (goto-char pos)
+      (when (eq major-mode 'org-mode)
+        (if (fboundp 'org-fold-show-context)
+            (org-fold-show-context)
+          (org-show-context))))))
 
 (defun ps/file-tree--click-label ()
   "Handle a label click on the node at point.
-Files and org headings (leaf or intermediate) open on the right. Project
-roots and plain directories toggle expand/collapse, as before."
+Files and org headings (leaf or intermediate) open in the editor window.
+Project roots and plain directories toggle expand/collapse, as before."
   (when-let* ((btn (treemacs-current-button))
               (state (treemacs-button-get btn :state)))
     (if (memq state '(root-node-open root-node-closed
@@ -435,17 +463,7 @@ roots and plain directories toggle expand/collapse, as before."
         (treemacs-toggle-node)
       (when-let* ((target (ps/file-tree--node-target btn))
                   (file (car target)))
-        (let ((pos (cdr target))
-              (win (or (get-buffer-window (get-file-buffer file))
-                       (ps/file-tree--target-window))))
-          (when win (select-window win))
-          (find-file file)
-          (when pos
-            (goto-char pos)
-            (when (eq major-mode 'org-mode)
-              (if (fboundp 'org-fold-show-context)
-                  (org-fold-show-context)
-                (org-show-context)))))))))
+        (ps/file-tree-visit-file file (cdr target))))))
 
 ;;;###autoload
 (defun ps/file-tree-click (event)

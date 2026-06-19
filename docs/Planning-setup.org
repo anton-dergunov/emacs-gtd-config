@@ -90,12 +90,12 @@ sequence (kept to four characters so the agenda stays compact):
 
 | Keyword | Meaning                                   |
 |---------+-------------------------------------------|
-| TODO    | something to do, not started              |
-| NEXT    | a concrete next action                    |
-| INPR    | in progress right now                     |
-| WAIT    | blocked / waiting on someone or something |
-| MAYB    | maybe / someday — not committed           |
-| DONE    | finished (drops out of the active agenda) |
+| =TODO=  | something to do, not started              |
+| =NEXT=  | a concrete next action                    |
+| =INPR=  | in progress right now                     |
+| =WAIT=  | blocked / waiting on someone or something |
+| =MAYB=  | maybe / someday — not committed           |
+| =DONE=  | finished (drops out of the active agenda) |
 
 In practice many people lean on =INPR= plus *priorities* (below) rather than
 =NEXT= to decide what to work on — the agenda has dedicated /In progress/ and
@@ -135,17 +135,17 @@ delete the planning line.
 These are standard Org-mode bindings, used while editing an Org file (not the
 agenda). They're worth committing to muscle memory.
 
-| Key       | Action                                                  |
-|-----------+---------------------------------------------------------|
-| C-c C-t   | change the TODO state (pick from the list)              |
-| S-→ / S-← | cycle the TODO state right / left without a menu        |
-| C-c ,     | set the priority (A/B/C, or SPC to clear)               |
-| C-c C-s   | add/edit a SCHEDULED date (calendar picker)             |
-| C-c C-d   | add/edit a DEADLINE date                                |
-| M-RET     | new headline/task at the same level, below the current  |
-| M-→ / M-← | demote / promote the heading (change its level)         |
-| M-↑ / M-↓ | move the whole subtree up / down among its siblings     |
-| C-c C-c   | set tags on a heading (also: act on the thing at point) |
+| Key           | Action                                                  |
+|---------------+---------------------------------------------------------|
+| =C-c C-t=     | change the TODO state (pick from the list)              |
+| =S-→= / =S-←= | cycle the TODO state right / left without a menu        |
+| =C-c ,=       | set the priority (=A=/=B=/=C=, or =SPC= to clear)       |
+| =C-c C-s=     | add/edit a *SCHEDULED* date (calendar picker)           |
+| =C-c C-d=     | add/edit a *DEADLINE* date                              |
+| =M-RET=       | new headline/task at the same level, below the current  |
+| =M-→= / =M-←= | demote / promote the heading (change its level)         |
+| =M-↑= / =M-↓= | move the whole subtree up / down among its siblings     |
+| =C-c C-c=     | set tags on a heading (also: act on the thing at point) |
 
 * Folding: see more or less
 Org files are outlines you can collapse and expand:

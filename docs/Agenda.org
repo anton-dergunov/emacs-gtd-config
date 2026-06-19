@@ -68,16 +68,16 @@ current; your cursor and scroll position are preserved.
 * Moving around in the agenda
 The agenda is read-only-ish — you act on tasks without leaving it:
 
-| Key       | Action                             |
-|-----------+------------------------------------|
-| n / p     | next / previous line               |
-| RET       | jump to the task in its file       |
-| SPC / TAB | peek at the task in another window |
-| t         | change the task's TODO state       |
-| ,         | set its priority                   |
-| :         | set its tags                       |
-| r / g     | refresh the agenda                 |
-| q         | quit the agenda window             |
+| Key           | Action                             |
+|---------------+------------------------------------|
+| =n= / =p=     | next / previous line               |
+| =RET=         | jump to the task in its file       |
+| =SPC= / =TAB= | peek at the task in another window |
+| =t=           | change the task's TODO state       |
+| =,=           | set its priority                   |
+| =:=           | set its tags                       |
+| =r= / =g=     | refresh the agenda                 |
+| =q=           | quit the agenda window             |
 
 * Folding sections
 Agenda sections can be collapsed. Press =TAB= (or click a section header) to

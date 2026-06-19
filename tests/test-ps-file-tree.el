@@ -268,7 +268,8 @@ others as empty files."
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/file-tree--target-window-picks-most-recently-used ()
-  "Among non-tree windows, the most-recently-selected one is returned."
+  "Among real editor windows, the most-recently-selected one is returned;
+the dedicated file-tree (side) window is excluded."
   (let ((tree-buf (generate-new-buffer "tree"))
         (buf-a (generate-new-buffer "a"))
         (buf-b (generate-new-buffer "b")))
@@ -279,28 +280,74 @@ others as empty files."
           (let* ((tree-win (selected-window))
                  (win-a (split-window tree-win))
                  (win-b (split-window win-a)))
+            ;; Mark the tree window dedicated, like the real treemacs side
+            ;; window; it must never be chosen.
+            (set-window-dedicated-p tree-win t)
             (set-window-buffer win-a buf-a)
             (set-window-buffer win-b buf-b)
             (select-window win-a)
             (select-window win-b)
-            (cl-letf (((symbol-function 'treemacs-get-local-window)
-                       (lambda () tree-win)))
-              (should (eq (ps/file-tree--target-window) win-b))
-              (select-window win-a)
-              (should (eq (ps/file-tree--target-window) win-a)))))
+            (should (eq (ps/file-tree--target-window) win-b))
+            (select-window win-a)
+            (should (eq (ps/file-tree--target-window) win-a))))
       (mapc #'kill-buffer (list tree-buf buf-a buf-b)))))
 
 (ert-deftest ps/file-tree--target-window-nil-when-only-tree-window ()
-  "Returns nil when the file tree is the only window."
+  "Returns nil when the only window is the dedicated file tree."
   (let ((tree-buf (generate-new-buffer "tree")))
     (unwind-protect
         (save-window-excursion
           (delete-other-windows)
           (set-window-buffer (selected-window) tree-buf)
-          (let ((tree-win (selected-window)))
-            (cl-letf (((symbol-function 'treemacs-get-local-window)
-                       (lambda () tree-win)))
-              (should-not (ps/file-tree--target-window)))))
+          (set-window-dedicated-p (selected-window) t)
+          (should-not (ps/file-tree--target-window)))
       (kill-buffer tree-buf))))
+
+;;; ps/file-tree-visit-file
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree-visit-file-reuses-editor-window-not-tree ()
+  "Visiting a not-yet-open file from the dedicated tree window reuses the
+editor window instead of splitting a new one (the get-buffer-window-of-nil bug)."
+  (let* ((tmp (make-temp-file "ps-visit" nil ".txt"))
+         (tree-buf (generate-new-buffer "tree"))
+         (ed-buf (generate-new-buffer "editor")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) tree-buf)
+          (let* ((tree-win (selected-window))
+                 (ed-win (split-window tree-win)))
+            (set-window-buffer ed-win ed-buf)
+            ;; Emulate the treemacs side window and a click happening in it.
+            (set-window-dedicated-p tree-win t)
+            (select-window tree-win)
+            (let ((before (length (window-list))))
+              (ps/file-tree-visit-file tmp)
+              (should (= (length (window-list)) before))
+              (should (eq (selected-window) ed-win))
+              (should (eq (window-buffer ed-win) (get-file-buffer tmp))))))
+      (when (get-file-buffer tmp) (kill-buffer (get-file-buffer tmp)))
+      (kill-buffer tree-buf)
+      (kill-buffer ed-buf)
+      (delete-file tmp))))
+
+(ert-deftest ps/file-tree-visit-file-reuses-window-already-showing-file ()
+  "If FILE is already shown in a window, that window is reused."
+  (let* ((tmp (make-temp-file "ps-visit" nil ".txt"))
+         (buf-a (generate-new-buffer "a")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) buf-a)
+          (let* ((w1 (selected-window))
+                 (w2 (split-window w1)))
+            (set-window-buffer w2 (find-file-noselect tmp))
+            (select-window w1)
+            (ps/file-tree-visit-file tmp)
+            (should (eq (selected-window) w2))))
+      (when (get-file-buffer tmp) (kill-buffer (get-file-buffer tmp)))
+      (kill-buffer buf-a)
+      (delete-file tmp))))
 
 ;;; test-ps-file-tree.el ends here

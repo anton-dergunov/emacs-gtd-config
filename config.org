@@ -779,6 +779,10 @@ function cell can't satisfy a runtime function call.
     ;; Disable modern bullets
     (setq org-modern-star nil)
 
+    ;; Let `valign' own table rendering (used in the docs reading view); when
+    ;; both are active they fight and tables render misaligned.
+    (setq org-modern-table nil)
+
     ;; Tone down priority badges: use light weight instead of semibold so the
     ;; colored fill is less visually dominant.  Color still comes from the theme's
     ;; `org-priority' face, so this adapts automatically across themes.
@@ -1251,10 +1255,19 @@ The user docs live in =docs/*.org=. =ps/help-open-doc= opens one (the index by
 default); the Productivity → Help menu and =C-c p h= use it.
 
 Docs are meant for *reading*, so any =.org= under =docs/= opens read-only and
-with the Org emphasis markers hidden (a clean, rendered look); inter-doc links
-then navigate in the same window, and each page carries a "back to index" link.
-To edit a doc from inside Emacs, toggle read-only with =C-x C-q=.
+with the Org emphasis markers hidden (a clean, rendered look). =valign= keeps
+tables visually aligned even with the markers hidden; inter-doc links navigate
+in the same window, and each page carries a "back to index" link. To edit a doc
+from inside Emacs, toggle read-only with =C-x C-q=.
 #+begin_src emacs-lisp
+  ;; valign: visually align org tables even when emphasis markers / inline code
+  ;; are hidden (the doc reading view), where source-width alignment alone fails.
+  ;; `valign-fancy-bar' draws solid box-drawing separators so tables look like
+  ;; real tables rather than ASCII art.
+  (use-package valign
+    :ensure t :defer t
+    :config (setq valign-fancy-bar t))
+
   (defun ps/help--docs-dir ()
     "Absolute path of the documentation directory."
     (expand-file-name "docs/" user-emacs-directory))
@@ -1266,24 +1279,27 @@ To edit a doc from inside Emacs, toggle read-only with =C-x C-q=.
                           (expand-file-name buffer-file-name))))
 
   (defun ps/help--setup-doc-buffer ()
-    "Apply the read-only, cleanly-rendered reading view to a doc buffer."
+    "Apply the read-only, cleanly-rendered reading view to a doc buffer.
+Inter-doc links are routed through `ps/file-tree-visit-file' so they reuse the
+documentation's editor window instead of ever opening a new one."
     (when (and (derived-mode-p 'org-mode) (ps/help--doc-buffer-p))
       (setq-local org-hide-emphasis-markers t)
+      (setq-local org-link-frame-setup
+                  (cons '(file . ps/file-tree-visit-file)
+                        (assq-delete-all 'file (copy-alist org-link-frame-setup))))
       (font-lock-flush)
+      (when (require 'valign nil t) (valign-mode 1))
       (read-only-mode 1)))
   (add-hook 'org-mode-hook #'ps/help--setup-doc-buffer)
 
   (defun ps/help-open-doc (&optional file)
     "Open documentation FILE (relative to docs/), defaulting to the index.
-Opens in a normal content window rather than the dedicated file-tree
-window, so the docs do not spawn an extra window."
+Opens in the most-recently-used editor window (never the dedicated file-tree
+window), reusing it rather than spawning an extra window."
     (interactive)
-    (let ((path (expand-file-name (concat "docs/" (or file "Index.org"))
-                                  user-emacs-directory))
-          (win (and (fboundp 'ps/file-tree--target-window)
-                    (ps/file-tree--target-window))))
-      (when win (select-window win))
-      (find-file path)))
+    (ps/file-tree-visit-file
+     (expand-file-name (concat "docs/" (or file "Index.org"))
+                       user-emacs-directory)))
 #+end_src
 
 ** Toggle horizontal/vertical split (=C-x |=)

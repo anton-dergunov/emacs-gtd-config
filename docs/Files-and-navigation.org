@@ -46,12 +46,12 @@ File sets are defined per Org folder in =workspace.org= — see
 [[file:Customization.org][Customization & appearance]].
 
 * Window management
-| Key           | Action                              |
-|---------------+-------------------------------------|
-| C-x 1         | focus: keep only the current window |
-| C-x 2 / C-x 3 | split horizontally / vertically     |
-| C-x 0         | close the current window            |
-| C-x o         | switch focus to the other window    |
+| Key               | Action                              |
+|-------------------+-------------------------------------|
+| =C-x 1=           | focus: keep only the current window |
+| =C-x 2= / =C-x 3= | split horizontally / vertically     |
+| =C-x 0=           | close the current window            |
+| =C-x o=           | switch focus to the other window    |
 
 This config also adds =C-x |= (also =C-c p |=, =ps/window-split-toggle=) to flip
 a split between horizontal and vertical — handy when the agenda and a file end

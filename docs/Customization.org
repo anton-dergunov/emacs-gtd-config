@@ -42,18 +42,18 @@ Appearance/, set =ps/color-theme=:
 External-package themes are *installed automatically* on first load.
 Recommended values:
 
-| Kind        | Source         | Examples                                                                    |
-|-------------+----------------+-----------------------------------------------------------------------------|
-| Solarized   | package        | solarized-light (default), solarized-dark                                   |
-| modus       | built-in (28+) | modus-operandi, modus-vivendi                                               |
-| ef-themes   | package        | ef-day, ef-elea-dark, ef-winter, ef-autumn                                  |
-| standard    | package        | standard-light, standard-dark                                               |
-| doric       | package        | doric-light, doric-dark                                                     |
-| doom        | package        | doom-one, doom-one-light, doom-nord, doom-dracula, doom-gruvbox             |
-| Catppuccin  | package        | batppuccin-latte, batppuccin-mocha, batppuccin-macchiato, batppuccin-frappe |
-| Tokyo Night | package        | tokyo-night, tokyo-night-storm, tokyo-night-moon, tokyo-night-day           |
-| Gruvbox     | package        | gruvbox-dark-medium, gruvbox-light-medium                                   |
-| Nord        | package        | nord                                                                        |
+| Kind        | Source         | Examples                                                                            |
+|-------------+----------------+-------------------------------------------------------------------------------------|
+| Solarized   | package        | =solarized-light= (default), =solarized-dark=                                       |
+| modus       | built-in (28+) | =modus-operandi=, =modus-vivendi=                                                   |
+| ef-themes   | package        | =ef-day=, =ef-elea-dark=, =ef-winter=, =ef-autumn=                                  |
+| standard    | package        | =standard-light=, =standard-dark=                                                   |
+| doric       | package        | =doric-light=, =doric-dark=                                                         |
+| doom        | package        | =doom-one=, =doom-one-light=, =doom-nord=, =doom-dracula=, =doom-gruvbox=           |
+| Catppuccin  | package        | =batppuccin-latte=, =batppuccin-mocha=, =batppuccin-macchiato=, =batppuccin-frappe= |
+| Tokyo Night | package        | =tokyo-night=, =tokyo-night-storm=, =tokyo-night-moon=, =tokyo-night-day=           |
+| Gruvbox     | package        | =gruvbox-dark-medium=, =gruvbox-light-medium=                                       |
+| Nord        | package        | =nord=                                                                              |
 
 The config's own visual tweaks (faded DONE tasks, timestamp pills, metadata, the
 SCHEDULED/DEADLINE icons) adapt to the chosen theme automatically — the original
