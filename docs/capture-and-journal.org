@@ -9,7 +9,7 @@ covers capturing tasks and notes, and keeping a journal.
 *Capture* lets you jot a task or note from anywhere, without navigating to the
 right file first.
 
-- Press *=C-c p k=* (Productivity → Capture & Notes → Capture…), or
+- Press =C-c p k= (Productivity → Capture & Notes → Capture…), or
   =M-x org-capture=.
 - A typical home for fresh items is =Areas/Inbox.org=; you sort them into the
   right area later during a review.
@@ -29,7 +29,7 @@ Folder* opens =Areas/= in Dired (Emacs's file manager).
 A journal is a dated log — daily notes, a weekly review, a record of decisions.
 This config uses [[https://github.com/bastibe/org-journal][org-journal]], organized into *weekly* files.
 
-- Press *=C-c p j=* (Productivity → Capture & Notes → New Journal Entry), or
+- Press =C-c p j= (Productivity → Capture & Notes → New Journal Entry), or
   =M-x org-journal-new-entry=. It opens this week's journal file and drops in a
   dated heading ready to type under.
 - Entries live in a =Journal/= folder inside your Org base directory.

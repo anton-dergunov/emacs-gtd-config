@@ -1,0 +1,62 @@
+#+TITLE: About this configuration
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+* What it is
+A minimalist Emacs configuration for planning your work and life in plain-text
+[[https://orgmode.org/][Org Mode]] files, with a clean, visual *agenda* at its centre. The workflow is
+inspired by /Getting Things Done/: capture things out of your head, keep them in
+a handful of Org files, and review a single agenda that surfaces what matters
+today.
+
+The guiding ideas:
+
+- *Plain text, forever.* Your data is Org files you own — no database, no lock-in.
+- *Calm and visual.* A readable agenda with pills, icons, and a real timeline,
+  rather than a wall of text.
+- *Org-native.* It builds on Org and a few well-chosen packages instead of
+  reinventing them.
+- *Minimal and yours.* Sensible defaults, with one obvious place to change each
+  setting (see [[file:customization.org][Customization & appearance]]).
+
+* Built on
+This configuration stands on excellent free software. The main pieces:
+
+- *Org Mode* — the foundation: outlines, tasks, the agenda, capture, dates.
+- *org-super-agenda* — groups the agenda into the /Schedule/, /Due/,
+  /High-priority/, /In progress/ … sections.
+- *org-modern* — the modern look: timestamp pills, priority and TODO badges.
+- *org-superstar* — nicer heading bullets.
+- *org-journal* — dated journal entries.
+- *treemacs* — the file-tree sidebar.
+- *ivy* / *counsel* / *counsel-projectile* / *ivy-rich* / *swiper* — the
+  completion and search stack.
+- *projectile* — project-aware navigation and search.
+- *magit* — the Git interface (behind the automatic sync).
+- *jinx* — the quiet, multilingual typo checker.
+- *guess-language* — helps the spell checker pick the right language.
+- *helpful* — richer help buffers.
+- *which-key* — the popup that lists what a key prefix can do.
+- A range of *color-theme* packages — Solarized, ef-themes, Doom, Catppuccin,
+  Tokyo Night, Gruvbox, Nord, and more (see [[file:customization.org][Customization & appearance]]).
+
+On top of these sit this project's own modules (the =ps/...= features:
+the agenda layout, schedule view, availability, conflicts, file tree, git sync,
+and so on) — see [[file:developing.org][Developing & extending]].
+
+* Requirements
+- *Emacs 29 or newer* (the config and its dev tooling use recent features such
+  as =--init-directory=).
+- Optional: the *Material Symbols Outlined* font (for category icons) and the
+  *enchant* library plus dictionaries (for typo checking). Both are covered in
+  [[file:installation.org][Installation]]; everything still loads without them.
+
+* Version
+There is no formal release number yet — the configuration is versioned by its
+Git history. To see what you're running, check the repository:
+https://github.com/anton-dergunov/emacs-gtd-config
+
+* History
+# TODO: Fill in the story of the project — why it started, how it grew, and any
+# milestones worth mentioning.
+/(Coming soon.)/

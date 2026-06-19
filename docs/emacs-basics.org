@@ -17,10 +17,10 @@ Emacs key notation is compact:
 - =C-c p a= means press =C-c=, then =p=, then =a= in sequence.
 
 * The two keys that save you
-- *=C-g= — cancel.* Pressed anything by accident, or stuck in a half-typed
+- =C-g= — *cancel.* Pressed anything by accident, or stuck in a half-typed
   command? =C-g= quits it and returns you to a normal state. When in doubt, press
   =C-g=.
-- *=C-/= — undo* (also =C-x u=). Redo by undoing after a =C-g=, or use =C-?=.
+- =C-/= — *undo* (also =C-x u=). Redo by undoing after a =C-g=, or use =C-?=.
 
 * Moving the cursor
 | Key       | Moves to                        |
@@ -68,12 +68,12 @@ you see several at once.
 | =C-x o= | move focus to the other window                 |
 | =C-x b= | switch buffer                                  |
 
-This config adds *=C-x |=* (also =C-c p |=) to flip an existing split between
+This config adds =C-x |= (also =C-c p |=) to flip an existing split between
 horizontal and vertical — handy when the agenda and a file end up stacked the
 wrong way. See [[file:files-and-navigation.org][Files & navigation]].
 
 * Running commands
-Every command has a name. Press *=M-x=*, start typing, and pick from the list —
+Every command has a name. Press =M-x=, start typing, and pick from the list —
 this is how you reach anything without a key. The commands this config adds are
 named =ps/...=, so =M-x ps/= shows them all.
 

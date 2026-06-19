@@ -70,13 +70,16 @@ Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
    (ps/git-sync--label)
    'help-echo (ps/git-sync--help-echo)
    'face
+   ;; Inherit `mode-line' so the label uses the same font family/height as the
+   ;; rest of the file-tree mode line (e.g. the file-set selector); only the
+   ;; colour differs per status.
    (cond
     (ps/git-sync-paused
-     '(:foreground "firebrick"))
+     '(:inherit mode-line :foreground "firebrick"))
     ((equal ps/git-sync--last-status ps/git-sync--icon-ok)
-     '(:foreground "gray40"))
+     '(:inherit mode-line :foreground "gray40"))
     (t
-     '(:foreground "gray60")))))
+     '(:inherit mode-line :foreground "gray60")))))
 
 ;;; Git helpers
 

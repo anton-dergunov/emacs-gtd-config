@@ -1246,6 +1246,17 @@ Logic lives in =lisp/ps-blank-lines.el=.
     (message "Config reloaded"))
 #+end_src
 
+** Help — open the documentation in Emacs
+The user docs live in =docs/*.org=. =ps/help-open-doc= opens one (the index by
+default); the Productivity → Help menu and =C-c p h= use it.
+#+begin_src emacs-lisp
+  (defun ps/help-open-doc (&optional file)
+    "Open documentation FILE (relative to docs/), defaulting to the index."
+    (interactive)
+    (find-file (expand-file-name (concat "docs/" (or file "index.org"))
+                                 user-emacs-directory)))
+#+end_src
+
 ** Toggle horizontal/vertical split (=C-x |=)
 #+begin_src emacs-lisp
   ;; Partially reuses the code from:
@@ -1358,7 +1369,9 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
     (define-key m (kbd "R") #'ps/reload-config)             ; R → Reload global config
     (define-key m (kbd "W") #'ps/open-workspace-config)     ; W → open Workspace config
     (define-key m (kbd "w") #'ps/reload-workspace-config)   ; w → reload Workspace config
-    (define-key m (kbd "T") #'ps/preview-theme))            ; T → Theme preview
+    (define-key m (kbd "T") #'ps/preview-theme)             ; T → Theme preview
+    ;; Help
+    (define-key m (kbd "h") #'ps/help-open-doc))            ; h → Help / docs index
 
   (easy-menu-define ps/productivity-menu global-map
     "Productivity tools menu (Org planning, links, sync, etc.)."
@@ -1422,7 +1435,15 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
         ["Reload"                 ps/reload-workspace-config :keys "C-c p w"])
        ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
        ["Customize ps/* Settings"
-        (lambda () (interactive) (customize-apropos "^ps/")) t])))
+        (lambda () (interactive) (customize-apropos "^ps/")) t])
+      ("Help"
+       ["Documentation (Index)" (ps/help-open-doc "index.org") :keys "C-c p h"]
+       "---"
+       ["Keybinding Cheat Sheet" (ps/help-open-doc "keybindings.org") t]
+       ["The Agenda"            (ps/help-open-doc "agenda.org") t]
+       ["Planning Setup"        (ps/help-open-doc "planning-setup.org") t]
+       "---"
+       ["About this configuration" (ps/help-open-doc "about.org") t])))
 
   ;; Pin the menu just before Help. Final-items is rendered in list order, so
   ;; prepending puts us to the left of help-menu (which stays last).

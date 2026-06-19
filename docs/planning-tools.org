@@ -11,7 +11,7 @@ syntax.
 Computes your open time over the coming days from the scheduled events in your
 Org files, so you can answer "when am I free?" at a glance.
 
-- Open with *=C-c p v=* (Productivity → Plan & Review → Show Availability), or
+- Open with =C-c p v= (Productivity → Plan & Review → Show Availability), or
   =M-x ps/org-show-availability=.
 - The buffer shows free slots per day; use its controls to change the window of
   days, working hours, and formatting.
@@ -24,7 +24,7 @@ to include weekends, 12h vs 24h time, and the layout.
 Scans your scheduled events and reports two kinds of trouble: events that
 *overlap*, and gaps between back-to-back events that are uncomfortably *small*.
 
-- Open with *=C-c p x=* (Productivity → Plan & Review → Check Conflicts), or
+- Open with =C-c p x= (Productivity → Plan & Review → Check Conflicts), or
   =M-x ps/show-conflicts=.
 - A lightweight version of this check also runs automatically in the agenda,
   flagging overlapping timed events with =⚠ overlap=.
@@ -37,7 +37,7 @@ Shifts the timestamps in an Org file from one timezone to another and shows you
 a preview before anything is written — useful when you've planned in one zone
 and are travelling to another.
 
-- Open with *=C-c p t=* (Productivity → Edit Org → Shift Timezones…), or
+- Open with =C-c p t= (Productivity → Edit Org → Shift Timezones…), or
   =M-x ps/shift-timezone=.
 - Review the preview, then confirm to apply.
 

@@ -63,7 +63,7 @@ See [[file:planning-setup.org][Planning setup]] for the folder layout the agenda
 
 * 5. First launch
 Start Emacs. On the first run it downloads its packages into =elpa/= (this takes
-a minute). When it settles, press *=C-c p a=* to open the agenda.
+a minute). When it settles, press =C-c p a= to open the agenda.
 
 Optionally pre-download packages from the command line instead:
 

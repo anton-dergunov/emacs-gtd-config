@@ -2,7 +2,7 @@
 #+OPTIONS: toc:t
 #+STARTUP: inlineimages
 
-A one-page cheat sheet. Everything this config adds lives under the *=C-c p=*
+A one-page cheat sheet. Everything this config adds lives under the =C-c p=
 ("Productivity") prefix and is mirrored in the *Productivity* menu; the F-keys
 are kept for muscle memory. Pause after =C-c p= and =which-key= will list every
 option.
@@ -41,12 +41,14 @@ option.
 | Key             | Command                          | Action                          |
 |-----------------+----------------------------------+---------------------------------|
 | =C-c p 1= / =C-x 1= | =delete-other-windows=             | focus current buffer            |
-| =C-c p= \vert{} / =C-x= \vert{} | =ps/window-split-toggle=    | flip split horizontal/vertical |
 | =F8=              | =ps/file-tree-toggle=              | toggle file tree                |
 | =C-c p F=         | =ps/file-tree-cycle-file-set=      | cycle file set                  |
 | =C-c p g=         | =ps/file-tree-toggle-agenda-filter= | file set restricts agenda      |
 | =C-c p f=         | =recentf-open-files=               | recent files                    |
 | =C-c p i=         | =imenu=                            | jump to a heading               |
+
+Flip a split between horizontal and vertical (=ps/window-split-toggle=):
+=C-x |= (also =C-c p |=).
 
 * Sync & version control
 | Key     | Command             | Action               |
@@ -62,6 +64,7 @@ option.
 | =C-c p R=        | =ps/reload-config=            | reload =config.org=       |
 | =C-c p W= / =C-c p w= | =ps/open-/reload-workspace-config= | open / reload =workspace.org= |
 | =C-c p T=        | =ps/preview-theme=            | audition a color theme  |
+| =C-c p h=        | =ps/help-open-doc=            | open this documentation |
 
 * Org task editing (in an Org file)
 | Key        | Action                                  |

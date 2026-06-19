@@ -62,14 +62,14 @@ Passing the test suite is necessary but not sufficient — the real check is tha
 #+end_quote
 
 * How the config is organized
-- *=init.el=* loads =config.org= (tangling and executing its elisp blocks in
+- =init.el= loads =config.org= (tangling and executing its elisp blocks in
   order).
-- *=config.org=* is the main configuration, in literate Org form. Its /Settings/
+- =config.org= is the main configuration, in literate Org form. Its /Settings/
   section is where defaults live; keep edits small and surgical.
-- *=lisp/ps-*.el=* are extracted, self-contained modules (free-slot computation,
+- =lisp/ps-*.el= are extracted, self-contained modules (free-slot computation,
   conflicts, the agenda layout, the file tree, Git sync, …), each with ERT tests
   in =tests/test-*.el=.
-- *=scripts/=* holds Python helpers (e.g. the semantic emoji matcher) and shell
+- =scripts/= holds Python helpers (e.g. the semantic emoji matcher) and shell
   utilities.
 
 The long-term direction is to keep moving non-trivial logic out of =config.org=

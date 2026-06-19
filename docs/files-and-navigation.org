@@ -9,20 +9,34 @@ scoping the agenda, window management, and quick jumps.
 A sidebar tree of your Org folders and files, with the same category icons used
 in the agenda.
 
-- Toggle it with *=F8=* (Productivity → Layout & Navigation → Toggle File Tree),
+- Toggle it with =F8= (Productivity → Layout & Navigation → Toggle File Tree),
   or =M-x ps/file-tree-toggle=.
-- Click a file to open it; expand/collapse folders as usual.
+- Click a file's *name* to open it; click a folder to expand/collapse it.
 
 If the Material Symbols font isn't installed, files fall back to simple
 folder/file icons — see [[file:installation.org][Installation]] and [[file:customization.org][Customization & appearance]].
+
+** Browse a file's outline in the tree
+The tree isn't just files and folders — you can drill into a file's *headings*
+without opening it first. Where you click matters:
+
+- Click a file's *icon* (not its name) to *expand* the file, listing the Org
+  headings inside it. You can keep drilling into sub-headings the same way, so
+  the tree mirrors the file's outline.
+- Click any *heading* to open the file and jump straight to that heading.
+- Click a file's *name* to just open the file.
+- *Shift-click* any node (or click a folder) to toggle expand/collapse.
+
+This makes the file tree double as a table of contents for navigating large Org
+files.
 
 * File sets
 A *file set* is a named subset of your Org files — for example "Work" or
 "Personal" — so you can focus on a slice of everything at once.
 
-- *=C-c p F=* (Layout & Navigation → Cycle File Set) cycles through your defined
+- =C-c p F= (Layout & Navigation → Cycle File Set) cycles through your defined
   sets, switching what the file tree shows.
-- *=C-c p g=* (File Set Restricts Agenda) toggles whether the active set also
+- =C-c p g= (File Set Restricts Agenda) toggles whether the active set also
   *scopes the agenda* — when on, the agenda only includes tasks from the files
   in the current set. Turn it off to always see everything.
 
@@ -36,14 +50,14 @@ File sets are defined per Org folder in =workspace.org= — see
 | =C-x 2= / =C-x 3=  | split horizontally / vertically                     |
 | =C-x 0=          | close the current window                            |
 | =C-x o=          | switch focus to the other window                    |
-| =C-x= \vert{} / =C-c p= \vert{} | flip a split between horizontal and vertical |
 
-The last one (=ps/window-split-toggle=) is this config's own — handy when the
-agenda and a file end up stacked the wrong way round.
+This config also adds =C-x |= (also =C-c p |=, =ps/window-split-toggle=) to flip
+a split between horizontal and vertical — handy when the agenda and a file end
+up stacked the wrong way round.
 
 * Jumping around
-- *=C-c p f=* — open a *recent file* (=recentf=).
-- *=C-c p i=* — *imenu*: jump to a heading in the current file by name.
+- =C-c p f= — open a *recent file* (=recentf=).
+- =C-c p i= — *imenu*: jump to a heading in the current file by name.
 - =C-s= — *Swiper* incremental search within the current buffer (see
   [[file:emacs-basics.org][Emacs basics]]).
 - =s-r= — search across the whole project with ripgrep
@@ -53,4 +67,6 @@ agenda and a file end up stacked the wrong way round.
 - The file tree (built on =treemacs=) is =lisp/ps-file-tree.el=, with its icon
   theme in =lisp/ps-file-tree-icons.el=. Its ignore list and file sets are in
   =config.org= → /File Tree/ and in your =workspace.org=.
+- The icon-vs-name click behaviour is =ps/file-tree-click= /
+  =ps/file-tree--click-label= in =lisp/ps-file-tree.el=.
 - The split-toggle command is defined in =config.org= → /Keybindings & Menu/.

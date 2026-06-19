@@ -11,7 +11,7 @@ live in.
 [[file:../screenshots/solarized-light.png]]
 
 * Opening it
-Press *=C-c p a=* (Productivity → Plan & Review → Agenda), or run =M-x
+Press =C-c p a= (Productivity → Plan & Review → Agenda), or run =M-x
 ps/show-agenda=. It opens today's view immediately.
 
 For Org's full agenda dispatcher (other built-in views, date ranges, etc.),

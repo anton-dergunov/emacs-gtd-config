@@ -115,7 +115,7 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (ps/git-sync-paused t))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:foreground "firebrick"))))))
+      (should (equal face '(:inherit mode-line :foreground "firebrick"))))))
 
 (ert-deftest ps/git-sync--modeline-ok-face ()
   "An OK status (not paused) uses the gray40 face."
@@ -124,7 +124,7 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (ps/git-sync-paused nil))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:foreground "gray40"))))))
+      (should (equal face '(:inherit mode-line :foreground "gray40"))))))
 
 (ert-deftest ps/git-sync--modeline-default-face ()
   "A non-OK, non-paused status uses the gray60 face."
@@ -133,7 +133,7 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (ps/git-sync-paused nil))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:foreground "gray60"))))))
+      (should (equal face '(:inherit mode-line :foreground "gray60"))))))
 
 ;;; -------------------------------------------------------
 ;;; conflict handling

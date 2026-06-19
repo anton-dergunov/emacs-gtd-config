@@ -7,7 +7,7 @@ me everything that's still open." It's a single flat list of all unfinished
 tasks across your =Areas/= files, which you then slice down with filters.
 
 * Opening it
-Press *=F9=* or *=C-c p n=* (Productivity → Plan & Review → Tasks), or run
+Press =F9= or =C-c p n= (Productivity → Plan & Review → Tasks), or run
 =M-x ps/show-tasks=.
 
 * Switching which states are shown

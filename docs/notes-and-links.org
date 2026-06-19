@@ -11,7 +11,7 @@ Instead of pasting a bare URL, this inserts a proper Org link whose description
 is the page's *real title*, fetched for you in the background (Emacs stays
 responsive while it loads).
 
-- Press *=F6=* or *=C-c p u=* (Productivity → Insert Links → URL with
+- Press =F6= or =C-c p u= (Productivity → Insert Links → URL with
   Auto-title), or =M-x ps/org-insert-link-async=.
 - Paste or type the URL; the finished =[[url][Page Title]]= link drops in once
   the title arrives.
@@ -22,9 +22,9 @@ The fetched title is trimmed to a sensible length so links stay readable.
 If you keep notes in Obsidian, these insert =obsidian:= links that open the note
 in Obsidian, and display nicely inside Emacs:
 
-- *=F4=* / *=C-c p o=* — insert an Obsidian link from the *clipboard* (copy an
+- =F4= / =C-c p o= — insert an Obsidian link from the *clipboard* (copy an
   Obsidian link in the app first).
-- *=F5=* / *=C-c p O=* — insert an Obsidian link by *typing/prompting* for the
+- =F5= / =C-c p O= — insert an Obsidian link by *typing/prompting* for the
   note.
 
 * Plain Org links

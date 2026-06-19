@@ -11,7 +11,7 @@ background: it commits your changes and pushes/pulls on a timer, so your tasks
 stay in step across devices without you running any Git commands.
 
 - A small *mode-line indicator* shows sync status.
-- Toggle it with *=C-c p s=* (Productivity → Sync & Version Control → Git Sync
+- Toggle it with =C-c p s= (Productivity → Sync & Version Control → Git Sync
   Enabled); =C-c p S= resumes it.
 - For manual control, =C-x g= opens [[https://magit.vc/][Magit]], the full Git interface.
 

@@ -57,3 +57,7 @@ Emacs? Jump to [[file:planning-setup.org][Planning your work]].
 * Developing & Extending
 - [[file:developing.org][Developing & extending]] — run Emacs straight from the repo, run the tests, and
   add your own modules.
+
+* About
+- [[file:about.org][About this configuration]] — what it is, the packages it builds on, requirements,
+  and project history.
