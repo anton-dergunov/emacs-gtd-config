@@ -29,6 +29,8 @@
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
+;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
+(defvar org-agenda-redo-command)
 
 ;;; Customization
 
@@ -150,15 +152,8 @@ Computed live (no cache) so it tracks point on every redisplay."
 
 ;;; Agenda mode line
 
-(defvar ps/mode-line--building-view nil
-  "View name (\"Agenda\"/\"Tasks\") dynamically bound while an agenda builds.
-Read by `ps/mode-line--agenda-finalize' to label the buffer; nil on a
-rebuild/redo, where the existing `permanent-local' title is preserved.")
-
 (defvar-local ps/mode-line--agenda-title nil
-  "Mode-line title for this agenda buffer.")
-;; Survive `kill-all-local-variables', which `org-agenda-mode' calls on redo.
-(put 'ps/mode-line--agenda-title 'permanent-local t)
+  "Mode-line title for this agenda buffer, set by `ps/mode-line--agenda-finalize'.")
 
 (defvar-local ps/mode-line--agenda-show-position nil
   "When non-nil, the agenda mode line appends point's percentage.")
@@ -175,11 +170,15 @@ rebuild/redo, where the existing `permanent-local' title is preserved.")
 (defun ps/mode-line--agenda-finalize ()
   "Apply per-view mode line/chrome to the agenda buffer on every build.
 Runs from `org-agenda-finalize-hook' at a negative depth, before the
-emoji/layout hooks, so the emoji toggle takes effect for this render."
+emoji/layout hooks, so the emoji toggle takes effect for this render.
+
+The view is derived intrinsically from `org-agenda-redo-command', which
+org sets before finalize: `org-todo-list' for the Tasks view, otherwise
+the Agenda series.  This is robust regardless of how the build was
+triggered (wrapper, dispatcher, `g'/redo)."
   (when (derived-mode-p 'org-agenda-mode)
-    (when ps/mode-line--building-view
-      (setq-local ps/mode-line--agenda-title ps/mode-line--building-view))
-    (let ((tasks (equal ps/mode-line--agenda-title "Tasks")))
+    (let ((tasks (eq (car-safe org-agenda-redo-command) 'org-todo-list)))
+      (setq-local ps/mode-line--agenda-title (if tasks "Tasks" "Agenda"))
       (setq-local ps/mode-line--agenda-show-position tasks)
       ;; Disable the semantic-emoji decoration in the (long) Tasks view.
       (setq-local ps/agenda-emoji-enabled (not tasks))
@@ -187,7 +186,10 @@ emoji/layout hooks, so the emoji toggle takes effect for this render."
       (display-line-numbers-mode (if tasks 1 0))
       ;; Agenda buffers are regenerated — never accumulate undo data.
       (setq buffer-undo-list t)
-      (setq-local mode-line-format '((:eval (ps/mode-line--agenda-render)))))))
+      (setq-local mode-line-format '((:eval (ps/mode-line--agenda-render))))
+      ;; Refresh on navigation so the Tasks percentage tracks point (see
+      ;; `ps/mode-line--org-setup' for why a full redraw must be forced).
+      (add-hook 'post-command-hook #'force-mode-line-update nil t))))
 
 ;;; Frame title
 
@@ -198,8 +200,12 @@ emoji/layout hooks, so the emoji toggle takes effect for this render."
 ;;; Setup
 
 (defun ps/mode-line--org-setup ()
-  "Install the planning mode line in the current Org buffer."
-  (setq-local mode-line-format '((:eval (ps/mode-line--render)))))
+  "Install the planning mode line in the current Org buffer.
+The `post-command-hook' forces a refresh after each command: Emacs's
+optimized cursor-movement redisplay does not re-evaluate a custom `:eval'
+mode line, so the live percentage/breadcrumb would otherwise look stale."
+  (setq-local mode-line-format '((:eval (ps/mode-line--render))))
+  (add-hook 'post-command-hook #'force-mode-line-update nil t))
 
 ;;;###autoload
 (defun ps/mode-line-setup ()
