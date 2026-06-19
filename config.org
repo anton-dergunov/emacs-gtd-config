@@ -883,6 +883,19 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
       (org-save-all-org-buffers)))
   (add-hook 'auto-save-hook #'ps/org-save-all-org-buffers-quietly)
 
+  ;; Obsidian-like persistence. The idle auto-save above keeps files current
+  ;; while editing; these two close the remaining gaps so the mode line never
+  ;; needs a "modified" indicator:
+  ;;   - save the moment Emacs loses focus (e.g. switching to another app), and
+  ;;   - save just before exit, so quitting never prompts "Save buffer?".
+  (defun ps/org-save-on-focus-loss ()
+    "Save all Org buffers when Emacs loses focus."
+    (unless (frame-focus-state)
+      (ps/org-save-all-org-buffers-quietly)))
+  (add-function :after after-focus-change-function #'ps/org-save-on-focus-loss)
+  (advice-add 'save-buffers-kill-emacs :before
+              (lambda (&rest _) (ps/org-save-all-org-buffers-quietly)))
+
   ;; Automatically revert buffers when files change on disk.
   ;; Rely on file-system notifications instead of the default ~5s polling
   ;; timer. On the macOS (NS) build, a redisplay forced from inside a timer

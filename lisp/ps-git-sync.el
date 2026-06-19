@@ -49,11 +49,19 @@ Surfaced in the mode-line tooltip rather than the bar itself.")
     (concat ps/git-sync--icon-offline " Sync Off"))))
 
 (defun ps/git-sync--help-echo ()
-  "Return the mode-line tooltip: last message plus last successful sync time."
-  (if ps/git-sync--last-success-time
-      (concat ps/git-sync--last-message
-              "\nLast successful sync: " ps/git-sync--last-success-time)
-    ps/git-sync--last-message))
+  "Return the mode-line tooltip.
+In the OK state the label already conveys success, so only the time is
+shown (\"Last successful sync: HH:MM\").  Other states show their status,
+plus the last successful sync time on a second line when one is known."
+  (let ((sync-line (and ps/git-sync--last-success-time
+                        (concat "Last successful sync: "
+                                ps/git-sync--last-success-time))))
+    (cond
+     ((and (equal ps/git-sync--last-status ps/git-sync--icon-ok) sync-line)
+      sync-line)
+     (sync-line
+      (concat ps/git-sync--last-message "\n" sync-line))
+     (t ps/git-sync--last-message))))
 
 (defun ps/git-sync--modeline ()
   "Return the propertized git-sync status label for the mode line.
@@ -127,7 +135,11 @@ Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
      ps/git-sync--icon-syncing
      "Git sync in progress")
 
-    (org-save-all-org-buffers)
+    ;; Save quietly: `org-save-all-org-buffers' echoes "Saving all Org
+    ;; buffers...done", which would flash in the echo area (and pile up in
+    ;; *Messages*) on every 60s sync.
+    (let ((inhibit-message t) (message-log-max nil))
+      (org-save-all-org-buffers))
 
     (let* ((default-directory ps/git-sync--directory)
            (host system-name)
@@ -174,14 +186,15 @@ Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
 
              (if (= (process-exit-status proc) 0)
 
-                 ;; Success
+                 ;; Success. The timestamp lives only in
+                 ;; `ps/git-sync--last-success-time' (shown in the tooltip), so
+                 ;; the status message stays time-free and never duplicates it.
                  (progn
                    (setq ps/git-sync--last-success-time
                          (format-time-string "%H:%M"))
                    (ps/git-sync--set-status
                     ps/git-sync--icon-ok
-                    (format "Git sync OK (%s)"
-                            (format-time-string "%H:%M:%S"))))
+                    "Git sync OK"))
 
                ;; Failure
                (if (string-match-p

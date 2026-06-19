@@ -82,12 +82,22 @@ Skipped when git is unavailable. Cleans up the repo afterward."
 
 (ert-deftest ps/git-sync--help-echo-appends-success-time ()
   "The tooltip appends the last successful sync time when known."
-  (let ((ps/git-sync--last-message "Git sync OK")
+  ;; Non-OK status: status message on one line, time on the next.
+  (let ((ps/git-sync--last-status ps/git-sync--icon-syncing)
+        (ps/git-sync--last-message "Git sync in progress")
         (ps/git-sync--last-success-time "21:13"))
     (should (string-match-p "Last successful sync: 21:13" (ps/git-sync--help-echo))))
-  (let ((ps/git-sync--last-message "msg")
+  (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
+        (ps/git-sync--last-message "msg")
         (ps/git-sync--last-success-time nil))
     (should (equal (ps/git-sync--help-echo) "msg"))))
+
+(ert-deftest ps/git-sync--help-echo-ok-shows-only-time ()
+  "In the OK state the tooltip shows the time once, not a duplicated message."
+  (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
+        (ps/git-sync--last-message "Git sync OK")
+        (ps/git-sync--last-success-time "01:44"))
+    (should (equal (ps/git-sync--help-echo) "Last successful sync: 01:44"))))
 
 (ert-deftest ps/git-sync--modeline-help-echo ()
   "The modeline string carries the last message as a help-echo property."
