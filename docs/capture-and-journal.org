@@ -1,0 +1,47 @@
+#+TITLE: Capture & journal
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+Good planning starts with getting things out of your head quickly. This page
+covers capturing tasks and notes, and keeping a journal.
+
+* Capture
+*Capture* lets you jot a task or note from anywhere, without navigating to the
+right file first.
+
+- Press *=C-c p k=* (Productivity → Capture & Notes → Capture…), or
+  =M-x org-capture=.
+- A typical home for fresh items is =Areas/Inbox.org=; you sort them into the
+  right area later during a review.
+
+#+begin_quote
+Capture uses Org's built-in =org-capture=. This config doesn't ship custom
+capture *templates* yet, so you'll define your own the first time — for example
+a "Task → Inbox" template. See the [[https://orgmode.org/manual/Capture.html][Org capture manual]] for the template
+syntax, and add yours in =config.org=.
+#+end_quote
+
+* Open the Areas folder
+To browse or pick a file directly, *Productivity → Capture & Notes → Open Areas
+Folder* opens =Areas/= in Dired (Emacs's file manager).
+
+* Journal
+A journal is a dated log — daily notes, a weekly review, a record of decisions.
+This config uses [[https://github.com/bastibe/org-journal][org-journal]], organized into *weekly* files.
+
+- Press *=C-c p j=* (Productivity → Capture & Notes → New Journal Entry), or
+  =M-x org-journal-new-entry=. It opens this week's journal file and drops in a
+  dated heading ready to type under.
+- Entries live in a =Journal/= folder inside your Org base directory.
+
+* Storing links to come back to
+=C-c p l= (=org-store-link=) remembers a pointer to wherever you are — a file, a
+heading, an email — so you can paste it as a clickable link elsewhere. For
+inserting web and note links, see [[file:notes-and-links.org][Notes & links]].
+
+* Under the hood / Customize
+- Journal settings (folder, weekly files, date format) are in =config.org= →
+  /Org Mode → Behavior → org-journal/ (=org-journal-dir=,
+  =org-journal-file-type=, etc.).
+- Capture has no custom templates in this repo yet; add
+  =org-capture-templates= in =config.org= to suit your workflow.

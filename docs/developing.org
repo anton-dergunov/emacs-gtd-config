@@ -1,0 +1,98 @@
+#+TITLE: Developing & extending
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+This config is also a small codebase you can hack on — whether to fix something,
+add a feature, or borrow ideas for your own setup. This page covers the
+development loop: running it safely, running the tests, and adding a module.
+
+* Run Emacs straight from the repo
+You don't need to install into =~/.emacs.d= to try changes. The launcher points
+Emacs at this repo and at the bundled sample Org files:
+
+#+begin_src bash
+./scripts/run_emacs_dev.sh
+#+end_src
+
+It uses =--init-directory= (Emacs 29+), and on first run creates a =local.el=
+pointing at =samples/realistic/= and downloads packages into =elpa/= inside the
+repo. Background Git sync is disabled in this mode, so it never commits while you
+test.
+
+If your Emacs isn't at the default path, override it:
+
+#+begin_src bash
+EMACS_BIN=/path/to/emacs ./scripts/run_emacs_dev.sh
+#+end_src
+
+** Trying other Emacs builds
+#+begin_src bash
+./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app (default)
+./scripts/run_emacs_dev.sh --emacs plus     # emacs-plus@30 (Homebrew)
+./scripts/run_emacs_dev.sh --emacs latest   # latest emacsformacosx.com build
+#+end_src
+
+** Sandboxed runs
+Pass =--sandbox= to copy the repo (without =.git=) to a temp dir under =/tmp= and
+run from there — no chance of touching this repo's Git history, and the temp dir
+is removed on exit. Combine with =--emacs=:
+
+#+begin_src bash
+./scripts/run_emacs_dev.sh --emacs plus --sandbox
+#+end_src
+
+* Running the tests
+*Python* (utilities in =scripts/=, tests in =tests/=):
+
+#+begin_src bash
+PYTHONPATH=. pytest
+# a single file:
+PYTHONPATH=. pytest tests/test_emoji_matcher.py
+#+end_src
+
+*Elisp* (modules in =lisp/=, tests in =tests/test-*.el=, using ERT):
+
+#+begin_src bash
+EMACS_BIN="/Applications/Emacs.app/Contents/MacOS/Emacs" ./scripts/org_test.sh
+#+end_src
+
+#+begin_quote
+Passing the test suite is necessary but not sufficient — the real check is that
+=config.org= still loads and works when you run =scripts/run_emacs_dev.sh=.
+#+end_quote
+
+* How the config is organized
+- *=init.el=* loads =config.org= (tangling and executing its elisp blocks in
+  order).
+- *=config.org=* is the main configuration, in literate Org form. Its /Settings/
+  section is where defaults live; keep edits small and surgical.
+- *=lisp/ps-*.el=* are extracted, self-contained modules (free-slot computation,
+  conflicts, the agenda layout, the file tree, Git sync, …), each with ERT tests
+  in =tests/test-*.el=.
+- *=scripts/=* holds Python helpers (e.g. the semantic emoji matcher) and shell
+  utilities.
+
+The long-term direction is to keep moving non-trivial logic out of =config.org=
+into tested =lisp/= modules.
+
+* Adding a feature
+The established pattern:
+
+1. Create =lisp/ps-<feature>.el= with =ps/<feature>-...= functions (the =ps/=
+   prefix plus the feature name — *don't* add =org-=) and a final =(provide
+   'ps-<feature>)=.
+2. Add =tests/test-ps-<feature>.el= (ERT; =(add-to-list 'load-path "lisp")=).
+3. If it has user-facing options, give them a settings block in =config.org= →
+   /Settings/, directly after /Load Local Modules/ — that block is the single
+   place users tune defaults.
+4. Wire it up in the relevant =config.org= section, and add a menu/keybinding
+   under =C-c p= if it's interactive.
+5. *Update the docs.* Per the project's change checklist, the affected
+   =docs/*.org= page(s) — including the "Under the hood / Customize" pointers —
+   and the README highlights (if user-visible) are updated as the last step of
+   the change.
+
+* Design notes
+Longer design rationale for several features lives in =design-docs/= (the agenda
+redesign, the schedule view, the mode line, the typo checker). These are
+internal notes, not user docs.

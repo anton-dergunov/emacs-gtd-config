@@ -1,0 +1,165 @@
+#+TITLE: Customization & appearance
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+This config is meant to be made yours. This page collects the taste-based
+choices — colors, fonts, icons, languages — and points to where every setting
+lives. (Settings that shape the *planning view* itself, like the agenda
+sections and the mode line, are covered in [[file:agenda.org][The Agenda]].)
+
+* Where settings live
+There are two layers, modelled on an editor's *User* vs *Workspace* settings:
+
+- *=config.org=* — the shared, public configuration. Its /Settings/ section
+  (right after the bootstrap) is the single place to adjust defaults: there's a
+  block per feature (Appearance, Availability, Conflicts, Mode line, Material
+  icons, File Tree, …).
+- *=workspace.org=* — settings tied to /your/ Org data folder (your category
+  icons, your file-tree sets). It lives beside your Org files, loads *after*
+  =config.org=, and overrides it. This keeps your personal categories out of the
+  public repo and means pulling upstream changes never conflicts with your
+  customizations.
+
+Open them from *Productivity → Config*: =C-c p C= opens =config.org= (=F10=
+too), =C-c p W= opens =workspace.org=; the lower-case =C-c p R= / =C-c p w=
+reload them. Copy =samples/realistic/workspace.org= as a starting point.
+
+Every setting this config adds is a =ps/...= variable, so you can also browse
+and change them with =M-x customize-apropos= → =^ps/= (or *Config → Customize
+ps/ Settings* in the menu).
+
+* Color theme
+Switching the whole look is a one-line change. In =config.org=, /Settings →
+Appearance/, set =ps/color-theme=:
+
+#+begin_src elisp
+(defvar ps/color-theme 'solarized-light  ; <- change this
+  "Color theme loaded by `Editor & UI / Color theme'.")
+#+end_src
+
+External-package themes are *installed automatically* on first load.
+Recommended values:
+
+| Kind        | Source         | Examples                                                              |
+|-------------+----------------+-----------------------------------------------------------------------|
+| Solarized   | package        | =solarized-light= (default), =solarized-dark=                         |
+| modus       | built-in (28+) | =modus-operandi=, =modus-vivendi=                                     |
+| ef-themes   | package        | =ef-day=, =ef-elea-dark=, =ef-winter=, =ef-autumn=                    |
+| standard    | package        | =standard-light=, =standard-dark=                                     |
+| doric       | package        | =doric-light=, =doric-dark=                                           |
+| doom        | package        | =doom-one=, =doom-one-light=, =doom-nord=, =doom-dracula=, =doom-gruvbox= |
+| Catppuccin  | package        | =batppuccin-latte=, =batppuccin-mocha=, =batppuccin-macchiato=, =batppuccin-frappe= |
+| Tokyo Night | package        | =tokyo-night=, =tokyo-night-storm=, =tokyo-night-moon=, =tokyo-night-day= |
+| Gruvbox     | package        | =gruvbox-dark-medium=, =gruvbox-light-medium=                         |
+| Nord        | package        | =nord=                                                                |
+
+The config's own visual tweaks (faded DONE tasks, timestamp pills, metadata, the
+SCHEDULED/DEADLINE icons) adapt to the chosen theme automatically — the original
+hand-tuned greys are kept for Solarized, and every other theme gets
+theme-relative equivalents so it looks right on light /and/ dark backgrounds.
+
+** Audition a theme live
+=M-x ps/preview-theme= (or *=C-c p T=*) loads any theme instantly so you can try
+before you commit. Set =ps/color-theme= to keep it.
+
+** Gallery
+The default theme, *Solarized Light*:
+
+#+CAPTION: Solarized Light (default)
+[[file:../screenshots/solarized-light.png]]
+
+A few others — light:
+
+#+CAPTION: Modus Operandi (light, accessible)
+[[file:../screenshots/modus-operandi.png]]
+
+#+CAPTION: ef-day (light, warm)
+[[file:../screenshots/ef-day.png]]
+
+#+CAPTION: Doom One Light
+[[file:../screenshots/doom-one-light.png]]
+
+#+CAPTION: Catppuccin Latte (light, pastel)
+[[file:../screenshots/batppuccin-latte.png]]
+
+…and dark:
+
+#+CAPTION: Solarized Dark
+[[file:../screenshots/solarized-dark.png]]
+
+#+CAPTION: Modus Vivendi (dark, accessible)
+[[file:../screenshots/modus-vivendi.png]]
+
+#+CAPTION: Doom One (dark)
+[[file:../screenshots/doom-one.png]]
+
+#+CAPTION: Tokyo Night (dark)
+[[file:../screenshots/tokyo-night.png]]
+
+#+CAPTION: Catppuccin Mocha (dark, pastel)
+[[file:../screenshots/batppuccin-mocha.png]]
+
+#+CAPTION: Gruvbox Dark
+[[file:../screenshots/gruvbox-dark-medium.png]]
+
+#+begin_quote
+Generate these locally with =scripts/screenshot_all_themes.sh= (or
+=scripts/screenshot_theme.sh <theme>=), which captures the agenda under each
+theme into =screenshots/=. macOS-only: it uses =screencapture=, so the terminal
+running it needs Screen Recording permission.
+#+end_quote
+
+* Fonts
+The editing font is set in =config.org= → /Editor & UI → Font/. Change the
+family and height there to taste; the icon sizes follow your font height
+automatically.
+
+* Category icons
+Icons in the agenda and file tree come from the *Material Symbols Outlined* font
+(install it per [[file:installation.org][Installation]]). They're assigned *declaratively*, mapping a
+=<Category>.org= file's basename to a [[https://fonts.google.com/icons][Material Symbols name]] — e.g.
+=("Blog" . "edit_square")=.
+
+=config.org= ships *no* mappings, so every file shows the generic =File= icon
+until you provide a map. Do that in your =workspace.org= (so your categories stay
+private):
+
+- per-file: =ps/material-icons-category-map= (=<Category>.org= → icon name);
+- whole folders (e.g. =Current/=, =Vision/=): =ps/material-icons-folder-map=.
+
+See =samples/realistic/workspace.org= for a complete example. To fine-tune
+size/alignment, adjust =ps/material-icons-height-scale= and
+=ps/file-tree-icon-ascent= in =config.org= → /Settings/.
+
+* Typo / spell checking
+Org buffers get a quiet, multilingual typo checker. A word is underlined with a
+subtle wavy line *only when none of your configured languages recognise it*, so
+terms valid in any language you write in are never flagged (e.g. Spanish =calor=
+or Cyrillic words inside English text stay clean). Code, links, file paths, and
+=verbatim=/=~code~= markup are skipped. Press =M-$= on an underlined word to pick
+a correction or add it to your personal dictionary. Only individual words are
+checked — no grammar checking, no network/LLM use.
+
+The accepted languages default to English, Russian, and Spanish. Edit
+=ps/typo-languages= in =config.org= → /Settings → Typo / spell checking/ to match
+the languages you write in.
+
+This uses [[https://github.com/minad/jinx][Jinx]], which needs the =enchant= library plus a dictionary per
+language (see [[file:installation.org][Installation]]). On macOS, English works out of the box via the
+system speller; for stricter checking or for Russian, install Hunspell
+dictionary files (=<locale>.aff= / =<locale>.dic=) into
+=~/.config/enchant/hunspell/=. List what =enchant= can see with =enchant-2
+-list-dicts=. Dictionaries are available from the [[https://github.com/LibreOffice/dictionaries][LibreOffice dictionaries]] repo.
+If =enchant= isn't installed, the rest of the config still loads — typo checking
+just stays off.
+
+The design rationale is in =design-docs/typo-checker.md=.
+
+* Under the hood / Customize
+- Theme machinery and live preview: =config.org= → /Editor & UI/
+  (=ps/color-theme=, =ps/preview-theme=).
+- Material icons: =lisp/ps-material-icons.el= (+ =ps-agenda-icons.el=,
+  =ps-file-tree-icons.el=); settings in =config.org= → /Material icons/ and
+  /File Tree/.
+- Typo checker: =lisp/ps-typo.el=; settings in =config.org= → /Typo / spell
+  checking/.

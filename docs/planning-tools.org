@@ -1,0 +1,50 @@
+#+TITLE: Planning tools
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+Three focused tools help you plan around your scheduled time: find free slots,
+spot conflicts, and move events between timezones. Each opens its own buffer
+with on-screen controls, so you can adjust options without remembering any
+syntax.
+
+* Availability — find free slots
+Computes your open time over the coming days from the scheduled events in your
+Org files, so you can answer "when am I free?" at a glance.
+
+- Open with *=C-c p v=* (Productivity → Plan & Review → Show Availability), or
+  =M-x ps/org-show-availability=.
+- The buffer shows free slots per day; use its controls to change the window of
+  days, working hours, and formatting.
+
+Defaults you can change (see below): how many days to look ahead, the start/end
+of your working day, a buffer between meetings, the minimum slot length, whether
+to include weekends, 12h vs 24h time, and the layout.
+
+* Conflicts — spot overlaps and tight gaps
+Scans your scheduled events and reports two kinds of trouble: events that
+*overlap*, and gaps between back-to-back events that are uncomfortably *small*.
+
+- Open with *=C-c p x=* (Productivity → Plan & Review → Check Conflicts), or
+  =M-x ps/show-conflicts=.
+- A lightweight version of this check also runs automatically in the agenda,
+  flagging overlapping timed events with =⚠ overlap=.
+
+Defaults you can change: the minimum acceptable gap between events, and whether
+to include past events.
+
+* Timezone shift — move events between zones
+Shifts the timestamps in an Org file from one timezone to another and shows you
+a preview before anything is written — useful when you've planned in one zone
+and are travelling to another.
+
+- Open with *=C-c p t=* (Productivity → Edit Org → Shift Timezones…), or
+  =M-x ps/shift-timezone=.
+- Review the preview, then confirm to apply.
+
+* Under the hood / Customize
+- *Availability:* =lisp/ps-availability.el=; defaults in =config.org= →
+  /Availability/ (=ps/org-avail-*=: =days=, =work-start=, =work-end=,
+  =buffer-minutes=, =min-duration=, =include-weekends=, =time-format=, =layout=).
+- *Conflicts:* =lisp/ps-conflicts.el=; defaults in =config.org= → /Conflicts/
+  (=ps/conflicts-gap-minutes=, =ps/conflicts-include-past=).
+- *Timezone:* =lisp/ps-timezone.el=.

@@ -1,0 +1,108 @@
+#+TITLE: The Agenda
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+The agenda is the heart of this config: a single, calm view of what matters
+today, built from all the tasks across your =Areas/= files. This page explains
+how to open it, how to read it, and the visual touches that make it pleasant to
+live in.
+
+#+CAPTION: The agenda under the Solarized Light theme
+[[file:../screenshots/solarized-light.png]]
+
+* Opening it
+Press *=C-c p a=* (Productivity → Plan & Review → Agenda), or run =M-x
+ps/show-agenda=. It opens today's view immediately.
+
+For Org's full agenda dispatcher (other built-in views, date ranges, etc.),
+press =C-c a=.
+
+* How it's organized
+The agenda groups tasks into sections, in this order:
+
+- *Schedule* — a real timeline of today's timed events, with a now-indicator
+  and grid ticks (see /The schedule view/ below).
+- *Scheduled today* — tasks you planned for today that have no specific time.
+- *Due today* / *Overdue* — deadlines landing today or already past.
+- *Scheduled earlier* — scheduled tasks you didn't get to.
+- *Due soon* — upcoming deadlines.
+- *High-priority* — every =[#A]= task, gathered in one place.
+- *In progress* — every =INPR= task.
+
+The last two sections are why you rarely need a separate "next actions" list:
+mark what's important with priority =A=, mark what you're actively doing as
+=INPR=, and the agenda surfaces both.
+
+* Reading a line
+Each task line is laid out in aligned columns so it scans cleanly:
+
+- a *category icon* for the file the task came from (e.g. a briefcase for
+  =Work.org=) — see [[file:customization.org][Customization & appearance]] to map your own;
+- the *category name*;
+- compact *pills* for the TODO state and priority;
+- the task text;
+- a right-aligned *date/time pill* for its schedule or deadline.
+
+=SCHEDULED= and =DEADLINE= labels are shown as small icons rather than words, to
+keep lines short. Finished (=DONE=) tasks are faded so they recede.
+
+* The schedule view
+The *Schedule* section renders the day as a time axis with a left-hand time
+column (=HH:MM-HH:MM ┆=). Two styles are available from *Productivity →
+Schedule View*:
+
+- *Timeline* — shows the full time axis, with a tick row for each grid interval
+  between events. Best when you want to see the complete shape of the day.
+- *Events* — shows only the timed events, hiding the empty grid rows for a
+  compact list.
+
+Overlapping events are flagged with =⚠ overlap= at the right edge (the
+[[file:planning-tools.org][conflict checker]] does a more thorough pass).
+
+*Auto-refresh* (on by default, toggle in the same menu) regenerates the agenda
+at the start of each minute so the now-indicator and DONE visibility stay
+current; your cursor and scroll position are preserved.
+
+* Moving around in the agenda
+The agenda is read-only-ish — you act on tasks without leaving it:
+
+| Key       | Action                                            |
+|-----------+---------------------------------------------------|
+| =n= / =p=     | next / previous line                              |
+| =RET=       | jump to the task in its file                      |
+| =SPC= / =TAB= | peek at the task in another window                |
+| =t=         | change the task's TODO state                      |
+| =,=         | set its priority                                  |
+| =:=         | set its tags                                      |
+| =r= / =g=     | refresh the agenda                                |
+| =q=         | quit the agenda window                            |
+
+* Folding sections
+Agenda sections can be collapsed. Press =TAB= (or click a section header) to
+fold/unfold it; =M-x ps/agenda-fold-collapse-all= and =ps/agenda-fold-expand-all=
+toggle everything at once. You can choose which sections start collapsed — see
+below.
+
+* The mode line
+The mode line (the status strip at the bottom of each window) is tuned for this
+planning environment rather than left at the Emacs default: it shows the file
+name, your position, and the current heading, separated by a thin =·=. Like
+=org-super-agenda= grouping and the layout pills, it's part of making the
+planning view readable — not a cosmetic theme choice. Its colors follow whatever
+[[file:customization.org][theme]] you pick.
+
+* Under the hood / Customize
+- The sections come from =org-super-agenda= and the custom command =c=, defined
+  in =config.org= → /Org Mode → Agenda → Super agenda/. Edit the
+  =org-super-agenda-groups= list there to add, remove, or reorder sections.
+- The aligned layout, pills, category/schedule icons, emoji, and folding are the
+  modules =lisp/ps-agenda-layout.el=, =ps-agenda-icons.el=,
+  =ps-schedule-icons.el=, =ps-agenda-emoji.el=, and =ps-agenda-fold.el=; their
+  settings live in the matching =config.org= blocks.
+- The schedule view is =lisp/ps-schedule-view.el=; defaults
+  (=ps/schedule-view-style=, =ps/schedule-view-auto-refresh=) are in =config.org=
+  → /Schedule view/.
+- Which sections start folded: =ps/agenda-fold-default-collapsed= in =config.org=
+  → /Agenda fold/.
+- The mode line is =lisp/ps-mode-line.el=; its separator is
+  =ps/mode-line-separator= in =config.org= → /Mode line/.

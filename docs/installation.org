@@ -1,0 +1,117 @@
+#+TITLE: Installation
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+This page walks through a full setup on macOS, Linux, and Windows. For a
+two-minute version, see the [[file:../README.md][README]].
+
+* 1. Install Emacs
+Install [[https://www.gnu.org/software/emacs/download.html][Emacs]] — version 29 or newer is recommended (this config uses
+=--init-directory= and other recent features).
+
+- *macOS:* download from [[https://emacsformacosx.com/][emacsformacosx.com]], or =brew install --cask emacs=,
+  or =brew install emacs-plus@30=.
+- *Linux:* use your package manager, e.g. =sudo apt install emacs= or
+  =sudo dnf install emacs=.
+- *Windows:* download the installer from a [[https://www.gnu.org/software/emacs/download.html][GNU mirror]].
+
+* 2. Install ripgrep
+[[https://github.com/BurntSushi/ripgrep][ripgrep]] powers fast in-project search.
+
+#+begin_src bash
+# macOS
+brew install ripgrep
+
+# Ubuntu/Debian
+sudo apt install ripgrep
+#+end_src
+
+[[https://github.com/BurntSushi/ripgrep#installation][Windows and other platforms]].
+
+* 3. Get the configuration
+Clone this repository as your Emacs configuration directory:
+
+#+begin_src bash
+git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
+#+end_src
+
+On Windows the directory is usually
+=C:\Users\<CURRENT_USER_NAME>\AppData\Roaming\.emacs.d=.
+
+#+begin_quote
+*Already have an `~/.emacs.d`?* Back it up first (=mv ~/.emacs.d ~/.emacs.d.bak=).
+You can also run this config from any directory without touching =~/.emacs.d= —
+see [[file:developing.org][Developing & extending]].
+#+end_quote
+
+* 4. Point it at your Org files
+All of your tasks and notes live in one base directory that you choose.
+
+1. Copy =local.el.template= to =local.el= in the config directory.
+2. Set =my-org-base-directory= to where you want your Org files. A folder inside
+   Dropbox, iCloud, or another sync service keeps them available on every
+   device.
+
+To explore before committing to a layout, point it at the bundled example:
+
+#+begin_src elisp
+(setq my-org-base-directory
+      (expand-file-name "samples/realistic/" user-emacs-directory))
+#+end_src
+
+See [[file:planning-setup.org][Planning setup]] for the folder layout the agenda expects.
+
+* 5. First launch
+Start Emacs. On the first run it downloads its packages into =elpa/= (this takes
+a minute). When it settles, press *=C-c p a=* to open the agenda.
+
+Optionally pre-download packages from the command line instead:
+
+#+begin_src bash
+emacs --batch -l ~/.emacs.d/init.el
+#+end_src
+
+* 6. Install the icon font (recommended)
+Category icons — in the agenda and the file tree — are drawn from Google's
+*Material Symbols Outlined* font. There are no per-icon image files to manage;
+each icon is a font glyph, sized to your text so it stays aligned everywhere.
+
+1. Download *Material Symbols Outlined* from [[https://fonts.google.com/icons][Google Fonts]] ("Download
+   family") or the [[https://github.com/google/material-design-icons/tree/master/variablefont][google/material-design-icons]] repo.
+2. From the archive, install only
+   =Material_Symbols_Outlined/static/MaterialSymbolsOutlined-Regular.ttf= (the
+   plain "Regular" static file — not a "Filled" or =*pt-*= variant).
+3. Install it:
+   - *macOS:* double-click the =.ttf= and click *Install Font* (or drop it in
+     =~/Library/Fonts/=).
+   - *Linux:* copy it into =~/.local/share/fonts/=, then run =fc-cache -f=.
+   - *Windows:* right-click the =.ttf= and choose *Install*.
+
+Without the font, everything still works — the file tree falls back to simple
+folder/file icons. Assigning icons to your own categories is covered in
+[[file:customization.org][Customization & appearance]].
+
+* 7. Install spell-check libraries (optional)
+Org buffers get a quiet, multilingual typo checker. It needs the =enchant=
+library plus a dictionary for each language you write in.
+
+#+begin_src bash
+# macOS
+brew install enchant          # also pulls in hunspell
+xcode-select --install        # C compiler for the module (skip if installed)
+
+# Ubuntu/Debian
+sudo apt install enchant-2
+#+end_src
+
+On macOS, English and several other languages work out of the box via the
+system speller; Russian and stricter checking need Hunspell dictionary files.
+If =enchant= isn't installed, the config still loads — typo checking simply
+stays off. Full details, including which languages are enabled and how to add
+dictionaries, are in [[file:customization.org][Customization & appearance]].
+
+* Under the hood / Customize
+- The base directory and module loading happen in =config.org= ("Bootstrap"
+  section) via =local.el=.
+- The dev launcher =scripts/run_emacs_dev.sh= sets all of this up automatically
+  for testing — see [[file:developing.org][Developing & extending]].

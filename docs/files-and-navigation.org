@@ -1,0 +1,56 @@
+#+TITLE: Files & navigation
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+This page covers moving around your Org files: the file tree, named file sets,
+scoping the agenda, window management, and quick jumps.
+
+* The file tree
+A sidebar tree of your Org folders and files, with the same category icons used
+in the agenda.
+
+- Toggle it with *=F8=* (Productivity → Layout & Navigation → Toggle File Tree),
+  or =M-x ps/file-tree-toggle=.
+- Click a file to open it; expand/collapse folders as usual.
+
+If the Material Symbols font isn't installed, files fall back to simple
+folder/file icons — see [[file:installation.org][Installation]] and [[file:customization.org][Customization & appearance]].
+
+* File sets
+A *file set* is a named subset of your Org files — for example "Work" or
+"Personal" — so you can focus on a slice of everything at once.
+
+- *=C-c p F=* (Layout & Navigation → Cycle File Set) cycles through your defined
+  sets, switching what the file tree shows.
+- *=C-c p g=* (File Set Restricts Agenda) toggles whether the active set also
+  *scopes the agenda* — when on, the agenda only includes tasks from the files
+  in the current set. Turn it off to always see everything.
+
+File sets are defined per Org folder in =workspace.org= — see
+[[file:customization.org][Customization & appearance]].
+
+* Window management
+| Key            | Action                                              |
+|----------------+-----------------------------------------------------|
+| =C-x 1=          | focus: keep only the current window                 |
+| =C-x 2= / =C-x 3=  | split horizontally / vertically                     |
+| =C-x 0=          | close the current window                            |
+| =C-x o=          | switch focus to the other window                    |
+| =C-x= \vert{} / =C-c p= \vert{} | flip a split between horizontal and vertical |
+
+The last one (=ps/window-split-toggle=) is this config's own — handy when the
+agenda and a file end up stacked the wrong way round.
+
+* Jumping around
+- *=C-c p f=* — open a *recent file* (=recentf=).
+- *=C-c p i=* — *imenu*: jump to a heading in the current file by name.
+- =C-s= — *Swiper* incremental search within the current buffer (see
+  [[file:emacs-basics.org][Emacs basics]]).
+- =s-r= — search across the whole project with ripgrep
+  (=counsel-projectile-rg=).
+
+* Under the hood / Customize
+- The file tree (built on =treemacs=) is =lisp/ps-file-tree.el=, with its icon
+  theme in =lisp/ps-file-tree-icons.el=. Its ignore list and file sets are in
+  =config.org= → /File Tree/ and in your =workspace.org=.
+- The split-toggle command is defined in =config.org= → /Keybindings & Menu/.

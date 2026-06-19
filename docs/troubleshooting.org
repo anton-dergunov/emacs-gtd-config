@@ -1,0 +1,54 @@
+#+TITLE: Troubleshooting
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+When something doesn't work, here's how to diagnose it. Most problems are a
+missing optional dependency or a path that needs setting.
+
+* First steps
+- *Read the messages.* Switch to the =*Messages*= buffer (=C-h e=, or =C-x b
+  *Messages*=) to see warnings and errors, including anything that failed at
+  startup.
+- *Cancel and retry.* If a command seems stuck, press =C-g= and try again.
+- *Reload the config.* After editing =config.org=, =C-c p R= reloads it without
+  restarting Emacs.
+
+* The agenda is empty
+- Check =my-org-base-directory= in =local.el= points at the right folder, and
+  that your task files are under its =Areas/= subfolder (see [[file:planning-setup.org][Planning setup]]).
+- If you've turned on *file-set filtering* (=C-c p g=), the agenda only shows the
+  active set — toggle it off to see everything.
+
+* Icons look like boxes or are missing
+- The *Material Symbols Outlined* font isn't installed, or the wrong variant is.
+  Install the plain "Regular" static file per [[file:installation.org][Installation]]. The file tree falls
+  back to simple folder/file icons without it.
+- Files show the generic icon until you map categories in =workspace.org= — see
+  [[file:customization.org][Customization & appearance]].
+
+* Spell check isn't underlining anything (or errors on startup)
+- It needs the =enchant= library plus a dictionary per language. If =enchant=
+  isn't installed, typo checking simply stays off and the rest of the config
+  loads normally. Install it per [[file:installation.org][Installation]].
+- Words valid in /any/ of your configured languages aren't flagged by design.
+  Check =ps/typo-languages= matches what you write in.
+- List the dictionaries =enchant= can see: =enchant-2 -list-dicts=.
+
+* A theme didn't load
+- Built-in themes (=modus-*=) always work. Package themes install automatically
+  on first load, which needs network access the first time. Check =*Messages*=
+  for a download error, then retry.
+
+* Startup fails or behaves oddly
+- Run from a *clean copy* to isolate the problem without risking your files or
+  Git history: =./scripts/run_emacs_dev.sh --sandbox= (see [[file:developing.org][Developing &
+  extending]]). If it works there, the issue is in your =local.el= or Org data.
+- Launch with =emacs --debug-init= to get a backtrace on startup errors.
+
+* Git sync did something unexpected
+- Open =C-x g= (Magit) to inspect the repository state and history.
+- Pause sync with =C-c p s= while you sort things out.
+
+* Still stuck?
+Open an issue with what you tried, the relevant lines from =*Messages*=, your
+Emacs version (=M-x emacs-version=), and your OS.

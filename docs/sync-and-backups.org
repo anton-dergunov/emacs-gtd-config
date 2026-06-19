@@ -1,0 +1,43 @@
+#+TITLE: Sync & backups
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+Your Org files are valuable — this config works to keep them saved, synced
+across machines, and recoverable.
+
+* Automatic Git sync
+If your Org base directory is a Git repository, this config syncs it in the
+background: it commits your changes and pushes/pulls on a timer, so your tasks
+stay in step across devices without you running any Git commands.
+
+- A small *mode-line indicator* shows sync status.
+- Toggle it with *=C-c p s=* (Productivity → Sync & Version Control → Git Sync
+  Enabled); =C-c p S= resumes it.
+- For manual control, =C-x g= opens [[https://magit.vc/][Magit]], the full Git interface.
+
+The sync is intentionally quiet and won't commit while you're mid-edit. (It is
+also disabled automatically when running the dev launcher — see
+[[file:developing.org][Developing & extending]].)
+
+* Auto-save and auto-revert
+You rarely need to press save:
+
+- *Auto-save* — Org buffers are written to disk shortly after you stop typing
+  (Obsidian-style), so changes are persisted continuously.
+- *Auto-revert* — if a file changes on disk (e.g. synced from another device),
+  the open buffer refreshes to match, so you never edit a stale copy.
+
+* Sessions
+Your set of open files and windows is saved when you quit and restored next
+time, so you pick up where you left off.
+
+* Backups
+Emacs keeps versioned backups and auto-save files in dedicated directories
+(outside your Org folders), so an accidental change or crash is recoverable.
+
+* Under the hood / Customize
+- Git sync: =lisp/ps-git-sync.el=; behavior is configured in =config.org= →
+  /Session & Backups → Automatic git sync/ (and the =PS_GIT_SYNC_DISABLE= env
+  var / =ps/git-sync-paused= for turning it off).
+- Auto-save/revert, sessions, and backups: =config.org= → /Session & Backups/
+  and /Org Mode → Behavior → Auto-save .../.

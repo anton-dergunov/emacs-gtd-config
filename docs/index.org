@@ -1,0 +1,59 @@
+#+TITLE: Documentation
+#+OPTIONS: toc:nil
+#+STARTUP: inlineimages
+
+Welcome. This is a minimalist Emacs configuration for planning your work and
+life in plain-text [[https://orgmode.org/][Org Mode]] files, with a clean visual
+*agenda* at its centre. The workflow is inspired by /Getting Things Done/: keep
+your tasks and notes in a few Org files, and let the agenda show what matters
+today.
+
+This documentation is written in Org so it reads well both on GitHub and
+*inside Emacs itself* — open any =.org= file here and images, links, and
+folding just work.
+
+New to Emacs? Follow the pages roughly top to bottom. Already comfortable with
+Emacs? Jump to [[file:planning-setup.org][Planning your work]].
+
+* Getting Started
+- [[file:installation.org][Installation]] — set up Emacs and this config on macOS, Linux, or Windows,
+  install the icon font and optional spell-check libraries, and point it at your
+  Org files.
+
+* Learning Emacs
+- [[file:emacs-basics.org][Emacs basics]] — a survival guide for newcomers: moving the cursor, editing
+  text, working with files, splitting windows, completion, and getting help.
+
+* Planning your work
+- [[file:planning-setup.org][Planning setup]] — how your Org files are organized, the task states and
+  priorities this config uses, and the Org-mode keys for editing tasks.
+- [[file:agenda.org][The Agenda]] — the heart of the system: how to read it, the schedule/timeline
+  view, the visual pills and icons, and the mode line.
+- [[file:tasks-view.org][The Tasks view]] — a flat, filterable list of everything still open.
+- [[file:planning-tools.org][Planning tools]] — find free slots, detect scheduling conflicts, and shift
+  timestamps between timezones.
+
+* Capturing & Notes
+- [[file:capture-and-journal.org][Capture & journal]] — get tasks and notes in quickly, and keep a journal.
+- [[file:notes-and-links.org][Notes & links]] — Obsidian-style links and one-key web-link insertion with the
+  page title fetched for you.
+
+* Organizing & Navigating
+- [[file:files-and-navigation.org][Files & navigation]] — the file tree, named file sets, scoping the agenda,
+  window management, and jumping around.
+
+* Customization & Appearance
+- [[file:customization.org][Customization & appearance]] — color themes, fonts, category icons, spell-check
+  languages, and where to change every setting.
+
+* Syncing & Backups
+- [[file:sync-and-backups.org][Sync & backups]] — automatic background Git sync, auto-save/auto-revert,
+  session restore, and backups.
+
+* Reference
+- [[file:keybindings.org][Keybindings]] — a one-page cheat sheet.
+- [[file:troubleshooting.org][Troubleshooting]] — what to do when something doesn't work.
+
+* Developing & Extending
+- [[file:developing.org][Developing & extending]] — run Emacs straight from the repo, run the tests, and
+  add your own modules.

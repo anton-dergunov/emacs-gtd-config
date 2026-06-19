@@ -8,6 +8,9 @@
 !lisp/
 !lisp/*.el
 
+!docs/
+!docs/*.org
+
 !icons/
 !icons/*.svg
 !icons/material-symbols.codepoints
