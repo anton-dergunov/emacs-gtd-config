@@ -32,7 +32,8 @@ setup or borrow pieces for your own.
 - **Many themes** — switch the entire look with one setting, or audition themes
   live.
 - **Quiet quality-of-life touches** — multilingual typo checking, faded/folded
-  DONE tasks, and automatic background Git sync of your Org files.
+  DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
+  and automatic background Git sync of your Org files.
 
 ## Quick start
 

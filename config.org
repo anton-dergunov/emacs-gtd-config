@@ -844,6 +844,31 @@ function cell can't satisfy a runtime function call.
        '(org-headline-done ((t (:inherit shadow :strike-through t)))))))
 #+end_src
 
+*** Show formatting markup only at point (=org-appear=)
+Hides emphasis markers, link brackets, entities, and sub/superscripts until
+point enters them, revealing the raw syntax for editing — Obsidian-style live
+preview. The read-only docs viewer (=ps/help--setup-doc-buffer=) keeps markers
+statically hidden and is excluded below.
+#+begin_src emacs-lisp
+  ;; Master switches org-appear toggles dynamically; off by default in Emacs,
+  ;; on here so editing buffers render clean except right at point.
+  (setq org-hide-emphasis-markers t
+        org-pretty-entities       t)
+
+  (use-package org-appear
+    :ensure t
+    :hook (org-mode . (lambda ()
+                         (unless (ps/help--doc-buffer-p)
+                           (org-appear-mode 1))))
+    :config
+    (setq org-appear-autoemphasis    t   ; *bold*, /italic/, =code=, etc.
+          org-appear-autolinks       t   ; [[target][desc]]
+          org-appear-autosubmarkers  t   ; x_1, x^2
+          org-appear-autoentities    t   ; \alpha, \rightarrow
+          org-appear-autokeywords    t   ; items in `org-hidden-keywords'
+          org-appear-inside-latex    t)) ; entities/sub-superscript inside $...$
+#+end_src
+
 *** Replace SCHEDULED / DEADLINE labels with icons
 Logic lives in =lisp/ps-schedule-icons.el=. Icons and face are set in the
 Schedule Icon Settings block above.

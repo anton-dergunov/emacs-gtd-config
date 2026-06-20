@@ -20,6 +20,21 @@
           (setq count (1+ count))))
       (should (= count 3)))))
 
+(ert-deftest ps/obsidian-links-survive-link-display-toggle ()
+  "Obsidian icon composition is unaffected by toggling `org-link-descriptive',
+the mechanism org-appear uses to reveal/hide link syntax at point."
+  (with-temp-buffer
+    (org-mode)
+    (insert "[[obsidian:Note]]")
+    (ps/org-enable-obsidian-links)
+    (font-lock-ensure)
+    (let ((org-link-descriptive nil))  ; simulate org-appear revealing the link
+      (font-lock-flush)
+      (font-lock-ensure)
+      (goto-char (point-min))
+      (re-search-forward "obsidian:")
+      (should (get-text-property (match-beginning 0) 'composition)))))
+
 ;;; -------------------------------------------------------
 ;;; Async URL link insertion
 ;;; -------------------------------------------------------

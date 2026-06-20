@@ -133,6 +133,15 @@ See =samples/realistic/workspace.org= for a complete example. To fine-tune
 size/alignment, adjust =ps/material-icons-height-scale= and
 =ps/file-tree-icon-ascent= in =config.org= → /Settings/.
 
+* Live markup preview while editing
+Org markup — =*bold*=, =/italic/=, =_underline_=, =+strikethrough+=, =code=,
+=~verbatim~=, link brackets, entities like =\alpha=, and sub/superscripts like
+=x_1= — renders clean, with the markup symbols hidden, like a live preview.
+Move point onto a marked-up bit of text and the raw syntax reappears so you
+can edit it; move away and it hides again. This applies everywhere except the
+read-only documentation viewer (these pages), which always keeps markers
+hidden since you're not editing there.
+
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a
 subtle wavy line *only when none of your configured languages recognise it*, so
@@ -160,6 +169,8 @@ The design rationale is in =design-docs/typo-checker.md=.
 * Under the hood / Customize
 - Theme machinery and live preview: =config.org= → /Editor & UI/
   (=ps/color-theme=, =ps/preview-theme=).
+- Live markup preview: the =org-appear= package, wired in =config.org= →
+  /Appearance → Show formatting markup only at point/.
 - Material icons: =lisp/ps-material-icons.el= (+ =ps-agenda-icons.el=,
   =ps-file-tree-icons.el=); settings in =config.org= → /Material icons/ and
   /File Tree/.
