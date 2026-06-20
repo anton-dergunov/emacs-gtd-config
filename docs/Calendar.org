@@ -1,0 +1,98 @@
+#+TITLE: The Calendar
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+Where the [[file:Agenda.org][Agenda]] answers /what should I focus on/, the *Calendar*
+answers /what is happening over a stretch of time/. It is a pure date-and-time
+view of your scheduled tasks and deadlines — a day, a week, a month, a year, or
+any number of days you ask for — with no high-priority or in-progress sections
+mixed in.
+
+* Opening it
+Press =C-c p c c= (Productivity → Plan & Review → Calendar → Open), or run =M-x
+ps/show-calendar=. It opens at a single day. To open straight at a span:
+
+| Key         | Opens          |
+|-------------+----------------|
+| =C-c p c c= | Calendar (day) |
+| =C-c p c d= | a single day   |
+| =C-c p c w= | a week         |
+| =C-c p c m= | a month        |
+| =C-c p c y= | a year         |
+
+Once it is open you can change the span at any time without reopening — see
+/Switching the span/ below.
+
+You can also *click a date stamp* in any Org file (or press =C-c C-o= on it):
+that opens the Calendar Day view for exactly that date — the same view as the
+menu, with the span buttons. Clicking a date /range/ opens the Calendar spanning
+those days.
+
+* How it reads
+The Calendar is a plain list — no sections, no timeline, no grid. *Day* shows a
+header naming the day and, beneath it, the tasks dated on that day: timed tasks
+first, sorted by time, with the time on the right (=08:00–08:30=); then the day's
+untimed scheduled tasks and deadlines. Everything is in the normal text colour —
+there is no overdue red, because…
+
+…it shows only what is dated on the day you are looking at: nothing is carried
+forward, warned about in advance, or shown as overdue, and no "x days ago"
+labels. Overdue tasks live on the [[file:Agenda.org][Agenda]], by design — the Calendar answers
+"what is dated for this day", not "what is outstanding".
+
+*Week*, *Month* and *Year* put the whole span in the top header (e.g. =18–24 May
+2026=, =May 2026=, =2026=) and then list each day as its own *section* — a
+left-aligned, bold heading on a soft grey band (=Monday · 18 May=) that you can
+collapse or expand. Days with nothing on them are skipped, so only the days that
+matter appear. Weeks start on whichever day your calendar is configured to start
+on, and a week/month/year always covers the whole calendar period containing the
+date you were on.
+
+Every line uses the same aligned columns, category icons, and pills as the rest
+of the agenda, so the Calendar looks consistent — it is just simpler. The rich
+timeline, the now-indicator, and the scheduled / due / overdue sections belong to
+the [[file:Agenda.org][Agenda]]; the Calendar deliberately leaves them out. The mode line names the
+current view and span, e.g. =Calendar · Week=.
+
+* Switching the span
+The top header carries a small control strip:
+
+- *D W M Y* — switch to a day / week / month / year view in place. The current
+  span is highlighted.
+- *N…* — prompt for an arbitrary number of days to show.
+- *−* / *+* — show one day fewer / one more, to grow or shrink the range a day
+  at a time.
+- the chevrons =‹= =›= step backward / forward by the current span (a week at a
+  time in week view, a month at a time in month view, and so on); =⊙= jumps back
+  to today and =⟳= reloads.
+
+The keyboard equivalents Org provides also work: =v d=, =v w=, =v m=, =v y= to
+switch span, and =b= / =f= to step back and forward.
+
+In week/month/year, press =TAB= on a day section (or click it) to collapse or
+expand that day.
+
+* Under the hood / Customize
+- The Calendar is the custom command =g=, defined alongside the Agenda in
+  =config.org= → /Org Mode → Agenda → Super agenda/. It uses no super-agenda
+  grouping and no time grid, and scopes every item to its own date (so nothing is
+  carried forward or shown as overdue) — every span is Org's native per-day
+  layout, kept as a plain list.
+- Clicking a date stamp opens the Calendar because =config.org= points Org's
+  timestamp-follow at the =g= command (=ps/calendar-follow-timestamp=), so a click
+  and the menu give the identical view.
+- The span-switch controls, the top control row, the per-day sections, and the
+  time pills live in =lisp/ps-agenda-layout.el=; the per-day section background
+  and the span label are the faces =ps/agenda-layout-day-section= and
+  =ps/agenda-layout-control-label= (customize to taste).  The bindings are
+  =ps/show-calendar= and =ps/show-calendar-{day,week,month,year}= under the
+  =C-c p c= prefix (see [[file:Keybindings.org][Keybindings]]).
+- Collapsing day sections reuses =lisp/ps-agenda-fold.el= (the same =TAB=/click
+  folding as the Agenda's sections).
+- The mode-line label (=Calendar · Day/Week/…=) is set in
+  =lisp/ps-mode-line.el=.
+- The minute auto-refresh that moves the now-indicator runs only for the
+  [[file:Agenda.org][Agenda]]; the Calendar (and the Tasks list) is never rebuilt behind your back,
+  so it stays on whatever day you navigated to.

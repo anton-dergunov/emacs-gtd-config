@@ -29,6 +29,7 @@
 (require 'ps-agenda-layout)
 
 ;; Functions from ps-agenda-layout used here (defined in that file).
+(declare-function ps/agenda-layout--calendarp      "ps-agenda-layout" ())
 (declare-function ps/agenda-layout--columns        "ps-agenda-layout" ())
 (declare-function ps/agenda-layout--window-cols    "ps-agenda-layout" ())
 (declare-function ps/agenda-layout--header-p       "ps-agenda-layout" ())
@@ -53,6 +54,7 @@
 
 (defvar ps/schedule-view-override)        ; declared below, defined here
 (defvar org-agenda-finalize-hook)
+(defvar ps/agenda-layout--view-kind)      ; buffer-local; set in ps-agenda-layout
 (defvar ps/agenda-layout-left-margin-cols)
 (defvar ps/agenda-layout-right-margin-cols)
 (defvar ps/agenda-layout-truncate)
@@ -447,8 +449,12 @@ No-op without a window (e.g. batch) — the plain ┆ glyph is kept."
 ;;; Main apply pass
 
 (defun ps/schedule-view--apply ()
-  "Render the Schedule section with the timeline or events layout."
-  (when (derived-mode-p 'org-agenda-mode)
+  "Render the Schedule section with the timeline or events layout.
+The Calendar has no Schedule timeline, so skip it there entirely — otherwise the
+unconditional `ps/agenda-layout--clear' below would wipe the Calendar's own
+layout overlays (the hidden day header, the blank line under the control row)."
+  (when (and (derived-mode-p 'org-agenda-mode)
+             (not (ps/agenda-layout--calendarp)))
     (let* ((inhibit-read-only t)
            (ps/agenda-layout--reserve-priority
             (ps/agenda-layout--scope-has-priority-p t))
@@ -580,9 +586,15 @@ No-op without a window (e.g. batch) — the plain ┆ glyph is kept."
     (if (= s 0) 60 (- 60 s))))
 
 (defun ps/schedule-view--refresh-agenda ()
-  "Refresh *Org Agenda*, preserving cursor and scroll position."
+  "Refresh *Org Agenda* when it holds the Agenda view, preserving point/scroll.
+The minute timer exists only to move the Agenda's now-indicator, so it must not
+rebuild the buffer when it currently holds the Calendar, the Tasks list, or a
+stock agenda — doing so made the Calendar jump back to today and the large
+month/year views sluggish.  The view kind is the buffer-local
+`ps/agenda-layout--view-kind' set by `ps/agenda-layout--apply'."
   (let* ((buf (get-buffer "*Org Agenda*")))
-    (when (buffer-live-p buf)
+    (when (and (buffer-live-p buf)
+               (eq (buffer-local-value 'ps/agenda-layout--view-kind buf) 'agenda))
       (let* ((win (get-buffer-window buf t))
              (pt  (with-current-buffer buf (point)))
              (ws  (and win (window-start win))))

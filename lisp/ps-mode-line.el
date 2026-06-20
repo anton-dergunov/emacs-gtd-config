@@ -31,6 +31,10 @@
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
 (defvar org-agenda-redo-command)
+;; Let-bound by the Calendar custom command; the displayed span.  Used to label
+;; the agenda mode line.
+(defvar ps/agenda-layout-view-kind)
+(defvar org-agenda-current-span)
 
 ;;; Customization
 
@@ -167,18 +171,37 @@ Computed live (no cache) so it tracks point on every redisplay."
                 (ps/mode-line--escape (ps/mode-line--percent)))
       (concat " " title))))
 
+(defun ps/mode-line--span-label (span)
+  "Return a human label for an agenda SPAN symbol or day count."
+  (pcase span
+    ('day "Day") ('week "Week") ('month "Month") ('year "Year")
+    ('fortnight "Fortnight")
+    ((and (pred integerp) n) (if (= n 1) "Day" (format "%d days" n)))
+    (_ "Day")))
+
 (defun ps/mode-line--agenda-finalize ()
   "Apply per-view mode line/chrome to the agenda buffer on every build.
 Runs from `org-agenda-finalize-hook' at a negative depth, before the
 emoji/layout hooks, so the emoji toggle takes effect for this render.
 
-The view is derived intrinsically from `org-agenda-redo-command', which
-org sets before finalize: `org-todo-list' for the Tasks view, otherwise
-the Agenda series.  This is robust regardless of how the build was
-triggered (wrapper, dispatcher, `g'/redo)."
+The view is derived intrinsically: `org-agenda-redo-command' is `org-todo-list'
+for the Tasks view; the Calendar custom command let-binds
+`ps/agenda-layout-view-kind' to `calendar' (in scope here, during finalize);
+otherwise it is the Agenda.  Robust regardless of how the build was triggered
+\(wrapper, dispatcher, `g'/redo, a date-stamp click)."
   (when (derived-mode-p 'org-agenda-mode)
-    (let ((tasks (eq (car-safe org-agenda-redo-command) 'org-todo-list)))
-      (setq-local ps/mode-line--agenda-title (if tasks "Tasks" "Agenda"))
+    (let* ((tasks (eq (car-safe org-agenda-redo-command) 'org-todo-list))
+           (calendar (and (boundp 'ps/agenda-layout-view-kind)
+                          (eq ps/agenda-layout-view-kind 'calendar))))
+      (setq-local ps/mode-line--agenda-title
+                  (cond (tasks "Tasks")
+                        (calendar
+                         (concat "Calendar"
+                                 ps/mode-line-separator
+                                 (ps/mode-line--span-label
+                                  (and (boundp 'org-agenda-current-span)
+                                       org-agenda-current-span))))
+                        (t "Agenda")))
       (setq-local ps/mode-line--agenda-show-position tasks)
       ;; Disable the semantic-emoji decoration in the (long) Tasks view.
       (setq-local ps/agenda-emoji-enabled (not tasks))

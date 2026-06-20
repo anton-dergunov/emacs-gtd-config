@@ -21,6 +21,8 @@
 (defvar org-agenda-finalize-hook)
 (defvar org-agenda-mode-map)
 (defvar org-super-agenda-header-map)
+;; Buffer-local view kind, set by ps-agenda-layout (`agenda' / `calendar' / …).
+(defvar ps/agenda-layout--view-kind)
 
 (defgroup ps-agenda-fold nil
   "Collapsible sections in the org agenda."
@@ -56,10 +58,18 @@ keymap of their own.")
 ;;; Header detection
 
 (defun ps/agenda-fold--header-p ()
-  "Non-nil when the line at point is a collapsible section header."
-  (and (not (org-get-at-bol 'org-agenda-date-header))
-       (or (org-get-at-bol 'org-super-agenda-header)
-           (org-get-at-bol 'org-agenda-structural-header))))
+  "Non-nil when the line at point is a collapsible section header.
+In the Calendar view the foldable headers are the per-day sections (the
+`org-agenda-date-header' lines turned into day sections by `ps-agenda-layout');
+the top control row (a structural header) is not foldable.  Elsewhere (the
+Agenda) the foldable headers are the super-agenda group and structural section
+headers, never the date header."
+  (if (eq (and (boundp 'ps/agenda-layout--view-kind) ps/agenda-layout--view-kind)
+          'calendar)
+      (and (org-get-at-bol 'org-agenda-date-header) t)
+    (and (not (org-get-at-bol 'org-agenda-date-header))
+         (or (org-get-at-bol 'org-super-agenda-header)
+             (org-get-at-bol 'org-agenda-structural-header)))))
 
 (defun ps/agenda-fold--header-label ()
   "Return the trimmed visible text of the header line at point."

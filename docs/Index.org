@@ -29,6 +29,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
   priorities this config uses, and the Org-mode keys for editing tasks.
 - [[file:Agenda.org][The Agenda]] — the heart of the system: how to read it, the schedule/timeline
   view, the visual pills and icons, and the mode line.
+- [[file:Calendar.org][The Calendar]] — a pure date/time view of scheduled tasks and deadlines over a
+  day, week, month, year, or any range you pick.
 - [[file:Tasks-view.org][The Tasks view]] — a flat, filterable list of everything still open.
 - [[file:Planning-tools.org][Planning tools]] — find free slots, detect scheduling conflicts, and shift
   timestamps between timezones.

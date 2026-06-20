@@ -661,41 +661,67 @@ preference and stays here.
                                  (1000 1200 1400 1600 1800)
                                  "......" "----------------"))
 
+    ;; Date-bound super-agenda groups for a SINGLE-DAY view.  Shared by the
+    ;; Agenda's agenda block, the Calendar's day view, and the global default
+    ;; below — so all three single-day renders group identically.
+    ;; NOTE: org-super-agenda matches groups in LIST ORDER (first matching group
+    ;; claims the item); the :order keyword only sorts where sections are
+    ;; displayed.  ":scheduled today" matches both timed and untimed
+    ;; scheduled-today tasks, while ":time-grid t" matches only items with a
+    ;; time-of-day.  So "Schedule:" must come BEFORE "Scheduled today:" so timed
+    ;; tasks stay in the grid and only untimed ones fall through.
+    (defvar ps/agenda-day-super-groups
+      '((:name "Schedule:"          :time-grid t       :order 1)
+        (:name "Scheduled today:"   :scheduled today   :order 2)
+        (:name "Due today:"         :deadline today    :order 3)
+        (:name "Overdue:"           :deadline past     :order 4)
+        (:name "Scheduled earlier:" :scheduled past    :order 5)
+        (:name "Due soon:"          :deadline future   :order 6))
+      "Date-bound super-agenda groups for single-day agenda views.")
+
+    ;; Make the styled, grouped day layout the GLOBAL default, so Org's stock
+    ;; agenda (C-c a a) and clicking a timestamp in an org file (which both call
+    ;; `org-agenda-list' with no group override) render through the same pipeline
+    ;; instead of a raw, ungrouped list.  Views that want a flat list bind this
+    ;; to nil locally: `ps/show-tasks' (Tasks) and the Calendar's multi-day
+    ;; branch (which relies on Org's native per-day headers instead).
+    (setq org-super-agenda-groups ps/agenda-day-super-groups)
+
     (setq org-agenda-custom-commands
           '(("c" "Agenda"
              ((agenda "" ((org-agenda-overriding-header "")
-                          ;; NOTE: org-super-agenda matches groups in LIST
-                         ;; ORDER (first matching group claims the item); the
-                         ;; :order keyword only sorts where sections are
-                         ;; displayed.  ":scheduled today" matches both timed
-                         ;; and untimed scheduled-today tasks, while ":time-grid
-                         ;; t" matches only items that have a time-of-day.  So
-                         ;; "Schedule:" must come BEFORE "Scheduled today:" in
-                         ;; the list, so timed tasks stay in the grid and only
-                         ;; untimed ones fall through to "Scheduled today:".
-                         (org-super-agenda-groups
-                           '((:name "Schedule:"
-                                    :time-grid t
-                                    :order 1)
-                             (:name "Scheduled today:"
-                                    :scheduled today
-                                    :order 2)
-                             (:name "Due today:"
-                                    :deadline today
-                                    :order 3)
-                             (:name "Overdue:"
-                                    :deadline past
-                                    :order 4)
-                             (:name "Scheduled earlier:"
-                                    :scheduled past
-                                    :order 5)
-                             (:name "Due soon:"
-                                    :deadline future
-                                    :order 6)))))
+                          (org-super-agenda-groups ps/agenda-day-super-groups)))
               (tags-todo "+PRIORITY=\"A\""
                          ((org-agenda-overriding-header " High-priority:")))
               (todo "INPR"
-                    ((org-agenda-overriding-header " In progress:")))))))
+                    ((org-agenda-overriding-header " In progress:"))))
+             ;; Command-wide: the two todo blocks inherit a flat list (nil),
+             ;; and the whole view is tagged `agenda' so the layout module knows
+             ;; NOT to draw Calendar's span-switch controls here.
+             ((org-super-agenda-groups nil)
+              (ps/agenda-layout-view-kind 'agenda)))
+            ("g" "Calendar"
+             ;; A plain, ungrouped list of dated/timed tasks for every span.  No
+             ;; super-agenda sections and no time grid — week/month/year use Org's
+             ;; native per-day headers, which the layout module turns into
+             ;; left-aligned collapsible day sections under a span header.
+             ;; - The three *-days knobs scope every item to its OWN date only:
+             ;;   nothing is carried forward, warned about in advance, or shown as
+             ;;   overdue — overdue belongs in the Agenda, not the Calendar.
+             ;; - No `org-agenda-overriding-header': Org then emits the block
+             ;;   header line, which the layout module reformats into the top
+             ;;   control row (span label + nav + span buttons).
+             ;; - `org-agenda-start-on-weekday' aligns the week view to the
+             ;;   configured first weekday; `org-agenda-show-all-dates' nil skips
+             ;;   empty days in week/month/year.
+             ((agenda "" ((org-super-agenda-groups nil)
+                          (org-agenda-use-time-grid nil)
+                          (org-scheduled-past-days 0)
+                          (org-deadline-past-days 0)
+                          (org-deadline-warning-days 0)
+                          (org-agenda-start-on-weekday calendar-week-start-day)
+                          (org-agenda-show-all-dates nil))))
+             ((ps/agenda-layout-view-kind 'calendar)))))
 
     :config
     (org-super-agenda-mode))
@@ -964,6 +990,21 @@ aligned in a single column the way =comment-region= does.
                  (dedicated . t)))
 #+end_src
 
+*** Agenda dispatcher pops up at the bottom
+The =C-c a= dispatcher menu (the transient =*Agenda Commands*= chooser) is shown
+by Org with =org-display-buffer-split=, which splits or reuses a window
+inconsistently depending on how many windows are open. Route it to a short,
+full-width transient window at the bottom — the same treatment as =*Calendar*= —
+so it always appears in the same place. Only the chooser is affected; the actual
+=*Org Agenda*= result buffer keeps its normal full-window display.
+#+begin_src emacs-lisp
+  (add-to-list 'display-buffer-alist
+               '("\\*Agenda Commands\\*"
+                 (display-buffer-at-bottom)
+                 (window-height . fit-window-to-buffer)
+                 (dedicated . t)))
+#+end_src
+
 *** Typo / spell checking (ps-typo.el)
 Logic lives in =lisp/ps-typo.el=; knobs are in the Typo / Spell Settings block
 above. =jinx= is the spell engine (needs =enchant=; see README.md) and
@@ -1226,7 +1267,10 @@ Logic lives in =lisp/ps-blank-lines.el=.
   (defun ps/show-tasks ()
     "Open the Tasks view: all open tasks (`org-todo-list')."
     (interactive)
-    (let ((open (ps/file-tree-window-exists-p)))
+    ;; Keep a flat list: the global `org-super-agenda-groups' day default would
+    ;; otherwise lump every untimed task under an "Other items" header.
+    (let ((open (ps/file-tree-window-exists-p))
+          (org-super-agenda-groups nil))
       (when open (ps/file-tree-hide))
       (org-todo-list)
       (delete-other-windows)
@@ -1375,6 +1419,69 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
 
   (define-obsolete-function-alias 'ps/show-super-agenda 'ps/show-agenda "2026-06")
 
+  ;; Calendar view (custom command "g"): a pure date/time view, switchable
+  ;; between day / week / month / year and arbitrary spans.  SPAN sets the
+  ;; initial span; the in-buffer header (D W M Y / N… / ±) switches it later.
+  (defun ps/show-calendar (&optional span)
+    "Open the Calendar — the date/time view (custom command =g=).
+With SPAN (a span symbol or a number of days) open at that span; otherwise
+open at the default single-day span.  Week/month/year open aligned to the
+calendar boundary containing the start day (e.g. the whole current week)."
+    (interactive)
+    (require 'org-agenda)
+    (let* ((span (or span org-agenda-span))
+           (org-agenda-start-on-weekday calendar-week-start-day)
+           (base (if org-agenda-start-day
+                     (time-to-days (org-time-string-to-time org-agenda-start-day))
+                   (org-today)))
+           (org-agenda-start-day
+            (if (memq span '(week fortnight month year))
+                (format-time-string
+                 "%Y-%m-%d"
+                 (org-time-from-absolute
+                  (org-agenda-compute-starting-span base span)))
+              org-agenda-start-day))
+           (org-agenda-span span))
+      (org-agenda nil "g")))
+
+  (defun ps/show-calendar-day ()   "Open the Calendar at a day."   (interactive) (ps/show-calendar 'day))
+  (defun ps/show-calendar-week ()  "Open the Calendar at a week."  (interactive) (ps/show-calendar 'week))
+  (defun ps/show-calendar-month () "Open the Calendar at a month." (interactive) (ps/show-calendar 'month))
+  (defun ps/show-calendar-year ()  "Open the Calendar at a year."  (interactive) (ps/show-calendar 'year))
+
+  ;; Clicking (or C-c C-o on) a date stamp in an Org file should open OUR Calendar
+  ;; at that date — the same view as the menu / C-c p c — not Org's stock grouped
+  ;; agenda.  Override `org-follow-timestamp-link' to run the Calendar command "g"
+  ;; with the clicked date as the start day (a date range opens that many days).
+  (defun ps/calendar-follow-timestamp ()
+    "Open the Calendar at the timestamp or date-range at point."
+    (require 'org-agenda)
+    (cond
+     ((org-at-date-range-p t)
+      (let* ((t1 (match-string 1))
+             (t2 (match-string 2))
+             (d1 (time-to-days (org-time-string-to-time t1)))
+             (d2 (time-to-days (org-time-string-to-time t2)))
+             (org-agenda-start-day (substring t1 0 10))
+             (org-agenda-span (max 1 (1+ (- d2 d1)))))
+        (org-agenda nil "g")))
+     ((org-at-timestamp-p 'lax)
+      (let ((org-agenda-start-day (substring (match-string 1) 0 10))
+            (org-agenda-span 'day))
+        (org-agenda nil "g")))
+     (t (user-error "Not on a timestamp"))))
+  (advice-add 'org-follow-timestamp-link :override #'ps/calendar-follow-timestamp)
+
+  ;; Sub-keymap so C-c p c c opens the Calendar and C-c p c d/w/m/y jump to a span.
+  (defvar ps/calendar-keymap (make-sparse-keymap)
+    "Prefix keymap for the Calendar view and its spans, bound at `C-c p c'.")
+  (let ((c ps/calendar-keymap))
+    (define-key c (kbd "c") #'ps/show-calendar)         ; c c → Calendar (default day)
+    (define-key c (kbd "d") #'ps/show-calendar-day)     ; c d → Day
+    (define-key c (kbd "w") #'ps/show-calendar-week)    ; c w → Week
+    (define-key c (kbd "m") #'ps/show-calendar-month)   ; c m → Month
+    (define-key c (kbd "y") #'ps/show-calendar-year))   ; c y → Year
+
   ;; Productivity prefix keymap (mnemonic suffixes under C-c p).
   (defvar ps/productivity-keymap (make-sparse-keymap)
     "Prefix keymap for project commands, bound at `C-c p'.")
@@ -1382,6 +1489,7 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
   (let ((m ps/productivity-keymap))
     ;; Plan & review
     (define-key m (kbd "a") #'ps/show-agenda)               ; a → Agenda
+    (define-key m (kbd "c") ps/calendar-keymap)            ; c → Calendar (sub-keymap)
     (define-key m (kbd "A") #'org-agenda)                   ; A → full chooser
     (define-key m (kbd "n") #'ps/show-tasks)                ; n → Tasks (all open)
     (define-key m (kbd "v") #'ps/org-show-availability)     ; v → aVailability
@@ -1423,6 +1531,12 @@ The mode line/chrome is applied by `ps/mode-line--agenda-finalize'."
     '("Productivity"
       ("Plan & Review"
        ["Agenda"              ps/show-agenda           :keys "C-c p a"]
+       ("Calendar"
+        ["Open (Day)"         ps/show-calendar         :keys "C-c p c c"]
+        ["Day"                ps/show-calendar-day     :keys "C-c p c d"]
+        ["Week"               ps/show-calendar-week    :keys "C-c p c w"]
+        ["Month"              ps/show-calendar-month   :keys "C-c p c m"]
+        ["Year"               ps/show-calendar-year    :keys "C-c p c y"])
        ["Tasks"               ps/show-tasks            :keys "C-c p n   /   F9"]
        ["Full Agenda…"        org-agenda               :keys "C-c a"]
        ["Show Availability"   ps/org-show-availability :keys "C-c p v"]

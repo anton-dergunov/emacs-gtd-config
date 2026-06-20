@@ -35,6 +35,10 @@ The last two sections are why you rarely need a separate "next actions" list:
 mark what's important with priority =A=, mark what you're actively doing as
 =INPR=, and the agenda surfaces both.
 
+The agenda is deliberately a /today/ view. To see scheduled tasks and deadlines
+laid out across a week, a month, a year, or an arbitrary range — without the
+high-priority and in-progress sections — use the [[file:Calendar.org][Calendar]] instead.
+
 * Reading a line
 Each task line is laid out in aligned columns so it scans cleanly:
 
@@ -95,8 +99,10 @@ planning view readable — not a cosmetic theme choice. Its colors follow whatev
 
 * Under the hood / Customize
 - The sections come from =org-super-agenda= and the custom command =c=, defined
-  in =config.org= → /Org Mode → Agenda → Super agenda/. Edit the
-  =org-super-agenda-groups= list there to add, remove, or reorder sections.
+  in =config.org= → /Org Mode → Agenda → Super agenda/. Edit the shared list
+  =ps/agenda-day-super-groups= there to add, remove, or reorder sections; it also
+  feeds the [[file:Calendar.org][Calendar]]'s day view and the default styling of Org's stock agenda
+  (=C-c a= then =a=) and of clicking a date stamp in an Org file.
 - The aligned layout, pills, category/schedule icons, emoji, and folding are the
   modules =lisp/ps-agenda-layout.el=, =ps-agenda-icons.el=,
   =ps-schedule-icons.el=, =ps-agenda-emoji.el=, and =ps-agenda-fold.el=; their
