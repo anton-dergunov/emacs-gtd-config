@@ -153,7 +153,8 @@ checked — no grammar checking, no network/LLM use.
 
 The accepted languages default to English, Russian, and Spanish. Edit
 =ps/typo-languages= in =config.org= → /Settings → Typo / spell checking/ to match
-the languages you write in.
+the languages you write in. Typo checking runs only in editable Org files —
+these documentation pages, which open read-only, are never spell-checked.
 
 This uses [[https://github.com/minad/jinx][Jinx]], which needs the =enchant= library plus a dictionary per
 language (see [[file:Installation.org][Installation]]). On macOS, English works out of the box via the

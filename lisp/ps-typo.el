@@ -139,6 +139,14 @@ never precision."
   :type '(repeat regexp)
   :group 'ps-typo)
 
+(defcustom ps/typo-inhibit-predicate nil
+  "When non-nil, a function of no arguments called in each Org buffer.
+If it returns non-nil, `ps/typo--enable' does not turn the typo checker on for
+that buffer.  Used to exclude the read-only documentation reading view, where
+spell-checking is pointless because the buffer is not editable."
+  :type '(choice (const :tag "Never inhibit" nil) function)
+  :group 'ps-typo)
+
 ;;; Pure helpers (no Jinx required — unit-tested)
 
 (defun ps/typo--locale->lang (locale)
@@ -291,8 +299,11 @@ any failure falls back to ORIG unchanged, so suggestions always work."
 (defun ps/typo--enable ()
   "Turn on `jinx-mode' in the current buffer, swallowing setup errors.
 Added to `org-mode-hook'.  If the Jinx module or `enchant' is not installed,
-typo checking is silently skipped rather than aborting Org startup."
-  (when (fboundp 'jinx-mode)
+typo checking is silently skipped rather than aborting Org startup.  Buffers
+for which `ps/typo-inhibit-predicate' returns non-nil are skipped entirely."
+  (when (and (fboundp 'jinx-mode)
+             (not (and ps/typo-inhibit-predicate
+                       (funcall ps/typo-inhibit-predicate))))
     (condition-case err
         (jinx-mode 1)
       (error (message "ps-typo: could not enable jinx-mode: %s"

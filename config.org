@@ -376,6 +376,9 @@ like a near miss of a real word); it is off by default so you can experiment.
 =ps/typo-order-suggestions-by-language= lists fixes for the locally-detected
 language first; set it to nil to disable. =ps/typo-underline-color= is the wavy
 underline colour (=auto= derives a muted colour from the theme's =shadow= face).
+=ps/typo-inhibit-predicate= excludes the read-only documentation reading view
+(=ps/help--doc-buffer-p=, defined later in this file) — those pages cannot be
+edited, so spell-checking them is just noise.
 #+begin_src emacs-lisp
   (setq ps/typo-languages       '("en_US" "ru_RU" "es_ES")
         ps/typo-min-length      3
@@ -383,7 +386,9 @@ underline colour (=auto= derives a muted colour from the theme's =shadow= face).
         ps/typo-near-miss-max-distance 2
         ps/typo-order-suggestions-by-language t
         ;; Solarized keeps a soft grey; other themes derive one from `shadow'.
-        ps/typo-underline-color (if ps/color-theme-solarized-p "gray60" 'auto))
+        ps/typo-underline-color (if ps/color-theme-solarized-p "gray60" 'auto)
+        ;; Never spell-check the read-only docs reading view.
+        ps/typo-inhibit-predicate #'ps/help--doc-buffer-p)
 #+end_src
 
 ** Workspace config (per-Org-folder overrides)
@@ -855,6 +860,23 @@ statically hidden and is excluded below.
   (setq org-hide-emphasis-markers t
         org-pretty-entities       t)
 
+  ;; Flicker fix for editing inside a link.  While the cursor is in a link,
+  ;; org-appear reveals its raw syntax; but the typo checker re-marks the edited
+  ;; line, so on the next redisplay Org's own link fontification (`org-activate-
+  ;; links') re-folds the link — re-hiding it for a frame on every keystroke.
+  ;; Re-assert org-appear's reveal right after that re-fold, in the same
+  ;; fontification pass, so the screen never shows the collapsed form mid-edit.
+  ;; Use org-appear's tracked element (the cursor's), since during fontification
+  ;; `point' is font-lock's scan position, not the user's cursor.
+  (defun ps/org-appear--reassert-reveal (&rest _)
+    "Re-reveal the link/markup org-appear is showing for the cursor.
+Added as :after advice to `org-activate-links' to cancel the re-fold that Org's
+link fontification applies on every refontification while editing inside a link."
+    (when (and (bound-and-true-p org-appear-mode)
+               (bound-and-true-p org-appear--elem-toggled)
+               (bound-and-true-p org-appear--prev-elem))
+      (ignore-errors (org-appear--show-invisible org-appear--prev-elem))))
+
   (use-package org-appear
     :ensure t
     :hook (org-mode . (lambda ()
@@ -866,7 +888,8 @@ statically hidden and is excluded below.
           org-appear-autosubmarkers  t   ; x_1, x^2
           org-appear-autoentities    t   ; \alpha, \rightarrow
           org-appear-autokeywords    t   ; items in `org-hidden-keywords'
-          org-appear-inside-latex    t)) ; entities/sub-superscript inside $...$
+          org-appear-inside-latex    t)  ; entities/sub-superscript inside $...$
+    (advice-add 'org-activate-links :after #'ps/org-appear--reassert-reveal))
 #+end_src
 
 *** Replace SCHEDULED / DEADLINE labels with icons

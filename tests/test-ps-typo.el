@@ -7,6 +7,7 @@
 ;; `emacs -Q'); the module is designed to load without them.
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-typo)
 
@@ -21,7 +22,33 @@
   (should (null ps/typo-near-miss-gate))
   (should (= ps/typo-near-miss-max-distance 2))
   (should (eq ps/typo-order-suggestions-by-language t))
-  (should (eq ps/typo-underline-color 'auto)))
+  (should (eq ps/typo-underline-color 'auto))
+  (should (null ps/typo-inhibit-predicate)))
+
+;;; -------------------------------------------------------
+;;; enable gate (ps/typo-inhibit-predicate)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/typo--enable-respects-inhibit-predicate ()
+  "`ps/typo--enable' skips jinx-mode exactly when the predicate returns non-nil."
+  (let (enabled)
+    (cl-letf (((symbol-function 'jinx-mode)
+               (lambda (&optional _arg) (setq enabled t))))
+      ;; Predicate says "inhibit" -> jinx-mode must NOT be called.
+      (let ((ps/typo-inhibit-predicate (lambda () t)))
+        (setq enabled nil)
+        (ps/typo--enable)
+        (should-not enabled))
+      ;; Predicate says "do not inhibit" -> jinx-mode IS called.
+      (let ((ps/typo-inhibit-predicate (lambda () nil)))
+        (setq enabled nil)
+        (ps/typo--enable)
+        (should enabled))
+      ;; No predicate at all -> jinx-mode IS called.
+      (let ((ps/typo-inhibit-predicate nil))
+        (setq enabled nil)
+        (ps/typo--enable)
+        (should enabled)))))
 
 ;;; -------------------------------------------------------
 ;;; locale -> language symbol
