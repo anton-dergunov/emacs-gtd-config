@@ -43,12 +43,12 @@ labels. Overdue tasks live on the [[file:Agenda.org][Agenda]], by design — the
 "what is dated for this day", not "what is outstanding".
 
 *Week*, *Month* and *Year* put the whole span in the top header (e.g. =18–24 May
-2026=, =May 2026=, =2026=) and then list each day as its own *section* — a
-left-aligned, bold heading on a soft grey band (=Monday · 18 May=) that you can
-collapse or expand. Days with nothing on them are skipped, so only the days that
-matter appear. Weeks start on whichever day your calendar is configured to start
-on, and a week/month/year always covers the whole calendar period containing the
-date you were on.
+2026 · W21=, =May 2026=, =2026= — the week also shows its ISO week number) and
+then list each day as its own *section* — a left-aligned, bold heading on a soft
+grey band (=Monday · 18 May=) that you can collapse or expand. Days with nothing
+on them are skipped, so only the days that matter appear. Weeks start on
+whichever day your calendar is configured to start on, and a week/month/year
+always covers the whole calendar period containing the date you were on.
 
 Every line uses the same aligned columns, category icons, and pills as the rest
 of the agenda, so the Calendar looks consistent — it is just simpler. The rich
@@ -57,13 +57,13 @@ the [[file:Agenda.org][Agenda]]; the Calendar deliberately leaves them out. The 
 current view and span, e.g. =Calendar · Week=.
 
 * Switching the span
-The top header carries a small control strip:
+The top header carries a small control strip of clickable buttons:
 
 - *D W M Y* — switch to a day / week / month / year view in place. The current
-  span is highlighted.
-- *N…* — prompt for an arbitrary number of days to show.
-- *−* / *+* — show one day fewer / one more, to grow or shrink the range a day
-  at a time.
+  span is filled in.
+- *Range…* — pick an arbitrary start and end date with Org's date picker (the
+  same one =C-c C-s= uses, entered at the bottom of the frame); the Calendar then
+  shows exactly that range. Only the dates matter — any time entered is ignored.
 - the chevrons =‹= =›= step backward / forward by the current span (a week at a
   time in week view, a month at a time in month view, and so on); =⊙= jumps back
   to today and =⟳= reloads.
@@ -84,15 +84,20 @@ expand that day.
   timestamp-follow at the =g= command (=ps/calendar-follow-timestamp=), so a click
   and the menu give the identical view.
 - The span-switch controls, the top control row, the per-day sections, and the
-  time pills live in =lisp/ps-agenda-layout.el=; the per-day section background
-  and the span label are the faces =ps/agenda-layout-day-section= and
-  =ps/agenda-layout-control-label= (customize to taste).  The bindings are
-  =ps/show-calendar= and =ps/show-calendar-{day,week,month,year}= under the
-  =C-c p c= prefix (see [[file:Keybindings.org][Keybindings]]).
+  time pills live in =lisp/ps-agenda-layout.el=; tunable faces are
+  =ps/agenda-layout-day-section= (per-day grey band), =ps/agenda-layout-control-label=
+  (span label), and =ps/agenda-layout-span-button= / =-span-button-active= (the
+  =D W M Y= / =Range…= buttons).  The bindings are =ps/show-calendar= and
+  =ps/show-calendar-{day,week,month,year}= under the =C-c p c= prefix (see
+  [[file:Keybindings.org][Keybindings]]).
 - Collapsing day sections reuses =lisp/ps-agenda-fold.el= (the same =TAB=/click
   folding as the Agenda's sections).
 - The mode-line label (=Calendar · Day/Week/…=) is set in
   =lisp/ps-mode-line.el=.
+- A long span (a year) only ever scans dated entries: the =g= command limits
+  =org-agenda-entry-types= and turns off blocked-task dimming, and the conflict
+  check is skipped for the Calendar — so it stays as quick as Org's per-day scan
+  allows.
 - The minute auto-refresh that moves the now-indicator runs only for the
   [[file:Agenda.org][Agenda]]; the Calendar (and the Tasks list) is never rebuilt behind your back,
   so it stays on whatever day you navigated to.

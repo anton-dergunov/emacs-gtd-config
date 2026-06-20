@@ -71,6 +71,9 @@ buffer-local `ps/agenda-layout--view-kind' so it survives a resize re-layout.")
 (declare-function org-agenda-find-same-or-today-or-agenda "org-agenda" (&optional cnt))
 (declare-function org-agenda-compute-starting-span "org-agenda" (sd span &optional n))
 (declare-function org-time-from-absolute "org" (d))
+(declare-function org-time-string-to-time "org" (s))
+(declare-function org-read-date "org" (&optional with-time to-time from-string prompt default-time default-input inactive))
+(declare-function org-days-to-iso-week "org" (days))
 (declare-function org-today "org" ())
 (declare-function calendar-gregorian-from-absolute "calendar" (date))
 (declare-function calendar-last-day-of-month "calendar" (month year))
@@ -222,12 +225,6 @@ TYPE-SUBSTRING.  Set to nil to disable leading glyphs entirely."
   "Face for time-range text (compact Schedule events)."
   :group 'ps-agenda-layout)
 
-(defface ps/agenda-layout-calendar-time
-  '((t :inherit default))
-  "Face for the time of a timed item in the Calendar view.
-Normal size and the default foreground — unlike the Agenda's small pill."
-  :group 'ps-agenda-layout)
-
 (defface ps/agenda-layout-day-section
   '((t :inherit org-super-agenda-header :weight bold :extend t))
   "Face for a Calendar per-day section header (week/month/year views).
@@ -238,6 +235,17 @@ tunable face: left-aligned, bold, normal size."
 (defface ps/agenda-layout-control-label
   '((t :inherit org-agenda-date))
   "Face for the span label in the Calendar control row (e.g. \"18–24 May 2026\")."
+  :group 'ps-agenda-layout)
+
+(defface ps/agenda-layout-span-button
+  '((t :inherit default :box (:line-width (1 . -1))))
+  "Face for the Calendar span-switch buttons (D W M Y / Range…).
+The thin box makes them read as clickable."
+  :group 'ps-agenda-layout)
+
+(defface ps/agenda-layout-span-button-active
+  '((t :inherit ps/agenda-layout-span-button :weight bold :inverse-video t))
+  "Face for the Calendar span button matching the current span (filled)."
   :group 'ps-agenda-layout)
 
 ;;; Line classification and source reads
@@ -578,13 +586,13 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
          (emoji (ps/agenda-layout--emoji title))
          ;; The Calendar is date-scoped (the day header / control row carries the
          ;; date), so a relative-date pill ("4w ago") has no meaning there: a
-         ;; timed item shows its time (normal size, default colour, zero-padded);
-         ;; an untimed item shows no right badge.  Other views keep the reldate /
-         ;; compact-Schedule behaviour.
+         ;; timed item shows its time (the same subtle pill as the Agenda, but
+         ;; zero-padded so times right-align); an untimed item shows no right
+         ;; badge.  Other views keep the reldate / compact-Schedule behaviour.
          (right (cond
                  ((and (ps/agenda-layout--calendarp) tod)
-                  (let ((badge (propertize (ps/agenda-layout--time-range tod dur t)
-                                           'face 'ps/agenda-layout-calendar-time)))
+                  (let ((badge (ps/agenda-layout--reldate-text
+                                (ps/agenda-layout--time-range tod dur t) 'time)))
                     (cons (string-width badge) badge)))
                  ((ps/agenda-layout--calendarp) (cons 0 nil))
                  (t (ps/agenda-layout--right-element schedule-compact tod dur))))
@@ -721,8 +729,12 @@ there is no such run."
     (cond
      ((eq span 'month) (format-time-string "%B %Y" tm))
      ((eq span 'year) (format-time-string "%Y" tm))
-     ((eq span 'week) (ps/agenda-layout--date-range-label start (+ start 6)))
-     ((eq span 'fortnight) (ps/agenda-layout--date-range-label start (+ start 13)))
+     ((eq span 'week)
+      (format "%s · W%02d" (ps/agenda-layout--date-range-label start (+ start 6))
+              (org-days-to-iso-week start)))
+     ((eq span 'fortnight)
+      (format "%s · W%02d" (ps/agenda-layout--date-range-label start (+ start 13))
+              (org-days-to-iso-week start)))
      ((and (numberp span) (> span 1))
       (ps/agenda-layout--date-range-label start (+ start (1- span))))
      (t  ;; a single day
@@ -797,30 +809,38 @@ there is no such run."
         (if (calendar-leap-year-p (nth 2 g)) 366 365)))
      (t 1))))
 
-(defun ps/agenda-layout--set-span (span)
-  "Rebuild the agenda with SPAN, keeping (and aligning) the current start day.
-SPAN is a span symbol (`day', `week', `month', `year') or a positive integer
-number of days.  For a symbol span the start is aligned to the containing
-calendar boundary (the week respects `calendar-week-start-day'); an integer span
-keeps the raw start.  Mirrors the mechanism Org uses in `org-agenda-later': set
-`org-agenda-overriding-arguments' (whose third element is the span) and redo."
+(defun ps/agenda-layout--rebuild (start span)
+  "Rebuild the agenda showing SPAN days starting at absolute day START.
+SPAN is a span symbol or a positive integer day count.  Mirrors the mechanism
+Org uses in `org-agenda-later': set `org-agenda-overriding-arguments' (whose
+third element is the span) and redo, so the active custom command re-runs."
   (when (derived-mode-p 'org-agenda-mode)
     (org-agenda-check-type t 'agenda)
     (let* ((pos  (min (1- (point-max)) (point)))
            (args (get-text-property pos 'org-last-args))
-           (sd0  (or (org-get-at-bol 'day) (nth 1 args)
-                     ps/agenda-layout--cal-start org-starting-day))
+           (org-agenda-overriding-cmd (get-text-property pos 'org-series-cmd))
+           (org-agenda-overriding-arguments (list (car args) start span)))
+      (org-agenda-redo)
+      (when (fboundp 'org-agenda-find-same-or-today-or-agenda)
+        (org-agenda-find-same-or-today-or-agenda)))))
+
+(defun ps/agenda-layout--set-span (span)
+  "Rebuild the agenda with SPAN, aligning the start to its calendar boundary.
+A symbol span (`day', `week', `month', `year') is aligned to the containing
+period (the week respects `calendar-week-start-day')."
+  (when (derived-mode-p 'org-agenda-mode)
+    (org-agenda-check-type t 'agenda)
+    (let* ((pos (min (1- (point-max)) (point)))
+           (args (get-text-property pos 'org-last-args))
+           (sd0 (or (org-get-at-bol 'day) (nth 1 args)
+                    ps/agenda-layout--cal-start org-starting-day))
            (org-agenda-start-on-weekday
             (if (memq span '(week fortnight)) calendar-week-start-day
               (and (boundp 'org-agenda-start-on-weekday) org-agenda-start-on-weekday)))
            (sd (if (memq span '(day week fortnight month year))
                    (org-agenda-compute-starting-span sd0 span)
-                 sd0))
-           (org-agenda-overriding-cmd (get-text-property pos 'org-series-cmd))
-           (org-agenda-overriding-arguments (list (car args) sd span)))
-      (org-agenda-redo)
-      (when (fboundp 'org-agenda-find-same-or-today-or-agenda)
-        (org-agenda-find-same-or-today-or-agenda)))))
+                 sd0)))
+      (ps/agenda-layout--rebuild sd span))))
 
 (defun ps/agenda-layout-span-day ()
   "Switch the Calendar to a single-day view."
@@ -842,21 +862,18 @@ keeps the raw start.  Mirrors the mechanism Org uses in `org-agenda-later': set
   (interactive)
   (ps/agenda-layout--set-span 'year))
 
-(defun ps/agenda-layout-span-set-days (n)
-  "Switch the Calendar to an arbitrary span of N days from the current start."
-  (interactive (list (read-number "Number of days to show: "
-                                  (max 1 (ps/agenda-layout--current-ndays)))))
-  (ps/agenda-layout--set-span (max 1 n)))
-
-(defun ps/agenda-layout-span-grow ()
-  "Extend the Calendar span by one day."
-  (interactive)
-  (ps/agenda-layout--set-span (1+ (max 1 (ps/agenda-layout--current-ndays)))))
-
-(defun ps/agenda-layout-span-shrink ()
-  "Shrink the Calendar span by one day (minimum one)."
-  (interactive)
-  (ps/agenda-layout--set-span (max 1 (1- (ps/agenda-layout--current-ndays)))))
+(defun ps/agenda-layout-span-range (start end)
+  "Show the Calendar for the inclusive date range START..END.
+Interactively prompts for both dates with Org's date picker (the same one
+`C-c C-s' uses); any time entered is ignored — only the dates matter."
+  (interactive
+   (list (org-read-date nil nil nil "Calendar range — start date")
+         (org-read-date nil nil nil "Calendar range — end date")))
+  (let* ((d1 (time-to-days (org-time-string-to-time start)))
+         (d2 (time-to-days (org-time-string-to-time end)))
+         (lo (min d1 d2))
+         (hi (max d1 d2)))
+    (ps/agenda-layout--rebuild lo (1+ (- hi lo)))))
 
 (defun ps/agenda-layout--date-is-today-p (pos)
   "Return non-nil when the agenda date header at POS is today."
@@ -880,20 +897,19 @@ runs CMD on click/RET, with tooltip HELP."
       s)))
 
 (defun ps/agenda-layout--text-button (label cmd help &optional active)
-  "Return a clickable text button showing LABEL, running CMD, tooltip HELP.
-When ACTIVE, render it emphasised to mark the span the view is currently on."
+  "Return a clickable boxed button showing LABEL, running CMD, tooltip HELP.
+When ACTIVE, render it filled to mark the span the view is currently on."
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-1] cmd)
     (define-key map (kbd "RET") cmd)
-    (propertize label 'keymap map 'mouse-face 'highlight 'help-echo help
-                'face (if active
-                          '(:inherit ps/agenda-layout-date-button
-                            :weight bold :underline t)
-                        'ps/agenda-layout-date-button))))
+    (propertize (concat " " label " ")
+                'keymap map 'mouse-face 'highlight 'help-echo help
+                'face (if active 'ps/agenda-layout-span-button-active
+                        'ps/agenda-layout-span-button))))
 
 (defun ps/agenda-layout--span-row ()
-  "Return the Calendar span-switch controls: D W M Y, a custom N, and ± a day.
-The control matching the currently displayed span is emphasised."
+  "Return the Calendar span-switch controls: D W M Y and a date Range… picker.
+The control matching the currently displayed span is filled."
   (let* ((span (ps/agenda-layout--current-span))
          (cur (cond ((memq span '(day 1 nil)) 'day) ((eq span 'week) 'week)
                     ((eq span 'month) 'month) ((eq span 'year) 'year) (t 'custom))))
@@ -906,11 +922,8 @@ The control matching the currently displayed span is emphasised."
      " "
      (ps/agenda-layout--text-button "Y" #'ps/agenda-layout-span-year  "Year view"  (eq cur 'year))
      "  "
-     (ps/agenda-layout--text-button "N…" #'ps/agenda-layout-span-set-days
-                                    "Show an arbitrary number of days…" (eq cur 'custom))
-     "  "
-     (ps/agenda-layout--text-button "−" #'ps/agenda-layout-span-shrink "One day fewer")
-     (ps/agenda-layout--text-button "+" #'ps/agenda-layout-span-grow   "One day more"))))
+     (ps/agenda-layout--text-button "Range…" #'ps/agenda-layout-span-range
+                                    "Show an arbitrary date range…" (eq cur 'custom)))))
 
 (defun ps/agenda-layout--centered-controls (label face show-today)
   "Display string for a control row: LABEL (in FACE), centred, hugged by buttons.
@@ -976,25 +989,35 @@ SHOW-TODAY controls the go-to-today button.  Adds one blank line beneath the row
    bol eol
    (ps/agenda-layout--centered-controls
     label 'ps/agenda-layout-control-label show-today))
-  (let ((ov (make-overlay (point) (point))))
+  ;; The blank line carries an inert keymap so a stray click on it does nothing
+  ;; (rather than falling through to the nearest control-row button).
+  (let ((ov (make-overlay (point) (point)))
+        (blank (let ((m (make-sparse-keymap)))
+                 (define-key m [mouse-1] #'ignore)
+                 (propertize "\n" 'keymap m))))
     (overlay-put ov 'ps/agenda-layout t)
-    (overlay-put ov 'after-string "\n")))
+    (overlay-put ov 'after-string blank)))
 
 (defun ps/agenda-layout--reformat-day-section (bol eol)
   "Turn a Calendar day header [BOL, EOL) into a left-aligned grey day section.
-Full-width grey background, bold label (\"Monday · 18 May\"); `ps-agenda-fold'
-adds the ▾/▸ collapse indicator."
+The label (\"Monday · 18 May\") sits at the left margin; the grey band fills to
+the window edge via the face's `:extend' on the trailing newline (so it never
+overruns the right edge).  `ps-agenda-fold' adds the ▾/▸ collapse indicator."
   (let* ((day   (org-get-at-bol 'day))
          (label (if day (ps/agenda-layout--day-section-label day)
                   (ps/agenda-layout--date-dotted
                    (string-trim (buffer-substring-no-properties bol eol)))))
-         (inner (concat (make-string ps/agenda-layout-left-margin-cols ?\s) label))
-         (win   (ps/agenda-layout--window-cols))
-         (pad   (max 0 (- win (string-width inner)))))
+         (inner (concat (make-string ps/agenda-layout-left-margin-cols ?\s) label)))
     (ps/agenda-layout--replace-line
      bol eol
-     (propertize (concat inner (make-string pad ?\s))
-                 'face 'ps/agenda-layout-day-section))))
+     (propertize inner 'face 'ps/agenda-layout-day-section))
+    ;; Extend the band to the window edge through the newline (face has :extend t),
+    ;; rather than padding with spaces (which overran the right edge).
+    (when (< (point) (point-max))
+      (let ((ov (make-overlay (point) (min (point-max) (1+ (point))))))
+        (overlay-put ov 'ps/agenda-layout t)
+        (overlay-put ov 'evaporate t)
+        (overlay-put ov 'face 'ps/agenda-layout-day-section)))))
 
 ;;; Main pass
 

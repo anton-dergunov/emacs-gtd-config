@@ -720,7 +720,14 @@ preference and stays here.
                           (org-deadline-past-days 0)
                           (org-deadline-warning-days 0)
                           (org-agenda-start-on-weekday calendar-week-start-day)
-                          (org-agenda-show-all-dates nil))))
+                          (org-agenda-show-all-dates nil)
+                          ;; Speed: the Calendar only shows dated tasks, so skip
+                          ;; diary sexps and the blocked-task computation Org
+                          ;; would otherwise do for every entry.  This roughly
+                          ;; halves the (per-day) scan a long span like a year
+                          ;; needs.
+                          (org-agenda-entry-types '(:deadline :scheduled :timestamp))
+                          (org-agenda-dim-blocked-tasks nil))))
              ((ps/agenda-layout-view-kind 'calendar)))))
 
     :config
