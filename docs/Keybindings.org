@@ -61,7 +61,6 @@ Flip a split between horizontal and vertical (=ps/window-split-toggle=):
 | Key       | Command              | Action          |
 |-----------+----------------------+-----------------|
 | =C-c p s= | =ps/git-sync-toggle= | toggle Git sync |
-| =C-c p S= | =ps/git-sync-resume= | resume Git sync |
 | =C-x g=   | =magit-status=       | open Magit      |
 
 * Config

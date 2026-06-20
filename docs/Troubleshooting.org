@@ -50,6 +50,9 @@ missing optional dependency or a path that needs setting.
 * Git sync did something unexpected
 - Open =C-x g= (Magit) to inspect the repository state and history.
 - Pause sync with =C-c p s= while you sort things out.
+- If the indicator looks stuck on "Syncing", it recovers on its own within a
+  minute or so; toggling sync off and back on with =C-c p s= forces an immediate
+  recovery and resync.
 
 * Still stuck?
 Open an issue with what you tried, the relevant lines from =*Messages*=, your

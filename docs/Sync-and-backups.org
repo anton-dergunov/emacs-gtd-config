@@ -12,13 +12,16 @@ If your Org base directory is a Git repository, this config syncs it in the
 background: it commits your changes and pushes/pulls on a timer, so your tasks
 stay in step across devices without you running any Git commands.
 
-- A small *mode-line indicator* shows sync status.
-- Toggle it with =C-c p s= (Productivity → Sync & Version Control → Git Sync
-  Enabled); =C-c p S= resumes it.
+- A small *mode-line indicator* shows sync status. Hover it to see when the last
+  successful sync happened (the date is included when it wasn't today).
+- Turn it on or off with =C-c p s= (Productivity → Sync & Version Control → Git
+  Sync Enabled). Turning it back on resyncs immediately.
 - For manual control, =C-x g= opens [[https://magit.vc/][Magit]], the full Git interface.
 
-The sync is intentionally quiet and won't commit while you're mid-edit. (It is
-also disabled automatically when running the dev launcher — see
+The sync is intentionally quiet and won't commit while you're mid-edit. It also
+recovers on its own: if a sync is ever interrupted (for example, your laptop
+sleeps mid-pull), the indicator clears the stuck state and resumes by itself.
+(Sync is disabled automatically when running the dev launcher — see
 [[file:Developing.org][Developing & extending]].)
 
 * Auto-save and auto-revert
@@ -39,7 +42,8 @@ Emacs keeps versioned backups and auto-save files in dedicated directories
 
 * Under the hood / Customize
 - Git sync: =lisp/ps-git-sync.el=; behavior is configured in =config.org= →
-  /Session & Backups → Automatic git sync/ (and the =PS_GIT_SYNC_DISABLE= env
-  var / =ps/git-sync-paused= for turning it off).
+  /Package Management → Git sync/ (=ps/git-sync-interval= and the stuck-sync
+  =ps/git-sync-timeout=). Turn it off with the =PS_GIT_SYNC_DISABLE= env var or
+  =ps/git-sync-paused=.
 - Auto-save/revert, sessions, and backups: =config.org= → /Session & Backups/
   and /Org Mode → Behavior → Auto-save .../.

@@ -85,8 +85,11 @@ Skipped when git is unavailable. Cleans up the repo afterward."
   ;; Non-OK status: status message on one line, time on the next.
   (let ((ps/git-sync--last-status ps/git-sync--icon-syncing)
         (ps/git-sync--last-message "Git sync in progress")
-        (ps/git-sync--last-success-time "21:13"))
-    (should (string-match-p "Last successful sync: 21:13" (ps/git-sync--help-echo))))
+        (ps/git-sync--last-success-time (current-time)))
+    (should (string-match-p
+             (concat "last successful sync: "
+                     (regexp-quote (ps/git-sync--format-success-time)))
+             (ps/git-sync--help-echo))))
   (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
         (ps/git-sync--last-message "msg")
         (ps/git-sync--last-success-time nil))
@@ -96,8 +99,29 @@ Skipped when git is unavailable. Cleans up the repo afterward."
   "In the OK state the tooltip shows the time once, not a duplicated message."
   (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
         (ps/git-sync--last-message "Git sync OK")
-        (ps/git-sync--last-success-time "01:44"))
-    (should (equal (ps/git-sync--help-echo) "Last successful sync: 01:44"))))
+        (ps/git-sync--last-success-time (current-time)))
+    (should (equal (ps/git-sync--help-echo)
+                   (concat "last successful sync: "
+                           (ps/git-sync--format-success-time))))))
+
+(ert-deftest ps/git-sync--format-success-time-today ()
+  "A timestamp from today renders as just the clock time."
+  (let ((ps/git-sync--last-success-time (current-time)))
+    (should (equal (ps/git-sync--format-success-time)
+                   (format-time-string "%H:%M")))))
+
+(ert-deftest ps/git-sync--format-success-time-earlier ()
+  "A timestamp from a previous day includes the full date."
+  (let ((ps/git-sync--last-success-time
+         (time-subtract (current-time) (* 2 86400))))
+    (should (equal (ps/git-sync--format-success-time)
+                   (format-time-string "%Y-%m-%d %H:%M"
+                                       ps/git-sync--last-success-time)))))
+
+(ert-deftest ps/git-sync--format-success-time-nil ()
+  "No recorded time yields nil."
+  (let ((ps/git-sync--last-success-time nil))
+    (should (null (ps/git-sync--format-success-time)))))
 
 (ert-deftest ps/git-sync--modeline-help-echo ()
   "The modeline string carries the last message as a help-echo property."
@@ -118,22 +142,22 @@ Skipped when git is unavailable. Cleans up the repo afterward."
       (should (equal face '(:foreground "firebrick"))))))
 
 (ert-deftest ps/git-sync--modeline-ok-face ()
-  "An OK status uses the gray40 face."
+  "A non-error status carries no face, so it inherits the mode-line colour."
   (let ((ps/git-sync--last-status ps/git-sync--icon-ok)
         (ps/git-sync--last-message "ok")
         (ps/git-sync-paused nil))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:foreground "gray40"))))))
+      (should (null face)))))
 
 (ert-deftest ps/git-sync--modeline-off-face ()
-  "The off/paused (offline) status is neutral gray, not red."
+  "The off/paused (offline) status also inherits the mode-line colour."
   (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
         (ps/git-sync--last-message "off")
         (ps/git-sync-paused t))
     (let* ((s (ps/git-sync--modeline))
            (face (get-text-property (1- (length s)) 'face s)))
-      (should (equal face '(:foreground "gray60"))))))
+      (should (null face)))))
 
 ;;; -------------------------------------------------------
 ;;; conflict handling
@@ -158,33 +182,65 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (kill-buffer "*Org Git Conflict*")))))
 
 ;;; -------------------------------------------------------
-;;; resume
+;;; watchdog (reap stale syncs)
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/git-sync--resume-clears-paused ()
-  "resume clears the paused flag and sets the offline status."
-  (let ((ps/git-sync-paused t)
-        (ps/git-sync--last-status nil)
-        (ps/git-sync--last-message nil))
-    (ps/git-sync-resume)
-    (should-not ps/git-sync-paused)
-    (should (equal ps/git-sync--last-status ps/git-sync--icon-offline))))
+(ert-deftest ps/git-sync--reap-stale-clears-dead-process ()
+  "reap-stale clears a stuck running flag when no live process backs it.
+This is the laptop-sleep case: the sentinel never fired, so the guard would
+otherwise stay set forever and block all future syncs."
+  (let ((ps/git-sync--running t)
+        (ps/git-sync--process nil)
+        (ps/git-sync--start-time (current-time)))
+    (should (ps/git-sync--reap-stale))
+    (should-not ps/git-sync--running)
+    (should-not ps/git-sync--process)
+    (should-not ps/git-sync--start-time)))
 
-(ert-deftest ps/git-sync--resume-is-interactive ()
-  "resume is an interactive command."
-  (should (commandp 'ps/git-sync-resume)))
+(ert-deftest ps/git-sync--reap-stale-noop-when-idle ()
+  "reap-stale does nothing when no sync is running."
+  (let ((ps/git-sync--running nil))
+    (should-not (ps/git-sync--reap-stale))))
+
+(ert-deftest ps/git-sync--reap-stale-kills-hung-process ()
+  "reap-stale kills a live process that has run past the timeout."
+  (skip-unless (executable-find "sleep"))
+  (let* ((proc (start-process "ps-git-sync-test-hung" nil "sleep" "30"))
+         (ps/git-sync--running t)
+         (ps/git-sync--process proc)
+         (ps/git-sync--start-time (time-subtract (current-time) 9999))
+         (ps/git-sync-timeout 1))
+    (unwind-protect
+        (progn
+          (should (ps/git-sync--reap-stale))
+          (should-not ps/git-sync--running))
+      (when (process-live-p proc) (delete-process proc)))))
+
+;;; -------------------------------------------------------
+;;; toggle
+;;; -------------------------------------------------------
 
 (ert-deftest ps/git-sync--toggle-flips-paused-and-icon ()
-  "toggle flips the paused flag and updates the status icon both ways."
+  "toggle flips the paused flag and updates the status icon both ways.
+Re-enabling also recovers (reap-stale) and ensures the periodic timer exists."
   (let ((ps/git-sync-paused nil)
         (ps/git-sync--last-status nil)
-        (ps/git-sync--last-message nil))
-    (ps/git-sync-toggle)
-    (should ps/git-sync-paused)
-    (should (equal ps/git-sync--last-status ps/git-sync--icon-offline))
-    (ps/git-sync-toggle)
-    (should-not ps/git-sync-paused)
-    (should (equal ps/git-sync--last-status ps/git-sync--icon-ok))))
+        (ps/git-sync--last-message nil)
+        (ps/git-sync--directory nil)
+        (ps/git-sync--running nil)
+        (ps/git-sync--timer nil))
+    (unwind-protect
+        (progn
+          (ps/git-sync-toggle)
+          (should ps/git-sync-paused)
+          (should (equal ps/git-sync--last-status ps/git-sync--icon-offline))
+          (ps/git-sync-toggle)
+          (should-not ps/git-sync-paused)
+          (should (equal ps/git-sync--last-status ps/git-sync--icon-ok))
+          ;; Re-enabling makes sure the periodic timer is scheduled.
+          (should (timerp ps/git-sync--timer)))
+      (when (timerp ps/git-sync--timer)
+        (cancel-timer ps/git-sync--timer)))))
 
 (ert-deftest ps/git-sync--toggle-is-interactive ()
   "toggle is an interactive command."

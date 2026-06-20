@@ -232,13 +232,25 @@ click (select window) and drag-to-resize are left untouched."
 
 ;;; Setup
 
+(defvar-local ps/mode-line--last-line nil
+  "Line number at the last mode-line refresh in this buffer.
+Used by `ps/mode-line--refresh-on-line-change' to skip per-keystroke updates.")
+
+(defun ps/mode-line--refresh-on-line-change ()
+  "Force a mode-line update only when point moved to a different line.
+Emacs's optimized cursor-movement redisplay does not re-evaluate a custom
+`:eval' mode line, so the live percentage/breadcrumb would otherwise look
+stale on keyboard navigation.  Refreshing on every command (including each
+self-insert) is visually noisy, so refresh only when the line changes."
+  (let ((line (line-number-at-pos)))
+    (unless (eql line ps/mode-line--last-line)
+      (setq ps/mode-line--last-line line)
+      (force-mode-line-update))))
+
 (defun ps/mode-line--org-setup ()
-  "Install the planning mode line in the current Org buffer.
-The `post-command-hook' forces a refresh after each command: Emacs's
-optimized cursor-movement redisplay does not re-evaluate a custom `:eval'
-mode line, so the live percentage/breadcrumb would otherwise look stale."
+  "Install the planning mode line in the current Org buffer."
   (setq-local mode-line-format '((:eval (ps/mode-line--render))))
-  (add-hook 'post-command-hook #'force-mode-line-update nil t))
+  (add-hook 'post-command-hook #'ps/mode-line--refresh-on-line-change nil t))
 
 ;;;###autoload
 (defun ps/mode-line-setup ()

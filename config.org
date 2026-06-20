@@ -256,6 +256,7 @@ active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 ** Git sync (ps-git-sync.el)
 #+begin_src emacs-lisp
   (setq ps/git-sync-interval 60)
+  (setq ps/git-sync-timeout 120)
 #+end_src
 
 ** Schedule/deadline icons (ps-schedule-icons.el)
@@ -1179,6 +1180,15 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (add-hook 'treemacs-mode-hook
       (lambda () (setq-local frame-title-format "File Tree")))
 
+    ;; Keep the tree pinned at column 0. Without this, resizing the frame can
+    ;; push point off-screen to the right and auto-hscroll scrolls the window
+    ;; sideways, cutting off the left edge. Truncating (like the agenda does)
+    ;; and disabling auto-hscroll keeps it from ever scrolling horizontally.
+    (add-hook 'treemacs-mode-hook
+      (lambda ()
+        (setq-local truncate-lines t)
+        (setq-local auto-hscroll-mode nil)))
+
     ;; Restore some vertical breathing room between entries.
     (add-hook 'treemacs-mode-hook (lambda () (setq-local line-spacing 2)))
 
@@ -1516,7 +1526,6 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "t") #'ps/shift-timezone)            ; t → timezone
     ;; Sync & VC
     (define-key m (kbd "s") #'ps/git-sync-toggle)           ; s → sync toggle
-    (define-key m (kbd "S") #'ps/git-sync-resume)           ; S → resume Sync
     ;; Layout & navigation
     (define-key m (kbd "1") #'delete-other-windows)         ; 1 → focus current buffer
     (define-key m (kbd "|") #'ps/window-split-toggle)       ; | → swap split direction
@@ -1579,7 +1588,6 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :style toggle
         :selected (not (and (boundp 'ps/git-sync-paused) ps/git-sync-paused))
         :keys "C-c p s"]
-       ["Resume Git Sync"   ps/git-sync-resume :keys "C-c p S"]
        ["Magit Status"      magit-status       :keys "C-x g"])
       ("Layout & Navigation"
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
