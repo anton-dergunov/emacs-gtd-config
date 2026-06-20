@@ -1398,6 +1398,10 @@ documentation's editor window instead of ever opening a new one."
                         (assq-delete-all 'file (copy-alist org-link-frame-setup))))
       (font-lock-flush)
       (when (require 'valign nil t) (valign-mode 1))
+      ;; Docs are read-only, so never spell-check them.  `ps/typo--enable' already
+      ;; skips them, but turn the checker off here too in case the buffer arrived
+      ;; with it on — e.g. one restored from a previous session.
+      (when (bound-and-true-p jinx-mode) (jinx-mode -1))
       (read-only-mode 1)))
   (add-hook 'org-mode-hook #'ps/help--setup-doc-buffer)
 
@@ -1718,6 +1722,19 @@ a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
   ;; Reload desktop without asking
   ;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html
   (setq desktop-load-locked-desktop t)
+
+  ;; Desktop restores each buffer's saved minor modes *after* the mode hooks
+  ;; run, so a doc buffer saved with the typo checker on comes back with it on
+  ;; despite the doc-buffer exclusion.  Once the whole session is restored, turn
+  ;; the checker back off in every (read-only) documentation buffer.
+  (add-hook 'desktop-after-read-hook
+            (lambda ()
+              (dolist (buf (buffer-list))
+                (with-current-buffer buf
+                  (when (and (derived-mode-p 'org-mode)
+                             (ps/help--doc-buffer-p)
+                             (bound-and-true-p jinx-mode))
+                    (jinx-mode -1))))))
 #+end_src
 
 ** Backup and autosave configuration
