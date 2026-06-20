@@ -50,6 +50,13 @@
                "recieve" "teh" "playa" "цвет" "привет" "niño"))
     (should-not (ps/typo--code-like-p w))))
 
+(ert-deftest ps/typo--code-like-passes-sentence-final-words ()
+  "A word immediately followed by a separator with nothing after it (e.g.
+the last word of a sentence, before the closing punctuation) is NOT
+treated as code -- only a genuine multi-segment token like \"foo.bar\" is."
+  (dolist (w '("typo." "sentence:" "path/"))
+    (should-not (ps/typo--code-like-p w))))
+
 ;;; -------------------------------------------------------
 ;;; near-miss gate
 ;;; -------------------------------------------------------

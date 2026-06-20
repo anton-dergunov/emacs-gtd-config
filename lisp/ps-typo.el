@@ -126,7 +126,7 @@ text, never cause a false positive, so it is safe to be generous here."
   :group 'ps-typo)
 
 (defcustom ps/typo-exclude-regexps
-  '("[[:alpha:]]+[._/:][[:alnum:]._/:~-]*"   ; foo.bar  a/b  ns::name  paths
+  '("[[:alpha:]]+[._/:][[:alnum:]._/:~-]+"   ; foo.bar  a/b  ns::name  paths
     "[[:lower:]]+[[:upper:]][[:alnum:]]*"     ; camelCase / dromedaryCase
     "[[:alpha:]]*_[[:alnum:]_]*"              ; snake_case / __dunder__
     "[@#$][[:alnum:]_-]+"                     ; @handle  #tag  $var
