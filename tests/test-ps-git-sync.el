@@ -87,7 +87,7 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (ps/git-sync--last-message "Git sync in progress")
         (ps/git-sync--last-success-time (current-time)))
     (should (string-match-p
-             (concat "last successful sync: "
+             (concat "Last successful sync: "
                      (regexp-quote (ps/git-sync--format-success-time)))
              (ps/git-sync--help-echo))))
   (let ((ps/git-sync--last-status ps/git-sync--icon-offline)
@@ -101,7 +101,7 @@ Skipped when git is unavailable. Cleans up the repo afterward."
         (ps/git-sync--last-message "Git sync OK")
         (ps/git-sync--last-success-time (current-time)))
     (should (equal (ps/git-sync--help-echo)
-                   (concat "last successful sync: "
+                   (concat "Last successful sync: "
                            (ps/git-sync--format-success-time))))))
 
 (ert-deftest ps/git-sync--format-success-time-today ()

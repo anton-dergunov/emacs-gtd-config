@@ -76,10 +76,10 @@ full date too (\"YYYY-MM-DD HH:MM\") when it was yesterday or earlier."
 (defun ps/git-sync--help-echo ()
   "Return the mode-line tooltip.
 In the OK state the label already conveys success, so only the time is
-shown (\"last successful sync: HH:MM\").  Other states show their status,
+shown (\"Last successful sync: HH:MM\").  Other states show their status,
 plus the last successful sync time on a second line when one is known."
   (let ((sync-line (let ((time (ps/git-sync--format-success-time)))
-                     (and time (concat "last successful sync: " time)))))
+                     (and time (concat "Last successful sync: " time)))))
     (cond
      ((and (equal ps/git-sync--last-status ps/git-sync--icon-ok) sync-line)
       sync-line)
