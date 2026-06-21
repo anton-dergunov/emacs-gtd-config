@@ -2,7 +2,16 @@
 
 set -euo pipefail
 
-EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
+if [ -z "${EMACS_BIN:-}" ]; then
+  if command -v emacs >/dev/null 2>&1; then
+    EMACS_BIN="emacs"
+  elif [ -x "/Applications/Emacs.app/Contents/MacOS/Emacs" ]; then
+    EMACS_BIN="/Applications/Emacs.app/Contents/MacOS/Emacs"
+  else
+    echo "Could not find an Emacs binary. Set EMACS_BIN explicitly." >&2
+    exit 1
+  fi
+fi
 
 echo "Using Emacs: $EMACS_BIN"
 
