@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-EMACS_BIN="${EMACS_BIN:-emacs}"
+EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
 
 echo "Using Emacs: $EMACS_BIN"
 
