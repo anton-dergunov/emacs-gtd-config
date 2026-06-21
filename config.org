@@ -14,13 +14,14 @@ file needs. Do not move it.
   ;; -*- lexical-binding: t; -*-
   ;; Code above enables lexical scoping so lambdas can capture variables (needed for async code)
 
-  ;; Disable the org-element cache for runtime Org use.  Without this,
-  ;; Org can hit "Invalid search bound (wrong side of point)" while
-  ;; parsing this very file — before the Org Mode section sets it later.
-  ;; NOTE: the authoritative *tangle-time* guard lives in init.el, set
-  ;; before `org-babel-load-file' tangles this file; this line cannot
-  ;; protect that tangle since it only takes effect once config.el is
-  ;; already built and loaded. Kept here as belt-and-suspenders.
+  ;; Keep the org-element cache globally OFF.  Parsing this very file with the
+  ;; cache on can throw "Invalid search bound (wrong side of point)", so it must
+  ;; stay off through startup.  The authoritative *tangle-time* guard lives in
+  ;; init.el (set before `org-babel-load-file' tangles this file); this line is
+  ;; the runtime companion — it only takes effect once config.el is built and
+  ;; loaded.  Live Org *editing* buffers re-enable the cache locally in the Org
+  ;; Mode section (see "Re-enable the org-element cache for live Org buffers"),
+  ;; which keeps editing/scrolling fast without exposing the startup tangle.
   (setq org-element-use-cache nil)
 
   ;; Don't pop up the *Warnings* buffer when third-party packages byte/native-
@@ -897,6 +898,19 @@ link fontification applies on every refontification while editing inside a link.
           org-appear-autokeywords    t   ; items in `org-hidden-keywords'
           org-appear-inside-latex    t)  ; entities/sub-superscript inside $...$
     (advice-add 'org-activate-links :after #'ps/org-appear--reassert-reveal))
+#+end_src
+
+*** Re-enable the org-element cache for live Org buffers
+The cache is globally off as a startup/tangle guard (see Bootstrap → Package
+Management and =init.el=), but that makes =org-element-at-point= /
+=org-element-context= re-parse from the enclosing section's start on every call.
+=org-appear= runs =org-element-context= on =post-command-hook=, so with the
+cache off, scrolling a large file gets slower the deeper point sits inside a big
+section. Re-enabling the cache buffer-locally (the modern Org default) keeps it
+fast and position-independent, while the global default stays off so the startup
+tangle is never exposed.
+#+begin_src emacs-lisp
+  (add-hook 'org-mode-hook (lambda () (setq-local org-element-use-cache t)))
 #+end_src
 
 *** Keep heading stars literal while typing them

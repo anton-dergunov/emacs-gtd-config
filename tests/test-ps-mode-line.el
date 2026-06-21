@@ -151,17 +151,17 @@
     (should (eq (lookup-key global-map [mode-line mouse-3]) #'ignore))))
 
 ;;; -------------------------------------------------------
-;;; ps/mode-line--refresh-on-line-change (cache gating)
+;;; ps/mode-line--update-now (cache gating)
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/mode-line--refresh-on-line-change-gates-on-line ()
+(ert-deftest ps/mode-line--update-now-gates-on-line ()
   "Same-line calls (e.g. each keystroke while typing) leave the cached
 string untouched and never force a redraw; a line change recomputes and
-forces one."
+forces one.  This is the synchronous worker the idle debounce drives."
   (with-temp-buffer
     (insert "line one\nline two\n")
     (goto-char (point-min))
-    (let ((ps/mode-line--last-line nil)
+    (let ((ps/mode-line--last-bol nil)
           (ps/mode-line--cached-string nil)
           (render-calls 0)
           (force-calls 0))
@@ -170,22 +170,22 @@ forces one."
                 ((symbol-function 'force-mode-line-update)
                  (lambda (&optional _all) (cl-incf force-calls))))
         ;; Initial call on line 1 establishes the cache.
-        (ps/mode-line--refresh-on-line-change)
+        (ps/mode-line--update-now (current-buffer))
         (should (= render-calls 1))
         (should (= force-calls 1))
         (should (equal ps/mode-line--cached-string "render-1"))
         ;; Same line (simulated keystrokes): no recompute, no forced redraw.
         (forward-char 3)
-        (ps/mode-line--refresh-on-line-change)
+        (ps/mode-line--update-now (current-buffer))
         (forward-char 2)
-        (ps/mode-line--refresh-on-line-change)
+        (ps/mode-line--update-now (current-buffer))
         (should (= render-calls 1))
         (should (= force-calls 1))
         (should (equal ps/mode-line--cached-string "render-1"))
         ;; Moving to a different line recomputes and forces a redraw.
         (goto-char (point-min))
         (forward-line 1)
-        (ps/mode-line--refresh-on-line-change)
+        (ps/mode-line--update-now (current-buffer))
         (should (= render-calls 2))
         (should (= force-calls 2))
         (should (equal ps/mode-line--cached-string "render-2"))))))
