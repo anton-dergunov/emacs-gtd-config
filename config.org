@@ -899,10 +899,11 @@ link fontification applies on every refontification while editing inside a link.
     (advice-add 'org-activate-links :after #'ps/org-appear--reassert-reveal))
 #+end_src
 
-*** Keep heading stars visible while typing them
+*** Keep heading stars literal while typing them
 With emphasis markers hidden (above), a half-typed heading (=**=, =***= before
-the space) is mis-parsed as bold and its stars vanish; logic lives in
-=lisp/ps-heading-stars.el=.
+the space) is otherwise mis-parsed as bold — the stars look bold and a stray
+=**= can hide the next headline's bullet. This keeps a pure run of leading stars
+plain until the heading is completed; logic lives in =lisp/ps-heading-stars.el=.
 #+begin_src emacs-lisp
   (add-hook 'org-mode-hook #'ps/heading-stars-enable)
 #+end_src

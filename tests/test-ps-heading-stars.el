@@ -6,9 +6,10 @@
 (require 'ps-heading-stars)
 
 (defmacro ps/heading-stars-test--in-org (content &rest body)
-  "Run BODY in a temp `org-mode' buffer with CONTENT, reveal enabled + fontified.
+  "Run BODY in a temp `org-mode' buffer with CONTENT, the guard active + fontified.
 Emphasis markers are hidden (as in the live config) so a mis-parsed heading
-star actually gets the `invisible' property our matcher must strip."
+star would actually get bold/`invisible'.  The global advice is removed again
+afterwards so it cannot leak into other test files."
   (declare (indent 1))
   `(with-temp-buffer
      (let ((org-mode-hook nil)
@@ -16,64 +17,79 @@ star actually gets the `invisible' property our matcher must strip."
            (org-fontify-emphasized-text t))
        (org-mode)
        (insert ,content)
-       (ps/heading-stars-enable)
-       (font-lock-flush)
-       (font-lock-ensure)
-       (goto-char (point-min))
-       ,@body)))
+       (unwind-protect
+           (progn
+             (ps/heading-stars-enable)
+             (font-lock-flush)
+             (font-lock-ensure)
+             (goto-char (point-min))
+             ,@body)
+         (ps/heading-stars-disable)))))
 
-(defun ps/heading-stars-test--any-star-invisible-p ()
-  "Return non-nil if any `*' in the buffer has `invisible' = t."
+(defun ps/heading-stars-test--star-bold-p (pos)
+  "Return non-nil if the `face' at POS includes the `bold' face."
+  (memq 'bold (ensure-list (get-text-property pos 'face))))
+
+(defun ps/heading-stars-test--bad-star ()
+  "Return the position of the first star that is bold, invisible, or emphasized.
+Nil means every `*' in the buffer renders as a plain heading star."
   (save-excursion
     (goto-char (point-min))
     (catch 'hit
       (while (search-forward "*" nil t)
-        (when (eq (get-text-property (match-beginning 0) 'invisible) t)
-          (throw 'hit t)))
+        (let ((pos (match-beginning 0)))
+          (when (or (eq (get-text-property pos 'invisible) t)
+                    (get-text-property pos 'org-emphasis)
+                    (ps/heading-stars-test--star-bold-p pos))
+            (throw 'hit pos))))
       nil)))
 
 ;;; -------------------------------------------------------
-;;; Half-typed heading on its own line
+;;; A pure run of leading stars is never emphasized
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/heading-stars--three-stars-all-visible ()
-  "\"***\" with no trailing space keeps all three literal stars visible."
+(ert-deftest ps/heading-stars--three-stars-plain ()
+  "\"***\" stays plain (no bold, no hidden, no emphasis)."
   (ps/heading-stars-test--in-org "***"
-    (should-not (ps/heading-stars-test--any-star-invisible-p))))
+    (should-not (ps/heading-stars-test--bad-star))))
 
-(ert-deftest ps/heading-stars--four-stars-all-visible ()
-  "\"****\" with no trailing space keeps all four literal stars visible."
+(ert-deftest ps/heading-stars--four-stars-plain ()
+  "\"****\" stays plain."
   (ps/heading-stars-test--in-org "****"
-    (should-not (ps/heading-stars-test--any-star-invisible-p))))
+    (should-not (ps/heading-stars-test--bad-star))))
+
+(ert-deftest ps/heading-stars--many-stars-not-bold ()
+  "A long pure star run has no bold middle stars."
+  (ps/heading-stars-test--in-org "**********\n"
+    (should-not (ps/heading-stars-test--bad-star))))
 
 ;;; -------------------------------------------------------
-;;; Stray "**" must not eat a neighbouring headline's star
+;;; A stray "**" must not bleed onto the next headline
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/heading-stars--stray-stars-spare-next-headline ()
-  "A bare \"**\" line above a real headline leaves every star visible."
-  (ps/heading-stars-test--in-org "**\n** Foo\n"
-    (should-not (ps/heading-stars-test--any-star-invisible-p))))
+  "A bare \"**\" line above a headline leaves the headline's stars pristine."
+  (ps/heading-stars-test--in-org "**\n** TODO foo\n"
+    (should-not (ps/heading-stars-test--bad-star))))
 
 ;;; -------------------------------------------------------
 ;;; Real headlines are unaffected
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/heading-stars--real-headline-visible ()
-  "A completed headline keeps its stars visible."
-  (ps/heading-stars-test--in-org "*** Done heading\n"
-    (should-not (ps/heading-stars-test--any-star-invisible-p))))
+(ert-deftest ps/heading-stars--real-headline-plain ()
+  "A completed headline's stars are not bold/hidden/emphasized."
+  (ps/heading-stars-test--in-org "*** Foo\n"
+    (should-not (ps/heading-stars-test--bad-star))))
 
 ;;; -------------------------------------------------------
-;;; Negative guard: do not over-reveal real inline bold
+;;; Negative guard: do not disturb real inline bold
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/heading-stars--inline-bold-stays-hidden ()
-  "A body line beginning with inline bold keeps its opening marker hidden.
-The leading `*' of \"*word*\" is a genuine emphasis marker, not a heading star,
-so the matcher must leave it `invisible'."
-  (ps/heading-stars-test--in-org "*word* and more\n"
-    ;; Sanity: emphasis fontification ran and hid the opening marker.
-    (should (eq (get-text-property (point-min) 'invisible) t))))
+(ert-deftest ps/heading-stars--inline-bold-untouched ()
+  "A body line beginning with inline bold keeps its hidden, emphasized marker.
+The leading `*' of \"*word*\" is a genuine emphasis marker, not a heading star."
+  (ps/heading-stars-test--in-org "*bold* and more\n"
+    (should (eq (get-text-property (point-min) 'invisible) t))
+    (should (get-text-property (point-min) 'org-emphasis))))
 
 ;;; test-ps-heading-stars.el ends here

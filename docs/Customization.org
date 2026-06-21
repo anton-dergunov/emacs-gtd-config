@@ -143,8 +143,9 @@ read-only documentation viewer (these pages), which always keeps markers
 hidden since you're not editing there.
 
 While you type the leading stars of a new heading, they show exactly as typed
-(=*=, =**=, =***=); the fancy bullet appears once the heading is complete (after
-the space).
+(=*=, =**=, =***=) — plain, never bold, and without disturbing the bullet on the
+next heading; the fancy bullet appears once the heading is complete (after the
+space).
 
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a

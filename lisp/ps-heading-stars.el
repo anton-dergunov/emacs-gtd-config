@@ -1,4 +1,4 @@
-;;; ps-heading-stars.el --- Keep half-typed heading stars visible -*- lexical-binding: t; -*-
+;;; ps-heading-stars.el --- Keep half-typed heading stars literal -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -9,48 +9,43 @@
 ;; headline stars as bold -- but only for a *complete* headline, because its
 ;; guard checks `org-outline-regexp-bol' (\"^\\*+ \", which requires a trailing
 ;; space).  A half-typed heading (\"**\", \"***\" with no space yet) is not a
-;; valid headline, so the guard does not fire and the stars are parsed as bold,
-;; whose markers then get an `invisible' text property:
-;;   - \"***\"  -> the outer pair hides, only 1 star shows;
-;;   - \"****\" -> 2 stars show;
-;;   - a stray \"**\" on its own line pairs across the newline with a
-;;     neighbouring headline's star, hiding it and breaking its bullet.
+;; valid headline, so the guard does not fire and the stars are parsed as bold:
+;;   - a long pure star run (\"**********\") shows its middle stars bold;
+;;   - a bare \"**\" pairs across the newline with the following headline,
+;;     putting the bold face + `invisible' on that headline's stars and so
+;;     hiding the bullet org-superstar composes onto them.
 ;;
-;; This module appends a font-lock matcher that runs after Org's emphasis
-;; keyword and strips that `invisible' property from any leading star run on a
-;; heading or would-be-heading line, so the literal stars always show.  The
-;; bullet still appears via org-superstar/org-modern once the headline is
-;; complete (i.e. once the space is typed).
+;; This module extends Org's own guard to also treat a line that is *nothing
+;; but* leading stars as headline stars, by binding `org-outline-regexp-bol'
+;; around `org-do-emphasis-faces' so it additionally matches \"^\\*+$\".  Then
+;; emphasis never touches a pure star run nor spans from a \"**\" line into the
+;; next headline; the literal stars stay plain and the bullet appears (via
+;; org-superstar/org-modern) once the heading is completed with a space.  A
+;; line that merely begins with real inline bold (\"*word*\") is unaffected.
 
 ;;; Code:
 
-(defun ps/heading-stars--show-literal (limit)
-  "Reveal leading heading stars hidden by Org's emphasis fontification.
-For every leading star run up to LIMIT that is followed by a space/tab (a real
-headline) or end of line (a half-typed one), remove the `invisible' property
-\(value t, which is what emphasis sets) so the literal stars stay visible.
+(require 'org)
 
-A body line that merely begins with inline bold (\"*word*\", a star followed
-immediately by a non-space) is deliberately not matched, so its genuinely
-hidden opening marker stays hidden.  Returns nil; used as a font-lock matcher."
-  (while (re-search-forward "^\\*+\\(?:[ \t]\\|$\\)" limit t)
-    (let* ((beg (match-beginning 0))
-           (end (save-excursion
-                  (goto-char beg)
-                  (skip-chars-forward "*")
-                  (point))))
-      (when (text-property-any beg end 'invisible t)
-        (remove-text-properties beg end '(invisible nil)))))
-  nil)
+(defun ps/heading-stars--protect-emphasis (orig limit)
+  "Around advice for `org-do-emphasis-faces' (ORIG, LIMIT passed through).
+Treat a line that is nothing but leading stars (a heading being typed, before
+its trailing space) as headline stars, so a pure star run is never fontified as
+bold and a stray \"**\" cannot form a cross-line bold that hides the next
+headline's bullet."
+  (let ((org-outline-regexp-bol
+         (concat "\\(?:" org-outline-regexp-bol "\\)\\|^\\*+$")))
+    (funcall orig limit)))
 
 (defun ps/heading-stars-enable ()
-  "Register the leading-star reveal in the current buffer.
-The keyword is appended (APPEND=t) so it runs after Org's own emphasis
-fontification, undoing the `invisible' it puts on mis-parsed heading stars."
-  (font-lock-add-keywords
-   nil
-   '((ps/heading-stars--show-literal))
-   t))
+  "Install the leading-star emphasis guard.
+The advice is global and `advice-add' is idempotent, so re-running this (e.g.
+from `org-mode-hook') is a no-op."
+  (advice-add 'org-do-emphasis-faces :around #'ps/heading-stars--protect-emphasis))
+
+(defun ps/heading-stars-disable ()
+  "Remove the leading-star emphasis guard installed by `ps/heading-stars-enable'."
+  (advice-remove 'org-do-emphasis-faces #'ps/heading-stars--protect-emphasis))
 
 (provide 'ps-heading-stars)
 ;;; ps-heading-stars.el ends here
