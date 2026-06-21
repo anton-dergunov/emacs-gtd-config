@@ -1,6 +1,7 @@
 ;;; test-ps-mode-line.el --- ERT tests for ps-mode-line -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-file-tree)   ; provides ps/file-tree--strip-org-extension
 (require 'ps-mode-line)
@@ -148,6 +149,46 @@
     (ps/mode-line--disable-destructive-mouse)
     (should (eq (lookup-key global-map [mode-line mouse-2]) #'ignore))
     (should (eq (lookup-key global-map [mode-line mouse-3]) #'ignore))))
+
+;;; -------------------------------------------------------
+;;; ps/mode-line--refresh-on-line-change (cache gating)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--refresh-on-line-change-gates-on-line ()
+  "Same-line calls (e.g. each keystroke while typing) leave the cached
+string untouched and never force a redraw; a line change recomputes and
+forces one."
+  (with-temp-buffer
+    (insert "line one\nline two\n")
+    (goto-char (point-min))
+    (let ((ps/mode-line--last-line nil)
+          (ps/mode-line--cached-string nil)
+          (render-calls 0)
+          (force-calls 0))
+      (cl-letf (((symbol-function 'ps/mode-line--render)
+                 (lambda () (cl-incf render-calls) (format "render-%d" render-calls)))
+                ((symbol-function 'force-mode-line-update)
+                 (lambda (&optional _all) (cl-incf force-calls))))
+        ;; Initial call on line 1 establishes the cache.
+        (ps/mode-line--refresh-on-line-change)
+        (should (= render-calls 1))
+        (should (= force-calls 1))
+        (should (equal ps/mode-line--cached-string "render-1"))
+        ;; Same line (simulated keystrokes): no recompute, no forced redraw.
+        (forward-char 3)
+        (ps/mode-line--refresh-on-line-change)
+        (forward-char 2)
+        (ps/mode-line--refresh-on-line-change)
+        (should (= render-calls 1))
+        (should (= force-calls 1))
+        (should (equal ps/mode-line--cached-string "render-1"))
+        ;; Moving to a different line recomputes and forces a redraw.
+        (goto-char (point-min))
+        (forward-line 1)
+        (ps/mode-line--refresh-on-line-change)
+        (should (= render-calls 2))
+        (should (= force-calls 2))
+        (should (equal ps/mode-line--cached-string "render-2"))))))
 
 (provide 'test-ps-mode-line)
 ;;; test-ps-mode-line.el ends here

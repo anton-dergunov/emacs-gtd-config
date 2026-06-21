@@ -135,8 +135,10 @@ be doubled or it (and the following character) is swallowed."
   (replace-regexp-in-string "%" "%%" s))
 
 (defun ps/mode-line--render ()
-  "Return the Org-buffer mode-line string.
-Computed live (no cache) so it tracks point on every redisplay."
+  "Return the Org-buffer mode-line string for the current point/buffer state.
+Called by `ps/mode-line--refresh-on-line-change' when the cache
+(`ps/mode-line--cached-string') needs updating -- not evaluated directly by
+`mode-line-format' on every redisplay."
   (let* ((sep ps/mode-line-separator)
          (name (ps/mode-line--buffer-name))
          (pct (ps/mode-line--percent))
@@ -236,20 +238,37 @@ click (select window) and drag-to-resize are left untouched."
   "Line number at the last mode-line refresh in this buffer.
 Used by `ps/mode-line--refresh-on-line-change' to skip per-keystroke updates.")
 
+(defvar-local ps/mode-line--cached-string nil
+  "Last-rendered mode-line string for this buffer.
+`mode-line-format' displays this value directly rather than calling
+`ps/mode-line--render' on every redisplay.  Gating the *content* this way
+(rather than just gating the `force-mode-line-update' call) matters because
+self-insert and other editing commands need a real window redisplay anyway
+\(to show the new character), and Emacs re-evaluates a custom `:eval' form
+during any such redisplay regardless of whether `force-mode-line-update'
+was called -- so editing on the same line would otherwise still change the
+displayed text on every keystroke.")
+
 (defun ps/mode-line--refresh-on-line-change ()
-  "Force a mode-line update only when point moved to a different line.
-Emacs's optimized cursor-movement redisplay does not re-evaluate a custom
-`:eval' mode line, so the live percentage/breadcrumb would otherwise look
-stale on keyboard navigation.  Refreshing on every command (including each
-self-insert) is visually noisy, so refresh only when the line changes."
+  "Recompute and cache the mode-line string only when point moved to a
+different line.  Emacs's optimized cursor-movement redisplay does not
+re-evaluate a custom `:eval' mode line on its own, so the live
+percentage/breadcrumb would otherwise look stale on keyboard navigation
+without this.  Recomputing (and thus visibly updating) on every command,
+including each self-insert, is visually noisy, so refresh only when the
+line changes; see `ps/mode-line--cached-string' for why the content itself,
+not just the redraw, must be gated."
   (let ((line (line-number-at-pos)))
     (unless (eql line ps/mode-line--last-line)
       (setq ps/mode-line--last-line line)
+      (setq ps/mode-line--cached-string (ps/mode-line--render))
       (force-mode-line-update))))
 
 (defun ps/mode-line--org-setup ()
   "Install the planning mode line in the current Org buffer."
-  (setq-local mode-line-format '((:eval (ps/mode-line--render))))
+  (setq ps/mode-line--last-line (line-number-at-pos))
+  (setq ps/mode-line--cached-string (ps/mode-line--render))
+  (setq-local mode-line-format '((:eval ps/mode-line--cached-string)))
   (add-hook 'post-command-hook #'ps/mode-line--refresh-on-line-change nil t))
 
 ;;;###autoload
