@@ -60,6 +60,11 @@
 
 ;;; Async URL link insertion
 
+;; org-appear internals, referenced defensively below. Declared so byte-compile
+;; doesn't warn about free variables when org-appear isn't loaded.
+(defvar org-appear--prev-elem)
+(defvar org-appear--elem-toggled)
+
 (defun ps/org--system-clipboard-url ()
   "Try to return a URL from GUI selection or pbpaste, or nil."
   (or
@@ -75,16 +80,34 @@
 
 (defun ps/org--replace-marked-region-with (start-marker end-marker text)
   "Replace region between START-MARKER and END-MARKER with TEXT.
+Runs from an async `url-retrieve' callback that deletes a placeholder link
+and inserts the final one outside the command loop. That invalidates
+org-appear's cached at-point element (`org-appear--prev-elem'), which still
+points at the deleted placeholder; the `ps/org-appear--reassert-reveal'
+advice on `org-activate-links' would otherwise re-reveal that stale region
+during refontification, leaving the new link half-folded (only the trailing
+\"]]\" hidden) until the cursor moves. Clear that cache first, then force the
+new link's fontification (Org link folding) and an immediate redisplay.
 Clears markers afterward to prevent double-execution bugs."
   (when (and (marker-position start-marker) (marker-position end-marker))
-    (let ((inhibit-read-only t))
+    (let ((inhibit-read-only t)
+          (beg (marker-position start-marker))
+          (end (marker-position end-marker)))
       (save-excursion
-        (goto-char (marker-position start-marker))
-        (delete-region (marker-position start-marker) (marker-position end-marker))
-        (insert text)
-        ;; Nullify markers to prevent the url.el double-callback bug
-        (set-marker start-marker nil)
-        (set-marker end-marker nil)))))
+        (goto-char beg)
+        (delete-region beg end)
+        (insert text))
+      ;; Drop org-appear's stale cached element before refontifying so its
+      ;; reveal-reassert advice no-ops; the next post-command resyncs cleanly.
+      (when (bound-and-true-p org-appear-mode)
+        (setq org-appear--prev-elem nil
+              org-appear--elem-toggled nil))
+      (font-lock-flush beg (+ beg (length text)))
+      (font-lock-ensure beg (+ beg (length text)))
+      (redisplay t)
+      ;; Nullify markers to prevent the url.el double-callback bug
+      (set-marker start-marker nil)
+      (set-marker end-marker nil))))
 
 (defun ps/org--extract-title (html)
   "Extract a page title from HTML string.

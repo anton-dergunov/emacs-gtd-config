@@ -6,6 +6,12 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-links)
 
+;; org-appear is not loaded in the batch test env; declare the internals the
+;; stale-cache regression test fakes so they are special (dynamically bound).
+(defvar org-appear-mode)
+(defvar org-appear--elem-toggled)
+(defvar org-appear--prev-elem)
+
 (ert-deftest ps/obsidian-links-all-composed ()
   "All obsidian: prefixes in a buffer receive font-lock composition."
   (with-temp-buffer
@@ -71,6 +77,40 @@ the mechanism org-appear uses to reveal/hide link syntax at point."
       ;; A second call is a no-op now that the markers are nil.
       (ps/org--replace-marked-region-with start end "SHOULD-NOT-APPEAR")
       (should-not (string-match-p "SHOULD-NOT-APPEAR" (buffer-string))))))
+
+(ert-deftest ps/links--replace-marked-region-folds-link-immediately ()
+  "After replacement, the inserted org link is folded without an explicit
+external font-lock-ensure call — the function must fontify it itself."
+  (with-temp-buffer
+    (org-mode)
+    (insert "before PLACEHOLDER after")
+    (goto-char (point-min))
+    (search-forward "PLACEHOLDER")
+    (let ((start (set-marker (make-marker) (match-beginning 0)))
+          (end   (set-marker (make-marker) (match-end 0))))
+      (ps/org--replace-marked-region-with
+       start end "[[https://example.com][Example]]")
+      (goto-char (point-min))
+      (search-forward "[[")
+      (should (eq (get-text-property (match-beginning 0) 'invisible)
+                  'org-link)))))
+
+(ert-deftest ps/links--replace-clears-stale-org-appear-cache ()
+  "The async replace clears org-appear's cached toggled element so the
+reveal-reassert advice cannot un-fold the freshly inserted link."
+  (with-temp-buffer
+    (org-mode)
+    (insert "x PLACEHOLDER y")
+    (goto-char (point-min))
+    (search-forward "PLACEHOLDER")
+    (let ((org-appear-mode t)
+          (org-appear--elem-toggled t)
+          (org-appear--prev-elem 'stale)
+          (start (set-marker (make-marker) (match-beginning 0)))
+          (end   (set-marker (make-marker) (match-end 0))))
+      (ps/org--replace-marked-region-with start end "[[u][d]]")
+      (should (null org-appear--elem-toggled))
+      (should (null org-appear--prev-elem)))))
 
 (ert-deftest ps/links--replace-marked-region-noop-on-unset ()
   "With unset markers, replacement does nothing and leaves the buffer intact."
