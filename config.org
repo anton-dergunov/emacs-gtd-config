@@ -86,6 +86,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-typo)
   (require 'ps-org-src-comment)
   (require 'ps-mode-line)
+  (require 'ps-heading-stars)
 
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
@@ -896,6 +897,14 @@ link fontification applies on every refontification while editing inside a link.
           org-appear-autokeywords    t   ; items in `org-hidden-keywords'
           org-appear-inside-latex    t)  ; entities/sub-superscript inside $...$
     (advice-add 'org-activate-links :after #'ps/org-appear--reassert-reveal))
+#+end_src
+
+*** Keep heading stars visible while typing them
+With emphasis markers hidden (above), a half-typed heading (=**=, =***= before
+the space) is mis-parsed as bold and its stars vanish; logic lives in
+=lisp/ps-heading-stars.el=.
+#+begin_src emacs-lisp
+  (add-hook 'org-mode-hook #'ps/heading-stars-enable)
 #+end_src
 
 *** Replace SCHEDULED / DEADLINE labels with icons

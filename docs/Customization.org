@@ -142,6 +142,10 @@ can edit it; move away and it hides again. This applies everywhere except the
 read-only documentation viewer (these pages), which always keeps markers
 hidden since you're not editing there.
 
+While you type the leading stars of a new heading, they show exactly as typed
+(=*=, =**=, =***=); the fancy bullet appears once the heading is complete (after
+the space).
+
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a
 subtle wavy line *only when none of your configured languages recognise it*, so
@@ -172,6 +176,8 @@ The design rationale is in =design-docs/typo-checker.md=.
   (=ps/color-theme=, =ps/preview-theme=).
 - Live markup preview: the =org-appear= package, wired in =config.org= →
   /Appearance → Show formatting markup only at point/.
+- Literal heading stars while typing: =lisp/ps-heading-stars.el=, wired in
+  =config.org= → /Appearance → Keep heading stars visible while typing them/.
 - Material icons: =lisp/ps-material-icons.el= (+ =ps-agenda-icons.el=,
   =ps-file-tree-icons.el=); settings in =config.org= → /Material icons/ and
   /File Tree/.
