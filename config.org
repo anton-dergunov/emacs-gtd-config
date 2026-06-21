@@ -29,6 +29,12 @@ file needs. Do not move it.
   ;; and our own ps-* modules are kept warning-clean regardless.
   (setq native-comp-async-report-warnings-errors 'silent)
 
+  ;; Suppress cosmetic byte-compiler "docstring wider than 80 characters"
+  ;; warnings emitted when package.el synchronously byte-compiles a newly
+  ;; installed third-party package (e.g. org-appear). Other warning categories
+  ;; (free variables, obsolete functions, etc.) remain active.
+  (setq byte-compile-warnings '(not docstrings))
+
   (require 'package)
 
   ;; Initialize package sources if needed
