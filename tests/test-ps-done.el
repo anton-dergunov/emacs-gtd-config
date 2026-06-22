@@ -110,6 +110,28 @@ More text.
                          (overlays-in (point-min) (point-max))))))
         (should (= n1 n2))))))
 
+(ert-deftest ps/done--refade-excludes-new-sibling-heading ()
+  "Rebuilding fades after typing a new sibling heading leaves it un-faded.
+Regression: text typed right after a DONE task used to inherit the stale fade
+overlay; a fresh `ps/done-fade-subtrees' must not cover the new heading."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (ps/done-fade-subtrees)
+    ;; Type a new sibling heading at the end of the DONE subtree (just before
+    ;; the next heading), mimicking the user's edit.
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* TODO Another active" nil t))
+    (beginning-of-line)
+    (insert "* This is a test\n")
+    ;; Re-fade (the debounced worker does exactly this).
+    (ps/done-fade-subtrees)
+    ;; No fade overlay should touch the new heading line.
+    (goto-char (point-min))
+    (should (re-search-forward "^\\* This is a test" nil t))
+    (let ((line-beg (line-beginning-position))
+          (line-end (line-end-position)))
+      (should-not (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
+                           (overlays-in line-beg line-end))))))
+
 ;;; -------------------------------------------------------
 ;;; Folding
 ;;; -------------------------------------------------------
@@ -149,7 +171,7 @@ More text.
 ;;; -------------------------------------------------------
 
 (ert-deftest ps/done--setup-hooks-registers-all ()
-  "setup-hooks installs the five buffer-local hooks."
+  "setup-hooks installs the buffer-local hooks."
   (ps/done-test--with-org-buffer ps/done-test--sample-org
     (ps/done-setup-hooks)
     (should (memq #'ps/done--clear-fade-overlays before-save-hook))
@@ -157,7 +179,8 @@ More text.
     (should (memq #'ps/done-fade-subtrees org-cycle-hook))
     (should (memq #'ps/done--after-todo-change-refresh
                   org-after-todo-state-change-hook))
-    (should (memq #'ps/done--refresh-after-revert after-revert-hook))))
+    (should (memq #'ps/done--refresh-after-revert after-revert-hook))
+    (should (memq #'ps/done--schedule-refade after-change-functions))))
 
 ;;; -------------------------------------------------------
 ;;; TODO-change refresh + timestamp strike-through

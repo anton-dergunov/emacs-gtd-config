@@ -137,6 +137,36 @@ active theme, falling back to \"gray50\" if that is unavailable."
                       (overlay-put ts-ov 'priority 20)
                       (overlay-put ts-ov 'ps-done-fade t)))))))))))))
 
+;;; Debounced re-fade on edit
+
+(defvar ps/done-refade-idle-delay 0.2
+  "Idle seconds before DONE fade overlays are rebuilt after an edit.
+Fade overlays are static, so text typed right after a DONE task (e.g. a new
+sibling heading) would otherwise inherit the stale overlay's fade until the
+next save.  The rebuild is debounced onto idle time so it does not run on
+every keystroke; it fires once typing pauses for this long.")
+
+(defvar-local ps/done--refade-timer nil
+  "Pending idle timer that will rebuild this buffer's fade overlays, or nil.")
+
+(defun ps/done--refade-now (buffer)
+  "Rebuild BUFFER's DONE fade overlays.  The debounced worker."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq ps/done--refade-timer nil)
+      (ps/done-fade-subtrees))))
+
+(defun ps/done--schedule-refade (&rest _)
+  "Debounce a fade-overlay rebuild onto idle time.
+Added to `after-change-functions' (whose BEG/END/LEN args are ignored), so it
+runs on actual edits rather than on cursor movement.  Arming only when no timer
+is pending keeps the per-edit cost negligible.  Rebuilding overlays does not
+modify buffer text, so it cannot re-trigger `after-change-functions'."
+  (unless ps/done--refade-timer
+    (setq ps/done--refade-timer
+          (run-with-idle-timer ps/done-refade-idle-delay nil
+                               #'ps/done--refade-now (current-buffer)))))
+
 (defun ps/done--refresh-after-revert ()
   "Fully rebuild Org visuals after auto-revert."
   (when (derived-mode-p 'org-mode)
@@ -184,6 +214,9 @@ Intended to be added to `org-mode-hook'."
             #'ps/done--after-todo-change-refresh nil t)
   ;; Rebuild after auto-revert
   (add-hook 'after-revert-hook #'ps/done--refresh-after-revert nil t)
+  ;; Rebuild (debounced) after ordinary edits, so text typed right after a DONE
+  ;; task is not left dimmed by a stale overlay until the next save.
+  (add-hook 'after-change-functions #'ps/done--schedule-refade nil t)
   ;; Initial render
   (ps/done-collapse-subtrees)
   (ps/done-fade-subtrees))
