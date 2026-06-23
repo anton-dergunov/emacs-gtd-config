@@ -27,6 +27,7 @@
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-up-heading-safe "org" ())
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
+(declare-function org-link-display-format "ol" (s))
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
@@ -67,18 +68,40 @@
 
 ;;; Heading breadcrumb
 
+(defun ps/mode-line--clean-markup (s)
+  "Return S with Org link and emphasis markup reduced to plain text.
+Bracket links collapse to their description (or path); a leading
+\"obsidian:\" link-type prefix is dropped; emphasis markers
+(* / _ = ~ +) wrapping a word are removed.  A light cleanup for display
+only -- not a full Org renderer."
+  (let ((s (if (fboundp 'org-link-display-format)
+               (org-link-display-format s)
+             s)))
+    ;; Drop the obsidian link-type prefix left on description-less links.
+    (setq s (replace-regexp-in-string "\\bobsidian:" "" s))
+    ;; Strip simple emphasis markers, keeping the wrapped text.
+    (replace-regexp-in-string
+     "\\([*/_=~+]\\)\\([^ \t\n*/_=~+][^*/_=~+]*\\)\\1"
+     "\\2" s)))
+
+(defun ps/mode-line--heading-title ()
+  "Return the current heading's cleaned, plain-text title."
+  (ps/mode-line--clean-markup
+   (substring-no-properties (org-get-heading t t t t))))
+
 (defun ps/mode-line--outline-titles ()
   "Return ancestor+current heading titles (top-to-bottom), or nil if none.
-Each title is cleaned of TODO keyword, priority, tags, and comment markers."
+Each title is cleaned of TODO keyword, priority, tags, comment markers,
+and Org link/emphasis markup."
   (when (derived-mode-p 'org-mode)
     (save-excursion
       (save-restriction
         (widen)
         (unless (org-before-first-heading-p)
           (org-back-to-heading t)
-          (let ((titles (list (substring-no-properties (org-get-heading t t t t)))))
+          (let ((titles (list (ps/mode-line--heading-title))))
             (while (org-up-heading-safe)
-              (push (substring-no-properties (org-get-heading t t t t)) titles))
+              (push (ps/mode-line--heading-title) titles))
             titles))))))
 
 (defun ps/mode-line--join-titles (titles)

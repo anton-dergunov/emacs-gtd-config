@@ -94,6 +94,43 @@
     (goto-char (point-min))
     (should (null (ps/mode-line--outline-titles)))))
 
+(ert-deftest ps/mode-line--outline-titles-strips-link-markup ()
+  "A heading whose title is an Org link is shown as plain text."
+  (with-temp-buffer
+    (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
+      (org-mode)
+      (insert "* Interviews\n"
+              "** TODO [[obsidian:Foo Corp - Lead - 2026-05-14]]\n"
+              "Body line\n")
+      (goto-char (point-max))
+      (should (equal (ps/mode-line--outline-titles)
+                     '("Interviews" "Foo Corp - Lead - 2026-05-14"))))))
+
+;;; -------------------------------------------------------
+;;; ps/mode-line--clean-markup
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--clean-markup-obsidian-link ()
+  (should (equal (ps/mode-line--clean-markup
+                  "[[obsidian:Linklaters - Data Science Team Lead - 2026-05-14]]")
+                 "Linklaters - Data Science Team Lead - 2026-05-14")))
+
+(ert-deftest ps/mode-line--clean-markup-link-with-description ()
+  (should (equal (ps/mode-line--clean-markup "[[https://example.com][Example]]")
+                 "Example")))
+
+(ert-deftest ps/mode-line--clean-markup-bare-link ()
+  (should (equal (ps/mode-line--clean-markup "[[https://example.com]]")
+                 "https://example.com")))
+
+(ert-deftest ps/mode-line--clean-markup-emphasis ()
+  (should (equal (ps/mode-line--clean-markup "*bold* and /italic/ and =code=")
+                 "bold and italic and code")))
+
+(ert-deftest ps/mode-line--clean-markup-leaves-plain-text ()
+  (should (equal (ps/mode-line--clean-markup "Just a plain title") "Just a plain title"))
+  (should (equal (ps/mode-line--clean-markup "A * lone asterisk") "A * lone asterisk")))
+
 ;;; -------------------------------------------------------
 ;;; per-segment truncation
 ;;; -------------------------------------------------------
