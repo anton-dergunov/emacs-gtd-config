@@ -916,8 +916,10 @@ tangle is never exposed.
 *** Keep heading stars literal while typing them
 With emphasis markers hidden (above), a half-typed heading (=**=, =***= before
 the space) is otherwise mis-parsed as bold — the stars look bold and a stray
-=**= can hide the next headline's bullet. This keeps a pure run of leading stars
-plain until the heading is completed; logic lives in =lisp/ps-heading-stars.el=.
+=**=, or an unterminated =*= typed on a completed heading line, can hide the
+next heading's bullet. This keeps leading stars plain until the heading is
+completed and always restores the bullet; logic lives in
+=lisp/ps-heading-stars.el=.
 #+begin_src emacs-lisp
   (add-hook 'org-mode-hook #'ps/heading-stars-enable)
 #+end_src

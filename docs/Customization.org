@@ -145,7 +145,8 @@ hidden since you're not editing there.
 While you type the leading stars of a new heading, they show exactly as typed
 (=*=, =**=, =***=) — plain, never bold, and without disturbing the bullet on the
 next heading; the fancy bullet appears once the heading is complete (after the
-space).
+space). Typing an unterminated =*= in a heading's text likewise leaves the next
+heading's bullet intact until you close it.
 
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a
