@@ -30,6 +30,14 @@ file needs. Do not move it.
   ;; and our own ps-* modules are kept warning-clean regardless.
   (setq native-comp-async-report-warnings-errors 'silent)
 
+  ;; Same idea for the *synchronous* byte-compiler: package.el byte-compiles
+  ;; every freshly installed package, and some (e.g. older MELPA packages) emit
+  ;; harmless free-variable/obsolete-function warnings under a modern Emacs.
+  ;; Suppress the *Compile-Log* buffer popping open for these; they're still
+  ;; logged there for anyone who wants to check. Actual install/compile
+  ;; failures raise a real Lisp error and surface in *Messages* regardless.
+  (add-to-list 'warning-suppress-types '(bytecomp))
+
   ;; Suppress cosmetic byte-compiler "docstring wider than 80 characters"
   ;; warnings emitted when package.el synchronously byte-compiles a newly
   ;; installed third-party package (e.g. org-appear). Other warning categories
