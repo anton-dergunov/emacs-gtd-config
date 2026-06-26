@@ -40,7 +40,8 @@ file needs. Do not move it.
 
   ;; Initialize package sources if needed
   (setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                           ("elpa" . "https://elpa.gnu.org/packages/")))
+                           ("elpa" . "https://elpa.gnu.org/packages/")
+                           ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
 
   ;; Refresh package contents if needed
   (unless package-archive-contents
@@ -84,6 +85,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-timezone)
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
+  (require 'ps-claude)
   (require 'ps-typo)
   (require 'ps-org-src-comment)
   (require 'ps-mode-line)
@@ -448,6 +450,17 @@ loads it, then deletes it. Silently does nothing when the file is absent."
 
   ;; Apply this folder's overrides now, before icons are built below.
   (ps/load-workspace-config)
+#+end_src
+
+** Claude Code (ps-claude.el)
+=ps/claude-window-width= is the side-window width in columns (the upstream
+default of 100 is quite wide). =ps/claude-resize-debounce-delay= controls how
+long Emacs waits, after a window resize settles, before re-syncing the
+terminal's dimensions with the =claude= process — this fixes garbled output
+that otherwise persists until a second resize.
+#+begin_src emacs-lisp
+  (setq ps/claude-window-width 90
+        ps/claude-resize-debounce-delay 0.3)
 #+end_src
 
 * Editor & UI
@@ -1340,6 +1353,41 @@ in place while choosing; it is restored after the agenda is built either way."
             (run-with-timer delay nil #'ps/file-tree-init base))))))
 #+end_src
 
+* AI Assistant
+=claude-code-ide.el= runs the real Claude Code agent in a side window, sees
+the current selection, and shows proposed edits as Emacs diffs. Runs on the
+Claude Pro/Max subscription (no separate pay-per-token cost). Bound under
+=C-c c=.
+
+** Claude Code IDE (claude-code-ide.el)
+=eat= is the terminal backend (pure Elisp, no native build). The package is not
+on MELPA, so it is installed once via =package-vc-install= (Emacs 29 has no
+=use-package :vc=). It drives the =claude= CLI, which uses the subscription
+natively — no API key or token handling needed.
+#+begin_src emacs-lisp
+  (use-package eat :ensure t :defer t)
+
+  (unless (package-installed-p 'claude-code-ide)
+    (package-vc-install "https://github.com/manzaltu/claude-code-ide.el"))
+
+  (use-package claude-code-ide
+    :ensure nil
+    :defer t
+    :commands (claude-code-ide claude-code-ide-menu claude-code-ide-stop
+               claude-code-ide-switch-to-buffer)
+    :init
+    ;; Pin the CLI path so a GUI (Finder-launched) Emacs finds it too.
+    (let ((cli (expand-file-name "~/.local/bin/claude")))
+      (when (file-executable-p cli)
+        (setq claude-code-ide-cli-path cli)))
+    :config
+    (setq claude-code-ide-terminal-backend 'eat)
+    ;; Let Claude use Emacs (selection, diagnostics) and show edits as diffs.
+    (claude-code-ide-emacs-tools-setup)
+    ;; Window width + resize/garbled-output fixes; see lisp/ps-claude.el.
+    (ps/claude-setup))
+#+end_src
+
 * Keybindings & Menu
 ** F7 — reinsert empty lines
 Logic lives in =lisp/ps-blank-lines.el=.
@@ -1490,6 +1538,19 @@ window), reusing it rather than spawning an extra window."
         (ps/file-tree-show))))
 
   (global-set-key (kbd "C-x |") 'ps/window-split-toggle)
+#+end_src
+
+** Claude Code IDE prefix keys (=C-c c=)
+Mnemonic suffix mirrors the =C-c p= productivity prefix above.
+#+begin_src emacs-lisp
+  (defvar ps/claude-code-keymap (make-sparse-keymap)
+    "Prefix keymap for Claude Code IDE, bound at `C-c c'.")
+  (global-set-key (kbd "C-c c") ps/claude-code-keymap)
+  (let ((m ps/claude-code-keymap))
+    (define-key m (kbd "c") #'claude-code-ide)               ; c → start/toggle
+    (define-key m (kbd "m") #'claude-code-ide-menu)          ; m → transient menu
+    (define-key m (kbd "b") #'claude-code-ide-switch-to-buffer) ; b → session buffer
+    (define-key m (kbd "s") #'claude-code-ide-stop))         ; s → stop session
 #+end_src
 
 ** Productivity menu + prefix keys
@@ -1684,6 +1745,10 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :keys "C-c p g"]
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
+      ("AI Assistant"
+       ["Claude Code — start/toggle"  claude-code-ide              :keys "C-c c c"]
+       ["Claude Code — menu…"         claude-code-ide-menu         :keys "C-c c m"]
+       ["Claude Code — stop"          claude-code-ide-stop         :keys "C-c c s"])
       ("Config"
        ("Global"
         ["Open config.org"        ps/open-config-file        :keys "C-c p C   /   F10"]
