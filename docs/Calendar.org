@@ -54,7 +54,9 @@ Every line uses the same aligned columns, category icons, and pills as the rest
 of the agenda, so the Calendar looks consistent — it is just simpler. The rich
 timeline, the now-indicator, and the scheduled / due / overdue sections belong to
 the [[file:Agenda.org][Agenda]]; the Calendar deliberately leaves them out. The mode line names the
-current view and span, e.g. =Calendar · Week=.
+current view and span, e.g. =Calendar · Week=, and that title doubles as a
+*view switcher*: click it to jump straight to the [[file:Agenda.org][Agenda]],
+[[file:Tasks-view.org][Tasks]], or another Calendar span.
 
 * Switching the span
 The top header carries a small control strip of clickable buttons:
@@ -92,7 +94,8 @@ expand that day.
   [[file:Keybindings.org][Keybindings]]).
 - Collapsing day sections reuses =lisp/ps-agenda-fold.el= (the same =TAB=/click
   folding as the Agenda's sections).
-- The mode-line label (=Calendar · Day/Week/…=) is set in
+- The mode-line label (=Calendar · Day/Week/…=) and its click-to-switch popup
+  are =ps/mode-line--agenda-render= / =ps/mode-line--agenda-click= in
   =lisp/ps-mode-line.el=.
 - A long span (a year) only ever scans dated entries: the =g= command limits
   =org-agenda-entry-types= and turns off blocked-task dimming, and the conflict

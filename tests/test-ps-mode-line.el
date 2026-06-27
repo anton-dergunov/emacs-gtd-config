@@ -227,5 +227,43 @@ forces one.  This is the synchronous worker the idle debounce drives."
         (should (= force-calls 2))
         (should (equal ps/mode-line--cached-string "render-2"))))))
 
+;;; -------------------------------------------------------
+;;; ps/mode-line--agenda-render (view-switcher)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--agenda-render-title-is-clickable ()
+  "The title segment carries the ▾ marker and a mouse-1 view-switch binding."
+  (with-temp-buffer
+    (let ((ps/mode-line--agenda-title "Agenda")
+          (ps/mode-line--agenda-show-position nil))
+      (let* ((s (ps/mode-line--agenda-render))
+             (map (get-text-property 1 'local-map s)))
+        (should (string-match-p "Agenda ▾" s))
+        (should (eq (lookup-key map [mode-line mouse-1]) #'ps/mode-line--agenda-click))))))
+
+(ert-deftest ps/mode-line--agenda-render-keeps-position-suffix ()
+  "The Tasks view's percentage suffix is preserved after the clickable title."
+  (with-temp-buffer
+    (insert "abcdefghij")
+    (goto-char (point-min))
+    (let ((ps/mode-line--agenda-title "Tasks")
+          (ps/mode-line--agenda-show-position t))
+      (should (string-match-p "Tasks ▾ · 0%%" (ps/mode-line--agenda-render))))))
+
+(ert-deftest ps/mode-line--agenda-click-calls-chosen-view ()
+  "Selecting a popup entry calls its command."
+  (let ((called nil))
+    (cl-letf (((symbol-function 'x-popup-menu)
+               (lambda (&rest _) #'ps/show-tasks))
+              ((symbol-function 'ps/show-tasks)
+               (lambda () (interactive) (setq called t))))
+      (ps/mode-line--agenda-click 'fake-event)
+      (should called))))
+
+(ert-deftest ps/mode-line--agenda-click-noop-when-menu-dismissed ()
+  "Dismissing the popup (nil choice) calls nothing."
+  (cl-letf (((symbol-function 'x-popup-menu) (lambda (&rest _) nil)))
+    (should-not (ps/mode-line--agenda-click 'fake-event))))
+
 (provide 'test-ps-mode-line)
 ;;; test-ps-mode-line.el ends here

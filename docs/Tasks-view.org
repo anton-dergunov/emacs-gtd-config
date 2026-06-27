@@ -10,7 +10,9 @@ tasks across your =Areas/= files, which you then slice down with filters.
 
 * Opening it
 Press =F9= or =C-c p n= (Productivity → Plan & Review → Tasks), or run
-=M-x ps/show-tasks=.
+=M-x ps/show-tasks=. Once you're in Tasks (or the [[file:Agenda.org][Agenda]]
+or [[file:Calendar.org][Calendar]]), the mode-line title (=Tasks ▾=) is also a
+view switcher: click it to jump straight to either of the other two.
 
 * Switching which states are shown
 The view has a selector header for the TODO keywords. Press a number then =r= to
@@ -47,3 +49,5 @@ Navigation and editing match the rest of the agenda:
 - =ps/show-tasks= is defined in =config.org= → /Keybindings & Menu → F9 — show
   Tasks/. The filtering and navigation keys are Org's own
   (=org-agenda-mode-map=), so they behave the same in any agenda buffer.
+- The mode-line title's click-to-switch popup is =ps/mode-line--agenda-click=
+  in =lisp/ps-mode-line.el=.

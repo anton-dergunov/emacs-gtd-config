@@ -28,6 +28,15 @@
 (declare-function org-up-heading-safe "org" ())
 (declare-function org-get-heading "org" (&optional no-tags no-todo no-priority no-comment))
 (declare-function org-link-display-format "ol" (s))
+;; The view-switcher commands are defined later, in config.org's "Menu Bar
+;; and Keybindings" section — always loaded well before a user can click the
+;; agenda mode line.
+(declare-function ps/show-agenda "config" ())
+(declare-function ps/show-calendar-day "config" ())
+(declare-function ps/show-calendar-week "config" ())
+(declare-function ps/show-calendar-month "config" ())
+(declare-function ps/show-calendar-year "config" ())
+(declare-function ps/show-tasks "config" ())
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
@@ -187,10 +196,37 @@ Called by `ps/mode-line--update-now' when the cache
 (defvar-local ps/mode-line--agenda-show-position nil
   "When non-nil, the agenda mode line appends point's percentage.")
 
+(defconst ps/mode-line--agenda-view-items
+  '(("Agenda" . ps/show-agenda)
+    ("Calendar: Day" . ps/show-calendar-day)
+    ("Calendar: Week" . ps/show-calendar-week)
+    ("Calendar: Month" . ps/show-calendar-month)
+    ("Calendar: Year" . ps/show-calendar-year)
+    ("Tasks" . ps/show-tasks))
+  "Views offered by the agenda mode-line's view switcher.
+An alist of (LABEL . COMMAND), shown as a flat popup menu by
+`ps/mode-line--agenda-click' — the same combo-box interaction as the file
+tree's file-set selector (see `ps/file-tree--modeline-click').")
+
+(defun ps/mode-line--agenda-click (event)
+  "Show a popup menu of planning views and switch to the one EVENT selects."
+  (interactive "e")
+  (let* ((menu (list "View" (cons "Views" ps/mode-line--agenda-view-items)))
+         (choice (x-popup-menu event menu)))
+    (when choice (call-interactively choice))))
+
 (defun ps/mode-line--agenda-render ()
-  "Return the agenda mode-line string."
-  (let ((title (propertize (or ps/mode-line--agenda-title "Agenda")
-                           'face 'mode-line-emphasis)))
+  "Return the agenda mode-line string.
+The title is clickable (mouse-1 switches views), matching the file tree's
+file-set selector."
+  (let ((title (propertize (concat (or ps/mode-line--agenda-title "Agenda") " ▾")
+                           'face 'mode-line-emphasis
+                           'mouse-face 'mode-line-highlight
+                           'help-echo "mouse-1: switch view"
+                           'local-map
+                           (let ((map (make-sparse-keymap)))
+                             (define-key map [mode-line mouse-1] #'ps/mode-line--agenda-click)
+                             map))))
     (if ps/mode-line--agenda-show-position
         (concat " " title ps/mode-line-separator
                 (ps/mode-line--escape (ps/mode-line--percent)))

@@ -100,6 +100,12 @@ are dropped. Like
 planning view readable — not a cosmetic theme choice. Its colors follow whatever
 [[file:Customization.org][theme]] you pick.
 
+In an agenda-type buffer (Agenda, [[file:Calendar.org][Calendar]], or
+[[file:Tasks-view.org][Tasks]]) the leading title (e.g. =Agenda ▾=) is also a
+*view switcher*: click it to pop up a menu and jump straight to any of the
+three views — the same click-a-label-for-a-menu interaction as the
+[[file:Files-and-navigation.org][file tree]]'s file-set selector.
+
 * Under the hood / Customize
 - The sections come from =org-super-agenda= and the custom command =c=, defined
   in =config.org= → /Org Mode → Agenda → Super agenda/. Edit the shared list
@@ -116,4 +122,5 @@ planning view readable — not a cosmetic theme choice. Its colors follow whatev
 - Which sections start folded: =ps/agenda-fold-default-collapsed= in =config.org=
   → /Agenda fold/.
 - The mode line is =lisp/ps-mode-line.el=; its separator is
-  =ps/mode-line-separator= in =config.org= → /Mode line/.
+  =ps/mode-line-separator= in =config.org= → /Mode line/. The view-switcher
+  popup is =ps/mode-line--agenda-click=, in the same file.
