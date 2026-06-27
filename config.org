@@ -517,7 +517,7 @@ that otherwise persists until a second resize.
   ;; set switches). Instead, refuse to turn numbers on for these modes at the
   ;; source, so the decision holds every time the global mode evaluates a buffer.
   (defvar ps/display-line-numbers-exempt-modes
-    '(treemacs-mode term-mode shell-mode eshell-mode org-agenda-mode)
+    '(treemacs-mode term-mode shell-mode eshell-mode org-agenda-mode eat-mode)
     "Major modes for which global line numbers must never be enabled.")
 
   (advice-add 'display-line-numbers--turn-on :before-while

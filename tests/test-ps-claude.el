@@ -35,5 +35,15 @@
     (ps/claude--on-window-size-change (selected-frame))
     (should-not ps/claude--resize-timer)))
 
+;;; Working directory override
+
+(defvar my-org-base-directory)
+
+(ert-deftest ps/claude-test-working-directory-uses-org-base ()
+  "Always returns the expanded `my-org-base-directory', not the project root."
+  (let ((my-org-base-directory "~/org/"))
+    (should (equal (ps/claude--working-directory)
+                   (expand-file-name "~/org/")))))
+
 (provide 'test-ps-claude)
 ;;; test-ps-claude.el ends here

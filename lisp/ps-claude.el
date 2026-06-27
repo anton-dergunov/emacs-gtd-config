@@ -1,7 +1,7 @@
 ;;; ps-claude.el --- Claude Code IDE window/resize tweaks -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Two small fixes for `claude-code-ide.el' (eat backend):
+;; Three small fixes for `claude-code-ide.el' (eat backend):
 ;;
 ;; 1. The side window opens too wide by default (100 columns); we offer a
 ;;    tunable `ps/claude-window-width' instead.
@@ -18,8 +18,14 @@
 ;;    the process size via `claude-code-ide--sync-terminal-dimensions' once
 ;;    the resize settles, regardless of what the reflow filter suppressed.
 ;;
-;; If upstream #1422 is fixed and this workaround is no longer needed, the
-;; reflow-glitch suppression itself can be disabled with:
+;; 3. `claude-code-ide--get-working-directory' defaults to the current
+;;    project root, which for any buffer in this repo is this config's own
+;;    source tree. This integration exists to assist with org-mode planning
+;;    content, not this config's source code, so we override it to always
+;;    use `my-org-base-directory' instead.
+;;
+;; If upstream #1422 is fixed and the reflow workaround is no longer needed,
+;; the reflow-glitch suppression itself can be disabled with:
 ;;   (setq claude-code-ide-prevent-reflow-glitch nil)
 ;; The resync hook below is harmless either way and can stay.
 
@@ -28,7 +34,9 @@
 (require 'seq)
 
 (declare-function claude-code-ide--sync-terminal-dimensions "claude-code-ide")
+(declare-function claude-code-ide--get-working-directory "claude-code-ide")
 (defvar claude-code-ide-window-width)
+(defvar my-org-base-directory)
 
 (defcustom ps/claude-window-width 90
   "Width (in columns) of the Claude Code IDE side window.
@@ -74,12 +82,22 @@ Code session buffer is currently displayed."
           (run-with-idle-timer ps/claude-resize-debounce-delay nil
                                 #'ps/claude--resync-windows))))
 
+(defun ps/claude--working-directory ()
+  "Always use `my-org-base-directory' as the Claude Code IDE working directory.
+Overrides `claude-code-ide--get-working-directory', whose default
+(current project root) would resolve to this config's own source tree
+for any buffer in this repo."
+  (expand-file-name my-org-base-directory))
+
 (defun ps/claude-setup ()
-  "Apply Claude Code IDE window-size tweaks.
-Sets `claude-code-ide-window-width' from `ps/claude-window-width' and
-installs the debounced resize-resync hook.  Idempotent."
+  "Apply Claude Code IDE window-size and working-directory tweaks.
+Sets `claude-code-ide-window-width' from `ps/claude-window-width',
+installs the debounced resize-resync hook, and pins the working directory
+to `my-org-base-directory'.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
-  (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change))
+  (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
+  (advice-add 'claude-code-ide--get-working-directory
+              :override #'ps/claude--working-directory))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here
