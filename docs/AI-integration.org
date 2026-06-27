@@ -1,0 +1,46 @@
+#+TITLE: AI integration (Claude Code)
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+An optional AI assistant runs in a side window and can read and edit your Org
+notes, with its proposed changes shown to you as Emacs diffs. It runs on your
+Claude Pro/Max subscription. This page is a brief overview; more detail will
+follow.
+
+* Opening it
+Press =C-c c= to start or toggle the assistant (Productivity menu → /Claude
+Code — start/toggle/). =C-c c m= opens its menu, =C-c c s= stops the session.
+
+* What it can see
+The assistant is aware of the file you are looking at and the text you have
+selected in your Org files — select a few lines and ask about "this", and it
+knows what you mean. It can also open files, show you diffs, and report Emacs
+diagnostics.
+
+* Telling it how to work with your notes
+The assistant reads a file named =AGENTS.md= in your Org directory (with a tiny
+=CLAUDE.md= alongside that just points to it). That file tells the assistant that
+words like "task", "project", and "note" mean entries in /your/ Org files — so
+when you say "add a task", it edits your plans rather than inventing its own list.
+
+You can open and edit =AGENTS.md= to tune how the assistant behaves. If you keep
+your notes in your own directory (not the bundled sample), put your own
+=AGENTS.md= there.
+
+* Copying text from the assistant window
+The live session is an interactive terminal, so a normal mouse selection there
+gets cleared as the assistant keeps drawing. Two reliable ways to copy:
+
+- Select text and press =M-w= (=Option-W= on macOS) right away to copy it.
+- Press =C-c C-e= to switch the session window to a plain, read-only view where
+  selection, scrolling back, and the Edit → Copy menu all work normally; press
+  =C-c C-j= to return to the interactive view.
+
+* When a file was changed both on disk and by you
+If you edit a file in Emacs and something else (the assistant, Git sync, another
+program) also changes it on disk, Emacs will ask before discarding your edits.
+To compare your buffer against what is on disk, run =M-x ediff-current-file=
+(or =M-x diff-buffer-with-file= for a quick diff), then decide whether to keep
+your version or reload.

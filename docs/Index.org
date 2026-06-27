@@ -44,6 +44,10 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
 - [[file:Files-and-navigation.org][Files & navigation]] — the file tree, named file sets, scoping the agenda,
   window management, and jumping around.
 
+* AI Assistant
+- [[file:AI-integration.org][AI integration (Claude Code)]] — an optional assistant that reads and edits your
+  notes in a side window, and how to guide it with =AGENTS.md=.
+
 * Customization & Appearance
 - [[file:Customization.org][Customization & appearance]] — color themes, fonts, category icons, spell-check
   languages, and where to change every setting.

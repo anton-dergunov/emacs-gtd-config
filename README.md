@@ -34,6 +34,9 @@ setup or borrow pieces for your own.
 - **Quiet quality-of-life touches** — multilingual typo checking, faded/folded
   DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
   and automatic background Git sync of your Org files.
+- **An optional AI assistant** — a side-window helper (on your Claude
+  subscription) that reads and edits your notes, aware of what you have selected,
+  with its changes shown as diffs; guide it with an `AGENTS.md` in your Org folder.
 
 ## Quick start
 
@@ -69,6 +72,8 @@ Jump straight to:
 - [The Agenda](docs/Agenda.org) — the heart of the system
 - [Customization & appearance](docs/Customization.org) — themes, fonts, icons,
   and settings
+- [AI integration (Claude Code)](docs/AI-integration.org) — the optional
+  assistant and how to guide it with `AGENTS.md`
 
 ## Developing
 
