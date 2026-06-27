@@ -94,6 +94,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
   (require 'ps-claude)
+  (require 'ps-ai-context)
   (require 'ps-typo)
   (require 'ps-org-src-comment)
   (require 'ps-mode-line)
@@ -469,6 +470,14 @@ that otherwise persists until a second resize.
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
         ps/claude-resize-debounce-delay 0.3)
+#+end_src
+
+** AI context sync (ps-ai-context.el)
+=ps/ai-context-enabled= controls whether the TODO-keyword/priority/agenda-scan/
+tagging/journal facts below are kept in sync with this config's =AGENTS.md=
+(see /AI context sync/ near the end of this file for the actual call).
+#+begin_src emacs-lisp
+  (setq ps/ai-context-enabled t)
 #+end_src
 
 * Editor & UI
@@ -1857,5 +1866,16 @@ a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
   ;; Alternatives:
   ;; - https://github.com/daviwil/emacs-from-scratch/blob/master/show-notes/Emacs-Tips-Cleaning.org
   ;; - no-littering package: https://github.com/emacscollective/no-littering
+#+end_src
+
+** AI context sync
+Runs last, once every task-representation setting above (TODO keywords,
+priorities, the agenda scan, tags, journal layout) has been set, so it always
+syncs from a fully-loaded config. This single call covers both a fresh
+startup and =ps/reload-config= (=C-c p R=), since the latter just re-runs this
+whole file — see =lisp/ps-ai-context.el= for why a tangle-on-save does *not*
+also need to call this.
+#+begin_src emacs-lisp
+  (ps/ai-context-sync)
 #+end_src
 

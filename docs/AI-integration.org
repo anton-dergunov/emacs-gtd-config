@@ -29,6 +29,11 @@ You can open and edit =AGENTS.md= to tune how the assistant behaves. If you keep
 your notes in your own directory (not the bundled sample), put your own
 =AGENTS.md= there.
 
+The block near the bottom of =AGENTS.md= (between the =ps-generated= markers) is
+auto-generated from =config.org='s settings — your TODO keywords, priorities, and
+similar facts — and is overwritten on the next reload, so edit =config.org= to
+change those; the rest of =AGENTS.md= is yours to edit freely.
+
 * Copying text from the assistant window
 The live session is an interactive terminal, so a normal mouse selection there
 gets cleared as the assistant keeps drawing. Two reliable ways to copy:
