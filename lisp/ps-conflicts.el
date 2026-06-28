@@ -3,6 +3,8 @@
 (require 'cl-lib)
 (require 'calendar)
 (require 'ps-file-tree)
+(require 'ps-window)
+(require 'ps-mode-line)
 
 ;;; Customization
 
@@ -249,7 +251,8 @@ Returns a plist with :overlaps and :gaps, each an alist of (date . pairs)."
 
 (define-derived-mode ps-conflicts-mode special-mode "Conflicts"
   "Major mode for the *Org Conflicts* buffer.
-\\{ps-conflicts-mode-map}")
+\\{ps-conflicts-mode-map}"
+  (setq-local mode-line-format '((:eval (ps/mode-line--simple-view-render "Conflicts")))))
 
 (let ((map ps-conflicts-mode-map))
   (define-key map (kbd "g")   #'ps/conflicts--buffer-refresh)
@@ -405,7 +408,7 @@ Press RET or click on any task to jump to it in its org file."
       (setq ps/conflicts--cur-directory
             (concat my-org-base-directory "Areas/"))
       (ps/conflicts--buffer-render))
-    (display-buffer buf)))
+    (ps/window-show-here buf)))
 
 ;;; Agenda integration (async via idle timer)
 

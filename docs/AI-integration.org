@@ -13,6 +13,12 @@ follow.
 Press =C-c c= to start or toggle the assistant (Productivity menu → /Claude
 Code — start/toggle/). =C-c c m= opens its menu, =C-c c s= stops the session.
 
+It opens in a stable side panel rather than taking over whatever you're
+editing — docked to the right when your Emacs window is wider than it is
+tall, or to the bottom when it's taller than wide (e.g. a window positioned
+on the narrow edge of an ultrawide monitor). The side is recomputed each time
+you open it, so it adapts if you've resized or moved the window since.
+
 * What it can see
 The assistant is aware of the file you are looking at and the text you have
 selected in your Org files — select a few lines and ask about "this", and it

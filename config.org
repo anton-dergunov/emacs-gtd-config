@@ -77,6 +77,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
 #+begin_src emacs-lisp
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (require 'ps-utils)
+  (require 'ps-window)
   (require 'ps-links)
   (require 'ps-done)
   (require 'ps-git-sync)
@@ -700,6 +701,10 @@ preference and stays here.
           org-agenda-start-day nil ;; i.e. today
           org-agenda-span 1
           org-agenda-start-on-weekday nil
+          ;; Take over the selected window in place; leave every other window
+          ;; untouched (see `ps/window--split-if-alone-advice' for the
+          ;; single-window split-first convenience, applied separately).
+          org-agenda-window-setup 'current-window
           ;; Timeline grid ticks: 10:00-18:00 only (drop 8:00 and 20:00).
           org-agenda-time-grid '((daily today require-timed)
                                  (1000 1200 1400 1600 1800)
@@ -1331,8 +1336,8 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (define-key treemacs-mode-map (kbd "M-+") #'ps/file-tree-expand-all)
     (define-key treemacs-mode-map (kbd "M--") #'ps/file-tree-collapse-all)
 
-    ;; Keep the file tree visible across agenda window reorganization
-    ;; (org-agenda's default window setup would otherwise close it).
+    ;; Keep the file tree visible while the agenda dispatcher is choosing a
+    ;; command (org-agenda's window setup would otherwise close it).
     (with-eval-after-load 'org-agenda
       (define-advice org-agenda (:around (orig-fn &rest args) ps/file-tree-preserve)
         "Keep the file tree visible across agenda window reorganization.
@@ -1344,12 +1349,19 @@ in place while choosing; it is restored after the agenda is built either way."
           (unwind-protect (apply orig-fn args)
             (when open (ps/file-tree-show)))))
 
+      ;; Companion to `ps/file-tree-preserve': split the selected window first
+      ;; when it's the only content window, so Agenda/Calendar/Tasks keep
+      ;; today's single-window convenience even though `org-agenda-window-setup'
+      ;; (set to `current-window') no longer reorganizes the frame for them.
+      (advice-add 'org-agenda :around #'ps/window--split-if-alone-advice)
+      (advice-add 'org-todo-list :around #'ps/window--split-if-alone-advice)
+
       ;; Show the agenda dispatcher (` *Agenda Commands*') as a bottom strip
       ;; without collapsing the frame.  Org's `org-display-buffer-split' calls
       ;; `delete-other-windows' before showing it; suppress that while the
       ;; chooser is up so the rest of the frame (file tree, splits) stays put.
       ;; The binding is reverted before any command runs, so the final agenda
-      ;; build still does its normal `reorganize-frame' split.
+      ;; build still goes through its configured `org-agenda-window-setup'.
       (define-advice org-agenda-get-restriction-and-command
           (:around (orig-fn &rest args) ps/agenda-dispatcher-keep-frame)
         "Show the agenda dispatcher as a bottom strip without collapsing the frame."
@@ -1517,21 +1529,18 @@ window), reusing it rather than spawning an extra window."
   ;; Partially reuses the code from:
   ;; https://emacs.stackexchange.com/questions/5371/how-to-change-emacs-windows-from-vertical-split-to-horizontal-split
   (defun ps/window-split-toggle ()
-    "Switch the two windows between a horizontal (top/bottom) and vertical
-\(left/right) split, keeping their order: left<->top and right<->bottom."
+    "Switch the two content windows between a horizontal (top/bottom) and
+vertical (left/right) split, keeping their order: left<->top and
+right<->bottom.  Side windows (the file tree, Claude Code) are ignored
+entirely -- never counted, never touched -- via `ps/window--content-windows'."
     (interactive)
-    ;; Check if the file tree is open
-    (let ((tree-open (ps/file-tree-window-exists-p)))
-      (when tree-open
-        (ps/file-tree-hide))  ;; Hide it temporarily
-
-      ;; Check if there are exactly two windows
-      (if (/= (length (window-list)) 2)
-          (error "Can only toggle with exactly 2 windows!")
+    (let ((wins (ps/window--content-windows)))
+      (if (/= (length wins) 2)
+          (error "Can only toggle with exactly 2 content windows!")
         ;; Order the windows geometrically (top-left first) rather than by
         ;; `window-list' order, which starts at the selected window and would
         ;; otherwise make placement depend on which pane is focused.
-        (let* ((ordered (sort (window-list)
+        (let* ((ordered (sort wins
                               (lambda (a b)
                                 (let ((ea (window-edges a))
                                       (eb (window-edges b)))
@@ -1545,14 +1554,13 @@ window), reusing it rather than spawning an extra window."
                (split-func (if (window-full-height-p win1)
                                #'split-window-vertically
                              #'split-window-horizontally)))
-          (delete-other-windows win1)
+          ;; Delete only win2 -- never `delete-other-windows', which would
+          ;; also sweep away any side window (file tree, Claude Code).
+          (delete-window win2)
+          (select-window win1)
           (let ((new-win (funcall split-func)))
             (set-window-buffer win1 buf1)
-            (set-window-buffer new-win buf2))))
-
-      ;; Reopen the file tree if it was open before
-      (when tree-open
-        (ps/file-tree-show))))
+            (set-window-buffer new-win buf2))))))
 
   (global-set-key (kbd "C-x |") 'ps/window-split-toggle)
 #+end_src

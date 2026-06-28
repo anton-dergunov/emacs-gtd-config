@@ -46,6 +46,18 @@
 ;;    inside its timer.  We wrap it to swallow that transient error and
 ;;    schedule a resync so the terminal re-renders cleanly.
 ;;
+;; 7. `claude-code-ide-window-side' is a fixed `right' by default, which is
+;;    impractical when the Emacs frame itself is taller than it is wide (e.g.
+;;    positioned on the narrow edge of an ultrawide monitor).  We advise the
+;;    side window's display function to dock `right' when the frame is wider
+;;    than tall, `bottom' otherwise -- recomputed fresh on every open, so it
+;;    tracks whatever shape the frame currently has.  Deliberately stays a
+;;    side window (not unified with the take-over-the-selected-window rule
+;;    used by the Agenda/Calendar/Tasks/Availability/Conflicts views, see
+;;    `lisp/ps-window.el'): the point of this panel is to stay in a stable,
+;;    predictable spot while you work elsewhere, the same way the file tree
+;;    does.
+;;
 ;; If upstream #1422 is fixed and the reflow workaround is no longer needed,
 ;; the reflow-glitch suppression itself can be disabled with:
 ;;   (setq claude-code-ide-prevent-reflow-glitch nil)
@@ -61,7 +73,9 @@
 (declare-function claude-code-ide-mcp--create-diff-buffers "claude-code-ide-mcp-handlers")
 (declare-function claude-code-ide-mcp-handle-open-file "claude-code-ide-mcp-handlers")
 (declare-function eat--process-output-queue "eat")
+(declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
 (defvar claude-code-ide-window-width)
+(defvar claude-code-ide-window-side)
 (defvar my-org-base-directory)
 
 (defcustom ps/claude-window-width 90
@@ -187,13 +201,24 @@ resync so the terminal re-renders cleanly, and continue."
               (error-message-string err))
      nil)))
 
+;;; Adaptive dock side (fix #7)
+
+(defun ps/claude--adaptive-side-advice (orig-fn &rest args)
+  "Dock the Claude Code side window `right' when the frame is wider than
+tall, `bottom' otherwise.  Recomputed on every call, so it tracks the
+frame's current shape rather than whatever it was when Emacs started."
+  (let ((claude-code-ide-window-side
+         (if (> (frame-pixel-width) (frame-pixel-height)) 'right 'bottom)))
+    (apply orig-fn args)))
+
 (defun ps/claude-setup ()
   "Apply Claude Code IDE window-size, working-directory and reliability tweaks.
 Sets `claude-code-ide-window-width' from `ps/claude-window-width', installs
 the debounced resize-resync hook, pins the working directory and project key
 to `my-org-base-directory', silences the post-write \"Reread from disk?\"
-race for unmodified buffers, and guards eat's output timer against transient
-`args-out-of-range' glitches.  Idempotent."
+race for unmodified buffers, guards eat's output timer against transient
+`args-out-of-range' glitches, and docks the panel `right'/`bottom' to match
+the frame's current shape.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
   (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
   (advice-add 'claude-code-ide--get-working-directory
@@ -205,7 +230,9 @@ race for unmodified buffers, and guards eat's output timer against transient
   (advice-add 'claude-code-ide-mcp-handle-open-file
               :before #'ps/claude--open-revert-advice)
   (advice-add 'eat--process-output-queue
-              :around #'ps/claude--eat-output-guard))
+              :around #'ps/claude--eat-output-guard)
+  (advice-add 'claude-code-ide--display-buffer-in-side-window
+              :around #'ps/claude--adaptive-side-advice))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here

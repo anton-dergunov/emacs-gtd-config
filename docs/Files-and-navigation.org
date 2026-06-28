@@ -55,7 +55,9 @@ File sets are defined per Org folder in =workspace.org= — see
 
 This config also adds =C-x |= (also =C-c p |=, =ps/window-split-toggle=) to flip
 a split between horizontal and vertical — handy when the agenda and a file end
-up stacked the wrong way round.
+up stacked the wrong way round. It only ever toggles your two regular windows;
+the file tree and the [[file:AI-integration.org][Claude Code]] side panel, if
+open, are left exactly where they are.
 
 * Jumping around
 - =C-c p f= — open a *recent file* (=recentf=).

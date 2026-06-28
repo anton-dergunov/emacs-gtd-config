@@ -239,7 +239,7 @@ forces one.  This is the synchronous worker the idle debounce drives."
       (let* ((s (ps/mode-line--agenda-render))
              (map (get-text-property 1 'local-map s)))
         (should (string-match-p "Agenda ▾" s))
-        (should (eq (lookup-key map [mode-line mouse-1]) #'ps/mode-line--agenda-click))))))
+        (should (eq (lookup-key map [mode-line mouse-1]) #'ps/mode-line--view-click))))))
 
 (ert-deftest ps/mode-line--agenda-render-keeps-position-suffix ()
   "The Tasks view's percentage suffix is preserved after the clickable title."
@@ -282,20 +282,46 @@ forces one.  This is the synchronous worker the idle debounce drives."
       (ps/mode-line--agenda-conflicts-click 'fake-event)
       (should called))))
 
-(ert-deftest ps/mode-line--agenda-click-calls-chosen-view ()
+(ert-deftest ps/mode-line--view-click-calls-chosen-view ()
   "Selecting a popup entry calls its command."
   (let ((called nil))
     (cl-letf (((symbol-function 'x-popup-menu)
                (lambda (&rest _) #'ps/show-tasks))
               ((symbol-function 'ps/show-tasks)
                (lambda () (interactive) (setq called t))))
-      (ps/mode-line--agenda-click 'fake-event)
+      (ps/mode-line--view-click 'fake-event)
       (should called))))
 
-(ert-deftest ps/mode-line--agenda-click-noop-when-menu-dismissed ()
+(ert-deftest ps/mode-line--view-click-noop-when-menu-dismissed ()
   "Dismissing the popup (nil choice) calls nothing."
   (cl-letf (((symbol-function 'x-popup-menu) (lambda (&rest _) nil)))
-    (should-not (ps/mode-line--agenda-click 'fake-event))))
+    (should-not (ps/mode-line--view-click 'fake-event))))
+
+(ert-deftest ps/mode-line--view-items-includes-all-five-views ()
+  "Availability and Conflicts are reachable from the switcher, alongside
+Agenda/Calendar/Tasks."
+  (let ((labels (mapcar #'car ps/mode-line--view-items)))
+    (should (member "Availability" labels))
+    (should (member "Conflicts" labels))
+    (should (member "Agenda" labels))
+    (should (member "Tasks" labels))))
+
+;;; -------------------------------------------------------
+;;; ps/mode-line--view-title / ps/mode-line--simple-view-render
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--view-title-is-clickable ()
+  "The shared title helper carries the ▾ marker and a mouse-1 view-switch
+binding, reused by Availability/Conflicts as well as the agenda views."
+  (let* ((s (ps/mode-line--view-title "Availability"))
+         (map (get-text-property 0 'local-map s)))
+    (should (string-match-p "Availability ▾" s))
+    (should (eq (lookup-key map [mode-line mouse-1]) #'ps/mode-line--view-click))))
+
+(ert-deftest ps/mode-line--simple-view-render-shows-label ()
+  "The simple render wraps the clickable title with a leading space, for
+buffers (Availability, Conflicts) that need nothing more in the mode line."
+  (should (string-match-p "Conflicts ▾" (ps/mode-line--simple-view-render "Conflicts"))))
 
 (provide 'test-ps-mode-line)
 ;;; test-ps-mode-line.el ends here

@@ -10,9 +10,10 @@ tasks across your =Areas/= files, which you then slice down with filters.
 
 * Opening it
 Press =F9= or =C-c p n= (Productivity → Plan & Review → Tasks), or run
-=M-x ps/show-tasks=. Once you're in Tasks (or the [[file:Agenda.org][Agenda]]
-or [[file:Calendar.org][Calendar]]), the mode-line title (=Tasks ▾=) is also a
-view switcher: click it to jump straight to either of the other two.
+=M-x ps/show-tasks=. It takes over whichever window you're in (splitting
+first only if it's the only one open). Once you're in Tasks (or any of the
+other four planning views), the mode-line title (=Tasks ▾=) is also a view
+switcher: click it to jump straight to any of the others.
 
 * Switching which states are shown
 The view has a selector header for the TODO keywords. Press a number then =r= to

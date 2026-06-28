@@ -23,7 +23,9 @@ ps/show-calendar=. It opens at a single day. To open straight at a span:
 | =C-c p c y= | a year         |
 
 Once it is open you can change the span at any time without reopening — see
-/Switching the span/ below.
+/Switching the span/ below. Opening it takes over whichever window you're in
+(splitting first only if it's the only one open) — every other open window is
+left exactly as it was.
 
 You can also *click a date stamp* in any Org file (or press =C-c C-o= on it):
 that opens the Calendar Day view for exactly that date — the same view as the
@@ -56,7 +58,9 @@ timeline, the now-indicator, and the scheduled / due / overdue sections belong t
 the [[file:Agenda.org][Agenda]]; the Calendar deliberately leaves them out. The mode line names the
 current view and span, e.g. =Calendar · Week=, and that title doubles as a
 *view switcher*: click it to jump straight to the [[file:Agenda.org][Agenda]],
-[[file:Tasks-view.org][Tasks]], or another Calendar span.
+[[file:Tasks-view.org][Tasks]], [[file:Planning-tools.org][Availability or
+Conflicts]], or another Calendar span. Whichever you pick takes over the
+window you're in, leaving any other open window untouched.
 
 * Switching the span
 The top header carries a small control strip of clickable buttons:

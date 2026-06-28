@@ -3,6 +3,8 @@
 (require 'calendar)
 (require 'cl-lib)
 (require 'ps-file-tree)
+(require 'ps-window)
+(require 'ps-mode-line)
 
 ;;; Customization
 
@@ -291,7 +293,8 @@ RAW non-nil disables buffer expansion and minimum-duration filtering."
 
 (define-derived-mode ps-availability-mode special-mode "Availability"
   "Major mode for the *Org Availability* buffer.
-\\{ps-availability-mode-map}")
+\\{ps-availability-mode-map}"
+  (setq-local mode-line-format '((:eval (ps/mode-line--simple-view-render "Availability")))))
 
 (let ((map ps-availability-mode-map))
   (define-key map (kbd "g") #'ps/org-avail--buffer-refresh)
@@ -426,7 +429,7 @@ to adjust: +/- days, w weekends, t time format, l layout, g refresh."
       (setq ps/org-avail--cur-directory
             (concat my-org-base-directory "Areas/"))
       (ps/org-avail--buffer-render))
-    (display-buffer buf)))
+    (ps/window-show-here buf)))
 
 ;;; CLI argument parser
 

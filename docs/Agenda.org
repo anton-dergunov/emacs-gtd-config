@@ -14,7 +14,9 @@ live in.
 
 * Opening it
 Press =C-c p a= (Productivity → Plan & Review → Agenda), or run =M-x
-ps/show-agenda=. It opens today's view immediately.
+ps/show-agenda=. It opens today's view immediately, taking over whichever
+window you're in (splitting first only if it's the only one open) — every
+other open window is left exactly as it was.
 
 For Org's full agenda dispatcher (other built-in views, date ranges, etc.),
 press =C-c a=.
@@ -100,11 +102,14 @@ are dropped. Like
 planning view readable — not a cosmetic theme choice. Its colors follow whatever
 [[file:Customization.org][theme]] you pick.
 
-In an agenda-type buffer (Agenda, [[file:Calendar.org][Calendar]], or
-[[file:Tasks-view.org][Tasks]]) the leading title (e.g. =Agenda ▾=) is also a
-*view switcher*: click it to pop up a menu and jump straight to any of the
-three views — the same click-a-label-for-a-menu interaction as the
-[[file:Files-and-navigation.org][file tree]]'s file-set selector.
+In any of the five planning-view buffers — Agenda, [[file:Calendar.org][Calendar]],
+[[file:Tasks-view.org][Tasks]], [[file:Planning-tools.org][Availability]], or
+[[file:Planning-tools.org][Conflicts]] — the leading title (e.g. =Agenda ▾=) is
+also a *view switcher*: click it to pop up a menu and jump straight to any of
+the other four — the same click-a-label-for-a-menu interaction as the
+[[file:Files-and-navigation.org][file tree]]'s file-set selector. Whichever
+view you switch to takes over the window you're in, leaving any other open
+window untouched (splitting first only if that window is the only one open).
 
 When the Agenda finds scheduling conflicts, a count (e.g. =⚠ 2 conflicts=)
 appears next to the title — in the mode line's normal text, not a warning

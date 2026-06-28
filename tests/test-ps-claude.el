@@ -1,6 +1,7 @@
 ;;; test-ps-claude.el --- ERT tests for ps-claude -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-claude)
 
@@ -144,6 +145,26 @@
     (should (timerp ps/claude--resize-timer))
     (when (timerp ps/claude--resize-timer)
       (cancel-timer ps/claude--resize-timer))))
+
+;;; adaptive dock side
+
+(ert-deftest ps/claude-test-adaptive-side-docks-right-when-wide ()
+  "A wider-than-tall frame docks the panel to the right."
+  (cl-letf (((symbol-function 'frame-pixel-width) (lambda (&rest _) 1600))
+            ((symbol-function 'frame-pixel-height) (lambda (&rest _) 900)))
+    (let (seen)
+      (ps/claude--adaptive-side-advice
+       (lambda (&rest _) (setq seen claude-code-ide-window-side)))
+      (should (eq seen 'right)))))
+
+(ert-deftest ps/claude-test-adaptive-side-docks-bottom-when-tall ()
+  "A taller-than-wide frame docks the panel to the bottom."
+  (cl-letf (((symbol-function 'frame-pixel-width) (lambda (&rest _) 900))
+            ((symbol-function 'frame-pixel-height) (lambda (&rest _) 1600)))
+    (let (seen)
+      (ps/claude--adaptive-side-advice
+       (lambda (&rest _) (setq seen claude-code-ide-window-side)))
+      (should (eq seen 'bottom)))))
 
 (provide 'test-ps-claude)
 ;;; test-ps-claude.el ends here

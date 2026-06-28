@@ -38,6 +38,7 @@
 (declare-function ps/show-calendar-year "config" ())
 (declare-function ps/show-tasks "config" ())
 (declare-function ps/show-conflicts "ps-conflicts" ())
+(declare-function ps/org-show-availability "ps-availability" ())
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
@@ -203,24 +204,46 @@ Set by `ps/conflicts--agenda-check' (lisp/ps-conflicts.el); cleared by
 `ps/mode-line--agenda-finalize' on every non-Agenda rebuild so a stale count
 never leaks into the Calendar or Tasks mode line.")
 
-(defconst ps/mode-line--agenda-view-items
+(defconst ps/mode-line--view-items
   '(("Agenda" . ps/show-agenda)
     ("Calendar: Day" . ps/show-calendar-day)
     ("Calendar: Week" . ps/show-calendar-week)
     ("Calendar: Month" . ps/show-calendar-month)
     ("Calendar: Year" . ps/show-calendar-year)
-    ("Tasks" . ps/show-tasks))
-  "Views offered by the agenda mode-line's view switcher.
+    ("Tasks" . ps/show-tasks)
+    ("Availability" . ps/org-show-availability)
+    ("Conflicts" . ps/show-conflicts))
+  "Planning views offered by the mode-line view switcher.
 An alist of (LABEL . COMMAND), shown as a flat popup menu by
-`ps/mode-line--agenda-click' — the same combo-box interaction as the file
-tree's file-set selector (see `ps/file-tree--modeline-click').")
+`ps/mode-line--view-click' — the same combo-box interaction as the file
+tree's file-set selector (see `ps/file-tree--modeline-click').  Reachable
+from any of the views' own mode lines (Agenda/Calendar/Tasks and the
+Availability/Conflicts buffers).")
 
-(defun ps/mode-line--agenda-click (event)
+(defun ps/mode-line--view-click (event)
   "Show a popup menu of planning views and switch to the one EVENT selects."
   (interactive "e")
-  (let* ((menu (list "View" (cons "Views" ps/mode-line--agenda-view-items)))
+  (let* ((menu (list "View" (cons "Views" ps/mode-line--view-items)))
          (choice (x-popup-menu event menu)))
     (when choice (call-interactively choice))))
+
+(defun ps/mode-line--view-title (label)
+  "Return a clickable \"LABEL ▾\" mode-line segment.
+Mouse-1 pops the planning-views menu (see `ps/mode-line--view-click')."
+  (propertize (concat label " ▾")
+              'face 'mode-line-emphasis
+              'mouse-face 'mode-line-highlight
+              'help-echo "mouse-1: switch view"
+              'local-map
+              (let ((map (make-sparse-keymap)))
+                (define-key map [mode-line mouse-1] #'ps/mode-line--view-click)
+                map)))
+
+(defun ps/mode-line--simple-view-render (label)
+  "Return a mode-line string showing LABEL as a clickable view-switcher title.
+Used by buffers (Availability, Conflicts) that need nothing beyond the
+clickable title itself."
+  (concat " " (ps/mode-line--view-title label)))
 
 (defun ps/mode-line--agenda-conflicts-click (event)
   "Open the dedicated Conflicts buffer in response to EVENT."
@@ -233,14 +256,7 @@ The title is clickable (mouse-1 switches views), matching the file tree's
 file-set selector.  In the Agenda view, a clickable conflict count follows it
 when there are scheduling conflicts — in the mode line's default face, not a
 warning face."
-  (let ((title (propertize (concat (or ps/mode-line--agenda-title "Agenda") " ▾")
-                           'face 'mode-line-emphasis
-                           'mouse-face 'mode-line-highlight
-                           'help-echo "mouse-1: switch view"
-                           'local-map
-                           (let ((map (make-sparse-keymap)))
-                             (define-key map [mode-line mouse-1] #'ps/mode-line--agenda-click)
-                             map))))
+  (let ((title (ps/mode-line--view-title (or ps/mode-line--agenda-title "Agenda"))))
     (cond
      (ps/mode-line--agenda-show-position
       (concat " " title ps/mode-line-separator

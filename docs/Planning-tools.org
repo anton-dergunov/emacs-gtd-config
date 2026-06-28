@@ -14,7 +14,9 @@ Computes your open time over the coming days from the scheduled events in your
 Org files, so you can answer "when am I free?" at a glance.
 
 - Open with =C-c p v= (Productivity → Plan & Review → Show Availability), or
-  =M-x ps/org-show-availability=.
+  =M-x ps/org-show-availability=. It takes over whichever window you're in
+  (splitting first only if it's the only one open) and is reachable from the
+  mode-line view switcher (click the title in Agenda/Calendar/Tasks/Conflicts).
 - The buffer shows free slots per day; use its controls to change the window of
   days, working hours, and formatting.
 
@@ -27,7 +29,8 @@ Scans your scheduled events and reports two kinds of trouble: events that
 *overlap*, and gaps between back-to-back events that are uncomfortably *small*.
 
 - Open with =C-c p x= (Productivity → Plan & Review → Check Conflicts), or
-  =M-x ps/show-conflicts=.
+  =M-x ps/show-conflicts=. Like Availability, it takes over whichever window
+  you're in and is reachable from the mode-line view switcher.
 - A lightweight version of this check also runs automatically in the
   [[file:Agenda.org][Agenda]], flagging overlapping timed events with =⚠
   overlap= and showing a total count next to the mode-line title — click it to
