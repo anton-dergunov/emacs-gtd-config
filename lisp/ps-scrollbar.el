@@ -193,10 +193,10 @@ The COLOR-filled pill is PILL-W wide at X, TH tall starting at Y."
                    ;; is ignored, so the strip spills off the frame's right edge.
                    (min-width . 0)
                    (min-height . 0)
-                   ;; Transparent background so only the SVG pill shows; keep a
-                   ;; matching background-color as a fallback where alpha-background
-                   ;; is unsupported (it then blends over the same-coloured fringe).
-                   (alpha-background . 0)
+                   ;; Background matches the buffer; the strip sits over the
+                   ;; same-coloured right fringe, so it reads as invisible and
+                   ;; never paints over text.  (alpha-background is unusable on
+                   ;; the NS build -- it makes the SVG pill itself transparent.)
                    (background-color . ,(frame-parameter parent 'background-color))
                    (width . 1) (height . 1)
                    (skip-taskbar . t)
@@ -284,19 +284,19 @@ changed, `hidden' when content fits, `rendered' otherwise."
             (if (null span)
                 (progn (ps/scrollbar--hide) 'hidden)
               (pcase-let* ((`(,y . ,th) span)
-                           (ibw (or (frame-parameter parent 'internal-border-width) 0))
-                           ;; The strip spans the whole reserved right fringe (the
-                           ;; clickable hit column); the visible pill is slimmer
-                           ;; and hugs the right edge.
-                           (strip-w (max 2 (nth 1 (window-fringes window))))
+                           ;; Place the strip exactly over the right fringe using
+                           ;; absolute pixel edges differenced against the parent's
+                           ;; native origin -- unambiguous, and it can never cover
+                           ;; text or the mode line.  The whole fringe is the
+                           ;; clickable hit column; the pill is slimmer, flush-right.
+                           (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
+                           (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
+                           (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native))
+                           (strip-w (max 2 (- wr br)))
                            (pill-w (max 2 (min ps/scrollbar-width strip-w)))
                            (pill-x (max 0 (- strip-w pill-w 1)))
-                           (left0 (+ ibw (- (+ (window-pixel-left window)
-                                               (window-pixel-width window))
-                                            strip-w)))
-                           ;; Never let the strip run past the frame's right edge.
-                           (left (max 0 (min left0 (- (frame-text-width parent) strip-w))))
-                           (top (+ ibw iT))
+                           (left (max 0 (- br pl)))
+                           (top (- bt pt))
                            (color (ps/scrollbar--color active))
                            (child (ps/scrollbar--ensure-frame parent)))
                 ;; Keep the strip blended with the (possibly re-themed) background.
