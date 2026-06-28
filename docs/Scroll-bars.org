@@ -33,7 +33,7 @@ The thumb is on by default. A few things you can adjust (see below for where):
 * Under the hood / Customize
 - Scrollbar: =lisp/ps-scrollbar.el=; settings live in =config.org= → /Settings →
   Scroll bars/ (=ps/scrollbar-hide-delay=, =ps/scrollbar-show-on-hover=,
-  =ps/scrollbar-fringe-width=, =ps/scrollbar-min-thumb-lines=). The colour comes
+  =ps/scrollbar-width=, =ps/scrollbar-min-thumb-pixels=). The colour comes
   from the =ps/scrollbar-thumb= face (and =ps/scrollbar-thumb-active= while
   hovering or dragging). Turn the whole thing off with =M-x ps/scrollbar-mode=.
 - Smooth scrolling: =config.org= → /Editor & UI → Smooth scrolling (ultra-scroll)/.

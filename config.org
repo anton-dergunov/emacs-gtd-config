@@ -194,14 +194,17 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 #+end_src
 
 ** Scroll bars (ps-scrollbar.el)
-Custom auto-hiding scrollbars drawn in the right fringe (the native macOS ones
-can't be recoloured or made to auto-hide). The thumb appears on scroll and on
-mouse hover, fades after =ps/scrollbar-hide-delay= seconds, and can be dragged.
+Custom auto-hiding scrollbars (the native macOS ones can't be recoloured or made
+to auto-hide). The thumb is a theme-coloured rounded pill at the right edge; it
+appears on scroll and on mouse hover, fades after =ps/scrollbar-hide-delay=
+seconds, and can be dragged. =ps/scrollbar-width= is the pill width in pixels and
+=ps/scrollbar-fringe-width= the reserved edge strip it floats over.
 #+begin_src emacs-lisp
-  (setq ps/scrollbar-fringe-width   10
-        ps/scrollbar-hide-delay     1.0
-        ps/scrollbar-show-on-hover   t
-        ps/scrollbar-min-thumb-lines 1)
+  (setq ps/scrollbar-width            8
+        ps/scrollbar-fringe-width    10
+        ps/scrollbar-hide-delay      1.0
+        ps/scrollbar-show-on-hover     t
+        ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 
 ** Mode line (ps-mode-line.el)
@@ -523,9 +526,10 @@ package). The two =scroll-= settings are required by ultra-scroll.
   (use-package ultra-scroll
     :ensure nil
     :init
-    (setq scroll-conservatively 101  ; required by ultra-scroll
-          scroll-margin 0)           ; required by ultra-scroll
+    (setq scroll-conservatively 3  ; recommended by ultra-scroll
+          scroll-margin 0)         ; required by ultra-scroll
     :config
+    ;; To turn smooth scrolling off, comment out the next line.
     (ultra-scroll-mode 1))
 #+end_src
 
