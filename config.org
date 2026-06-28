@@ -100,6 +100,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-org-src-comment)
   (require 'ps-mode-line)
   (require 'ps-heading-stars)
+  (require 'ps-scrollbar)
 
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
@@ -190,6 +191,17 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 #+begin_src emacs-lisp
   (setq ps/conflicts-gap-minutes    15
         ps/conflicts-include-past   nil)
+#+end_src
+
+** Scroll bars (ps-scrollbar.el)
+Custom auto-hiding scrollbars drawn in the right fringe (the native macOS ones
+can't be recoloured or made to auto-hide). The thumb appears on scroll and on
+mouse hover, fades after =ps/scrollbar-hide-delay= seconds, and can be dragged.
+#+begin_src emacs-lisp
+  (setq ps/scrollbar-fringe-width   10
+        ps/scrollbar-hide-delay     1.0
+        ps/scrollbar-show-on-hover   t
+        ps/scrollbar-min-thumb-lines 1)
 #+end_src
 
 ** Mode line (ps-mode-line.el)
@@ -493,9 +505,28 @@ tagging/journal facts below are kept in sync with this config's =AGENTS.md=
   ;; Disable the toolbar
   (tool-bar-mode -1)
 
-  ;; Disable scroll bars for all buffers
+  ;; Disable the native scroll bars (the NS toolkit ignores their face, so they
+  ;; can't be themed or auto-hidden) and use our custom fringe scrollbars instead.
   (scroll-bar-mode -1)
   (horizontal-scroll-bar-mode -1)
+  (ps/scrollbar-mode 1)
+#+end_src
+
+** Smooth scrolling (ultra-scroll)
+Pixel-precise, momentum mouse/trackpad scrolling. Not on MELPA, so it is
+installed once via =package-vc-install= (the same pattern as the AI Assistant
+package). The two =scroll-= settings are required by ultra-scroll.
+#+begin_src emacs-lisp
+  (unless (package-installed-p 'ultra-scroll)
+    (package-vc-install "https://github.com/jdtsmith/ultra-scroll"))
+
+  (use-package ultra-scroll
+    :ensure nil
+    :init
+    (setq scroll-conservatively 101  ; required by ultra-scroll
+          scroll-margin 0)           ; required by ultra-scroll
+    :config
+    (ultra-scroll-mode 1))
 #+end_src
 
 ** Indentation: always use spaces

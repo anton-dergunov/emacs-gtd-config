@@ -51,6 +51,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
 * Customization & Appearance
 - [[file:Customization.org][Customization & appearance]] — color themes, fonts, category icons, spell-check
   languages, and where to change every setting.
+- [[file:Scroll-bars.org][Scroll bars]] — auto-hiding, theme-coloured scrollbars you can drag, plus smooth
+  pixel scrolling.
 
 * Syncing & Backups
 - [[file:Sync-and-backups.org][Sync & backups]] — automatic background Git sync, auto-save/auto-revert,
