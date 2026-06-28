@@ -284,19 +284,21 @@ changed, `hidden' when content fits, `rendered' otherwise."
             (if (null span)
                 (progn (ps/scrollbar--hide) 'hidden)
               (pcase-let* ((`(,y . ,th) span)
-                           ;; Place the strip exactly over the right fringe using
-                           ;; absolute pixel edges differenced against the parent's
-                           ;; native origin -- unambiguous, and it can never cover
-                           ;; text or the mode line.  The whole fringe is the
-                           ;; clickable hit column; the pill is slimmer, flush-right.
+                           ;; Place the strip over the right fringe.  On this NS
+                           ;; build `set-frame-position' for the child frame uses
+                           ;; DISPLAY-ABSOLUTE coordinates (verified empirically),
+                           ;; so we feed it the absolute window-body edges directly.
+                           ;; `window-edges' with ABSOLUTE+PIXELWISE gives the
+                           ;; window's outer right (wr) and the text-area edges
+                           ;; (bt/br); the strip covers exactly [br, wr] = the right
+                           ;; fringe, so it never paints over text or the mode line.
                            (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
                            (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
-                           (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native))
                            (strip-w (max 2 (- wr br)))
                            (pill-w (max 2 (min ps/scrollbar-width strip-w)))
                            (pill-x (max 0 (- strip-w pill-w 1)))
-                           (left (max 0 (- br pl)))
-                           (top (- bt pt))
+                           (left br)
+                           (top bt)
                            (color (ps/scrollbar--color active))
                            (child (ps/scrollbar--ensure-frame parent)))
                 ;; Keep the strip blended with the (possibly re-themed) background.
