@@ -75,8 +75,8 @@
 (ert-deftest ps/scrollbar--image-builds ()
   "The SVG image builder returns an image when SVG is available."
   (skip-unless (image-type-available-p 'svg))
-  ;; canvas-w h x pill-w y th color
-  (let ((img (ps/scrollbar--image 14 400 8 6 150 100 "gray60")))
+  ;; canvas-w h x pill-w y th color bg
+  (let ((img (ps/scrollbar--image 14 400 8 6 150 100 "gray60" "#fdf6e3")))
     (should (eq (car img) 'image))))
 
 (ert-deftest ps/scrollbar--reveals-on-scroll-not-hover ()
