@@ -586,30 +586,34 @@ layout overlays (the hidden day header, the blank line under the control row)."
     (if (= s 0) 60 (- 60 s))))
 
 (defun ps/schedule-view--refresh-agenda ()
-  "Refresh *Org Agenda* when it holds the Agenda view, preserving point/scroll.
-The minute timer exists only to move the Agenda's now-indicator, so it must not
-rebuild the buffer when it currently holds the Calendar, the Tasks list, or a
-stock agenda — doing so made the Calendar jump back to today and the large
-month/year views sluggish.  The view kind is the buffer-local
-`ps/agenda-layout--view-kind' set by `ps/agenda-layout--apply'."
-  (let* ((buf (get-buffer "*Org Agenda*")))
-    (when (and (buffer-live-p buf)
+  "Refresh *Org Agenda* when it holds the Agenda view and has a live window,
+preserving point/scroll.  The minute timer exists only to move the Agenda's
+now-indicator, so it must not rebuild the buffer when it currently holds the
+Calendar, the Tasks list, or a stock agenda — doing so made the Calendar
+jump back to today and the large month/year views sluggish.  The view kind
+is the buffer-local `ps/agenda-layout--view-kind' set by
+`ps/agenda-layout--apply'.
+
+Also skips entirely when the buffer has no live window: there's nothing to
+visually refresh if nobody is looking, and `org-agenda-redo' calls `recenter'
+internally, which requires the selected window to display the current
+buffer -- `with-current-buffer' alone is not enough, and re-invoking
+`org-agenda'/`org-todo-list' without a real selected window risked
+redirecting the rebuilt content into whatever buffer the user actually had
+selected."
+  (let* ((buf (get-buffer "*Org Agenda*"))
+         (win (and buf (get-buffer-window buf t))))
+    (when (and win
+               (buffer-live-p buf)
                (eq (buffer-local-value 'ps/agenda-layout--view-kind buf) 'agenda))
-      (let* ((win (get-buffer-window buf t))
-             (pt  (with-current-buffer buf (point)))
-             (ws  (and win (window-start win))))
+      (let* ((pt (with-current-buffer buf (point)))
+             (ws (window-start win)))
         (condition-case err
-            ;; org-agenda-redo calls recenter internally, which requires
-            ;; the selected window to display the current buffer.  When the
-            ;; timer fires while focus is elsewhere, with-current-buffer
-            ;; alone is not enough — we must also select the agenda window.
             ;; Suppress the "Rebuilding agenda buffer…done" echo-area/Messages
             ;; noise that fires on every auto-refresh.
             (let ((inhibit-message t)
                   (message-log-max nil))
-              (if win
-                  (with-selected-window win (org-agenda-redo))
-                (with-current-buffer buf  (org-agenda-redo))))
+              (with-selected-window win (org-agenda-redo)))
           (error
            (message "ps/schedule-view: redo error: %s" (error-message-string err))
            (ignore-errors
@@ -618,7 +622,7 @@ month/year views sluggish.  The view kind is the buffer-local
                  (run-hooks 'org-agenda-finalize-hook))))))
         (ignore-errors
           (with-current-buffer buf (goto-char (min pt (point-max)))))
-        (when (and win (window-live-p win))
+        (when (window-live-p win)
           (ignore-errors
             (with-selected-window win
               (set-window-start win (min ws (point-max)) t))))))))

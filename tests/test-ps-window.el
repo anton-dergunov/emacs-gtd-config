@@ -61,6 +61,29 @@
     (should-not (ps/window--alone-p))))
 
 ;;; -------------------------------------------------------
+;;; ps/window--current-buffer-visible-p
+;;; -------------------------------------------------------
+
+(ert-deftest ps/window--current-buffer-visible-p-true-when-displayed ()
+  "True for a buffer actually shown in a window (real interactive navigation)."
+  (let ((buf (generate-new-buffer "a")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf)
+          (should (ps/window--current-buffer-visible-p)))
+      (kill-buffer buf))))
+
+(ert-deftest ps/window--current-buffer-visible-p-false-when-windowless ()
+  "False for a buffer pinned via `with-current-buffer' that has no window --
+the exact signature of a background `org-agenda-redo' on a closed Agenda."
+  (let ((buf (generate-new-buffer "a")))
+    (unwind-protect
+        (with-current-buffer buf
+          (should-not (ps/window--current-buffer-visible-p)))
+      (kill-buffer buf))))
+
+;;; -------------------------------------------------------
 ;;; ps/window-show-here
 ;;; -------------------------------------------------------
 
@@ -92,7 +115,10 @@ stays visible alongside the new one."
     (unwind-protect
         (save-window-excursion
           (delete-other-windows)
-          (set-window-buffer (selected-window) buf-a)
+          ;; `switch-to-buffer' (not `set-window-buffer') so `current-buffer'
+          ;; is actually synced to the window, like real interactive
+          ;; navigation -- required for `ps/window--current-buffer-visible-p'.
+          (switch-to-buffer buf-a)
           (let ((win-a (selected-window)))
             (ps/window-show-here buf-new)
             (should (= (length (ps/window--content-windows)) 2))
@@ -113,7 +139,7 @@ stays visible alongside the new one."
     (unwind-protect
         (save-window-excursion
           (delete-other-windows)
-          (set-window-buffer (selected-window) buf-a)
+          (switch-to-buffer buf-a)
           (ps/window--split-if-alone-advice (lambda (&rest _) (setq called t)))
           (should called)
           (should (= (length (ps/window--content-windows)) 2)))
@@ -128,6 +154,30 @@ stays visible alongside the new one."
       (ps/window--split-if-alone-advice (lambda (&rest _) (setq called t)))
       (should called)
       (should (= (length (ps/window--content-windows)) 2)))))
+
+(ert-deftest ps/window--split-if-alone-advice-noop-when-buffer-windowless ()
+  "Regression test: a background `org-agenda-redo' pinning a windowless
+buffer via `with-current-buffer' must not split/select a window -- doing so
+previously corrupted whatever buffer the user was actually looking at (see
+`ps/schedule-view--refresh-agenda').  The wrapped function still runs; only
+the window manipulation is skipped."
+  (let ((agenda-buf (generate-new-buffer "*fake agenda*"))
+        (other-buf (generate-new-buffer "other"))
+        (called nil))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer other-buf)
+          (let ((other-win (selected-window))
+                (other-size (with-current-buffer other-buf (point-max))))
+            (with-current-buffer agenda-buf
+              (ps/window--split-if-alone-advice (lambda (&rest _) (setq called t))))
+            (should called)
+            ;; No new window, and the buffer the user was looking at is untouched.
+            (should (= (length (ps/window--content-windows)) 1))
+            (should (eq (window-buffer other-win) other-buf))
+            (should (= (with-current-buffer other-buf (point-max)) other-size))))
+      (mapc #'kill-buffer (list agenda-buf other-buf)))))
 
 (provide 'test-ps-window)
 ;;; test-ps-window.el ends here

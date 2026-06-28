@@ -15,6 +15,8 @@
 
 (require 'ps-schedule-view)
 (require 'ert)
+(require 'cl-lib)
+(require 'org-agenda)
 
 ;;; ------------------------------------------------------------------
 ;;; ps/schedule-view--to-mins
@@ -221,6 +223,41 @@
 (ert-deftest ps/schedule-view--now-line-str/narrow-window ()
   ;; Should not error even with a very narrow window.
   (should (stringp (ps/schedule-view--now-line-str 900 10))))
+
+;;; ------------------------------------------------------------------
+;;; ps/schedule-view--refresh-agenda
+
+(ert-deftest ps/schedule-view--refresh-agenda/skips-when-no-window ()
+  "Regression test: must not call `org-agenda-redo' (and must leave any other
+buffer untouched) when the *Org Agenda* buffer has no live window -- doing
+so previously corrupted whatever buffer the user had selected (see
+`lisp/ps-window.el''s `ps/window--split-if-alone-advice')."
+  (let ((agenda-buf (generate-new-buffer "*Org Agenda*"))
+        (redo-calls 0))
+    (unwind-protect
+        (progn
+          (with-current-buffer agenda-buf
+            (setq-local ps/agenda-layout--view-kind 'agenda))
+          (cl-letf (((symbol-function 'org-agenda-redo)
+                     (lambda (&rest _) (cl-incf redo-calls))))
+            (ps/schedule-view--refresh-agenda))
+          (should (= redo-calls 0)))
+      (kill-buffer agenda-buf))))
+
+(ert-deftest ps/schedule-view--refresh-agenda/redoes-when-window-present ()
+  "Calls `org-agenda-redo' when the Agenda view has a live window."
+  (let ((agenda-buf (generate-new-buffer "*Org Agenda*"))
+        (redo-calls 0))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer agenda-buf)
+          (setq-local ps/agenda-layout--view-kind 'agenda)
+          (cl-letf (((symbol-function 'org-agenda-redo)
+                     (lambda (&rest _) (cl-incf redo-calls))))
+            (ps/schedule-view--refresh-agenda))
+          (should (= redo-calls 1)))
+      (kill-buffer agenda-buf))))
 
 (provide 'test-ps-schedule-view)
 ;;; test-ps-schedule-view.el ends here

@@ -26,12 +26,22 @@
   "Non-nil when the selected window is the only content window in the frame."
   (<= (length (ps/window--content-windows)) 1))
 
+(defun ps/window--current-buffer-visible-p ()
+  "Non-nil when the current buffer is displayed in a window somewhere.
+Splitting/selecting a window on its behalf is only safe when this holds --
+otherwise we're running inside a background process (e.g. a timer-driven
+`org-agenda-redo') that pinned `current-buffer' via `with-current-buffer' on
+a windowless buffer, and `select-window' would silently override that
+binding, redirecting whatever gets inserted next into the wrong buffer."
+  (get-buffer-window (current-buffer) t))
+
 (defun ps/window--split-if-alone ()
   "Split the selected window when it's the only content window, then select
 the new pane.  Mirrors the single-window convenience already familiar from
 the agenda views: the buffer that was already visible stays visible
-alongside whatever gets shown next."
-  (when (ps/window--alone-p)
+alongside whatever gets shown next.  No-op when the current buffer isn't
+actually visible anywhere -- see `ps/window--current-buffer-visible-p'."
+  (when (and (ps/window--current-buffer-visible-p) (ps/window--alone-p))
     (when-let ((new (split-window-sensibly)))
       (select-window new))))
 
