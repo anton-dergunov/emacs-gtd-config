@@ -196,14 +196,15 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 ** Scroll bars (ps-scrollbar.el)
 Custom auto-hiding scrollbars (the native macOS ones can't be recoloured or made
 to auto-hide). The thumb is a theme-coloured rounded pill at the right edge; it
-appears on scroll and on mouse hover, fades after =ps/scrollbar-hide-delay=
-seconds, and can be dragged. =ps/scrollbar-width= is the pill width in pixels and
-=ps/scrollbar-fringe-width= the reserved edge strip it floats over.
+appears when you scroll, fades after =ps/scrollbar-hide-delay= seconds, and can be
+dragged. =ps/scrollbar-width= is the visible pill width and
+=ps/scrollbar-fringe-width= the wider reserved strip that forms the drag hit area.
+Set =ps/scrollbar-show-on-hover= to =t= to also reveal it on mouse hover.
 #+begin_src emacs-lisp
-  (setq ps/scrollbar-width            8
-        ps/scrollbar-fringe-width    10
+  (setq ps/scrollbar-width            6
+        ps/scrollbar-fringe-width    14
         ps/scrollbar-hide-delay      1.0
-        ps/scrollbar-show-on-hover     t
+        ps/scrollbar-show-on-hover   nil
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 

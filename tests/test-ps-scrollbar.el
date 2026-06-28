@@ -75,8 +75,13 @@
 (ert-deftest ps/scrollbar--image-builds ()
   "The SVG image builder returns an image when SVG is available."
   (skip-unless (image-type-available-p 'svg))
-  (let ((img (ps/scrollbar--image 8 400 150 100 "gray60")))
+  ;; canvas-w h x pill-w y th color
+  (let ((img (ps/scrollbar--image 14 400 8 6 150 100 "gray60")))
     (should (eq (car img) 'image))))
+
+(ert-deftest ps/scrollbar--reveals-on-scroll-not-hover ()
+  "By default the thumb is scroll-triggered, not hover-triggered."
+  (should-not ps/scrollbar-show-on-hover))
 
 (ert-deftest ps/scrollbar--terminal-not-excluded ()
   "Terminal majors (e.g. the Claude Code window) keep their scrollbar."

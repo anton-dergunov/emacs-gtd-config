@@ -9,8 +9,9 @@ edge of every window. It stays out of the way and matches your colour theme.
 
 * What it does
 - *Auto-hides.* The scrollbar is invisible until you need it. It appears when
-  you scroll and when the mouse moves over a window, then fades a moment after
-  you stop — just like the overlay scroll bars in macOS, VS Code, or Obsidian.
+  you scroll a window, then fades a moment after you stop — just like the overlay
+  scroll bars in macOS, VS Code, or Obsidian. (Set =ps/scrollbar-show-on-hover=
+  to also reveal it on mouse hover.)
 - *Shows your place.* The thumb's height reflects how much of the buffer is on
   screen, and its position tracks where you are in the document.
 - *Calm and theme-aware.* It is a soft, muted pill that takes its colour from
