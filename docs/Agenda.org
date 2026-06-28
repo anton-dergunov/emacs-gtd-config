@@ -106,6 +106,12 @@ In an agenda-type buffer (Agenda, [[file:Calendar.org][Calendar]], or
 three views — the same click-a-label-for-a-menu interaction as the
 [[file:Files-and-navigation.org][file tree]]'s file-set selector.
 
+When the Agenda finds scheduling conflicts, a count (e.g. =⚠ 2 conflicts=)
+appears next to the title — in the mode line's normal text, not a warning
+color, so it informs without shouting. Click it to open the full
+[[file:Planning-tools.org][conflict checker]]. It only appears for the Agenda
+view; switching to Calendar or Tasks clears it.
+
 * Under the hood / Customize
 - The sections come from =org-super-agenda= and the custom command =c=, defined
   in =config.org= → /Org Mode → Agenda → Super agenda/. Edit the shared list

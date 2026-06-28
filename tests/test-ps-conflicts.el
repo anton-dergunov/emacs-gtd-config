@@ -4,6 +4,7 @@
 (require 'org-agenda)
 (add-to-list 'load-path "lisp")
 (require 'ps-conflicts)
+(require 'ps-mode-line)   ; provides ps/mode-line--agenda-conflict-count
 
 ;; Declared special so the agenda-check tests' `let' bindings are dynamic.
 (defvar my-org-base-directory)
@@ -692,17 +693,19 @@ live agenda buffer, run BODY, then clean up. Binds `agenda' to the buffer."
                (kill-buffer agenda))))
        (delete-directory base t))))
 
-(ert-deftest ps/conflicts--agenda-check-appends-warning ()
-  "agenda-check appends a conflict warning to the agenda buffer when conflicts exist."
+(ert-deftest ps/conflicts--agenda-check-sets-mode-line-count ()
+  "agenda-check sets the mode-line conflict count and leaves the buffer text alone."
   (ps/conflicts-test--with-agenda ps/conflicts-test--sample-org
+    (with-current-buffer agenda (insert "unrelated agenda text"))
     (ps/conflicts--agenda-check)
     (with-current-buffer agenda
-      (should (string-match-p "conflict" (buffer-string))))))
+      (should (> ps/mode-line--agenda-conflict-count 0))
+      (should-not (string-match-p "conflict" (buffer-string))))))
 
-(ert-deftest ps/conflicts--agenda-check-silent-when-none ()
-  "agenda-check appends nothing when there are no conflicts."
+(ert-deftest ps/conflicts--agenda-check-zero-when-none ()
+  "agenda-check sets the count to 0 when there are no conflicts."
   (ps/conflicts-test--with-agenda
       "* Only\nSCHEDULED: <2026-05-04 Mon 10:00-11:00>\n"
     (ps/conflicts--agenda-check)
     (with-current-buffer agenda
-      (should-not (string-match-p "conflict" (buffer-string))))))
+      (should (= ps/mode-line--agenda-conflict-count 0)))))

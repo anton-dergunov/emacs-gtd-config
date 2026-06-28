@@ -250,6 +250,38 @@ forces one.  This is the synchronous worker the idle debounce drives."
           (ps/mode-line--agenda-show-position t))
       (should (string-match-p "Tasks ▾ · 0%%" (ps/mode-line--agenda-render))))))
 
+(ert-deftest ps/mode-line--agenda-render-shows-plain-clickable-conflict-count ()
+  "A positive conflict count renders calmly (no face) and is clickable."
+  (with-temp-buffer
+    (let ((ps/mode-line--agenda-title "Agenda")
+          (ps/mode-line--agenda-show-position nil)
+          (ps/mode-line--agenda-conflict-count 2))
+      (let* ((s (ps/mode-line--agenda-render))
+             (marker-pos (string-match "⚠ 2 conflicts" s)))
+        (should marker-pos)
+        (should-not (get-text-property marker-pos 'face s))
+        (should (eq (lookup-key (get-text-property marker-pos 'local-map s)
+                                 [mode-line mouse-1])
+                    #'ps/mode-line--agenda-conflicts-click))))))
+
+(ert-deftest ps/mode-line--agenda-render-omits-conflict-count-when-zero-or-nil ()
+  "No conflict segment is shown when the count is nil or zero."
+  (with-temp-buffer
+    (let ((ps/mode-line--agenda-title "Agenda")
+          (ps/mode-line--agenda-show-position nil))
+      (let ((ps/mode-line--agenda-conflict-count nil))
+        (should-not (string-match-p "conflict" (ps/mode-line--agenda-render))))
+      (let ((ps/mode-line--agenda-conflict-count 0))
+        (should-not (string-match-p "conflict" (ps/mode-line--agenda-render)))))))
+
+(ert-deftest ps/mode-line--agenda-conflicts-click-opens-conflicts-buffer ()
+  "Clicking the conflict segment opens the dedicated Conflicts buffer."
+  (let ((called nil))
+    (cl-letf (((symbol-function 'ps/show-conflicts)
+               (lambda () (interactive) (setq called t))))
+      (ps/mode-line--agenda-conflicts-click 'fake-event)
+      (should called))))
+
 (ert-deftest ps/mode-line--agenda-click-calls-chosen-view ()
   "Selecting a popup entry calls its command."
   (let ((called nil))

@@ -413,25 +413,24 @@ Press RET or click on any task to jump to it in its org file."
 ;; / nil); active during `org-agenda-finalize-hook'.  Used to run the conflict
 ;; check for the Agenda only.
 (defvar ps/agenda-layout-view-kind)
+;; Buffer-local agenda mode-line state, defined in `ps-mode-line'; set here so
+;; the conflict count surfaces in the mode line instead of the buffer text.
+(defvar ps/mode-line--agenda-conflict-count)
 
 (defvar ps/conflicts--agenda-timer nil
   "Pending idle timer for the agenda conflict check.")
 
 (defun ps/conflicts--agenda-check ()
-  "Check for conflicts and append a summary line at the bottom of the agenda buffer."
+  "Recompute the scheduling-conflict count for the agenda mode line."
   (when (and (boundp 'my-org-base-directory)
              (buffer-live-p (get-buffer org-agenda-buffer-name)))
     (let* ((directory (concat my-org-base-directory "Areas/"))
            (result (ps/conflicts--find-all
                     directory ps/conflicts-gap-minutes ps/conflicts-include-past))
            (n (ps/conflicts--count result)))
-      (when (> n 0)
-        (with-current-buffer (get-buffer org-agenda-buffer-name)
-          (let ((inhibit-read-only t))
-            (save-excursion
-              (goto-char (point-max))
-              (insert (format "\n⚠  %d conflict%s — GTD > Check Conflicts\n"
-                              n (if (= n 1) "" "s"))))))))))
+      (with-current-buffer (get-buffer org-agenda-buffer-name)
+        (setq-local ps/mode-line--agenda-conflict-count n)
+        (force-mode-line-update)))))
 
 (defun ps/conflicts--agenda-schedule-check ()
   "Schedule an idle-time conflict check after the agenda finishes rendering.

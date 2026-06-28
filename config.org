@@ -1419,13 +1419,14 @@ Logic lives in =lisp/ps-blank-lines.el=.
 
 ** F9 — show Tasks
 #+begin_src emacs-lisp
-  ;; Show the Tasks view (all open tasks across the agenda files) and delete
-  ;; other windows, keeping the file tree visible (delete-other-windows would
-  ;; otherwise close it).  Uses `org-todo-list' so the native keyword-selector
-  ;; header is shown (press e.g. `1 r' to switch keyword); filter live with
-  ;; / (tag), = (regexp), < (category), _ (effort).  The mode line, line-number
-  ;; gutter, and emoji-off are applied by `ps/mode-line--agenda-finalize', keyed
-  ;; off the dynamically-bound view name below.
+  ;; Show the Tasks view (all open tasks across the agenda files), keeping the
+  ;; file tree visible (org-todo-list's own window setup would otherwise close
+  ;; it -- only `org-agenda' itself is advised to protect the tree).  Uses
+  ;; `org-todo-list' so the native keyword-selector header is shown (press
+  ;; e.g. `1 r' to switch keyword); filter live with / (tag), = (regexp),
+  ;; < (category), _ (effort).  The mode line, line-number gutter, and
+  ;; emoji-off are applied by `ps/mode-line--agenda-finalize', keyed off the
+  ;; dynamically-bound view name below.
   (defun ps/show-tasks ()
     "Open the Tasks view: all open tasks (`org-todo-list')."
     (interactive)
@@ -1435,7 +1436,6 @@ Logic lives in =lisp/ps-blank-lines.el=.
           (org-super-agenda-groups nil))
       (when open (ps/file-tree-hide))
       (org-todo-list)
-      (delete-other-windows)
       (when open (ps/file-tree-show))))
 
   (global-set-key [f9] 'ps/show-tasks)

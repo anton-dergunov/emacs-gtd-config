@@ -28,8 +28,10 @@ Scans your scheduled events and reports two kinds of trouble: events that
 
 - Open with =C-c p x= (Productivity → Plan & Review → Check Conflicts), or
   =M-x ps/show-conflicts=.
-- A lightweight version of this check also runs automatically in the agenda,
-  flagging overlapping timed events with =⚠ overlap=.
+- A lightweight version of this check also runs automatically in the
+  [[file:Agenda.org][Agenda]], flagging overlapping timed events with =⚠
+  overlap= and showing a total count next to the mode-line title — click it to
+  open this view.
 
 Defaults you can change: the minimum acceptable gap between events, and whether
 to include past events.

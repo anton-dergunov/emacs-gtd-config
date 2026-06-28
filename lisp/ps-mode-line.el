@@ -37,6 +37,7 @@
 (declare-function ps/show-calendar-month "config" ())
 (declare-function ps/show-calendar-year "config" ())
 (declare-function ps/show-tasks "config" ())
+(declare-function ps/show-conflicts "ps-conflicts" ())
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
@@ -196,6 +197,12 @@ Called by `ps/mode-line--update-now' when the cache
 (defvar-local ps/mode-line--agenda-show-position nil
   "When non-nil, the agenda mode line appends point's percentage.")
 
+(defvar-local ps/mode-line--agenda-conflict-count nil
+  "Scheduling-conflict count for this agenda buffer's Agenda view.
+Set by `ps/conflicts--agenda-check' (lisp/ps-conflicts.el); cleared by
+`ps/mode-line--agenda-finalize' on every non-Agenda rebuild so a stale count
+never leaks into the Calendar or Tasks mode line.")
+
 (defconst ps/mode-line--agenda-view-items
   '(("Agenda" . ps/show-agenda)
     ("Calendar: Day" . ps/show-calendar-day)
@@ -215,10 +222,17 @@ tree's file-set selector (see `ps/file-tree--modeline-click').")
          (choice (x-popup-menu event menu)))
     (when choice (call-interactively choice))))
 
+(defun ps/mode-line--agenda-conflicts-click (event)
+  "Open the dedicated Conflicts buffer in response to EVENT."
+  (interactive "e")
+  (call-interactively #'ps/show-conflicts))
+
 (defun ps/mode-line--agenda-render ()
   "Return the agenda mode-line string.
 The title is clickable (mouse-1 switches views), matching the file tree's
-file-set selector."
+file-set selector.  In the Agenda view, a clickable conflict count follows it
+when there are scheduling conflicts — in the mode line's default face, not a
+warning face."
   (let ((title (propertize (concat (or ps/mode-line--agenda-title "Agenda") " ▾")
                            'face 'mode-line-emphasis
                            'mouse-face 'mode-line-highlight
@@ -227,10 +241,23 @@ file-set selector."
                            (let ((map (make-sparse-keymap)))
                              (define-key map [mode-line mouse-1] #'ps/mode-line--agenda-click)
                              map))))
-    (if ps/mode-line--agenda-show-position
-        (concat " " title ps/mode-line-separator
-                (ps/mode-line--escape (ps/mode-line--percent)))
-      (concat " " title))))
+    (cond
+     (ps/mode-line--agenda-show-position
+      (concat " " title ps/mode-line-separator
+              (ps/mode-line--escape (ps/mode-line--percent))))
+     ((and ps/mode-line--agenda-conflict-count
+           (> ps/mode-line--agenda-conflict-count 0))
+      (concat " " title ps/mode-line-separator
+              (propertize (format "⚠ %d conflict%s" ps/mode-line--agenda-conflict-count
+                                  (if (= ps/mode-line--agenda-conflict-count 1) "" "s"))
+                          'mouse-face 'mode-line-highlight
+                          'help-echo "mouse-1: show conflicts"
+                          'local-map
+                          (let ((map (make-sparse-keymap)))
+                            (define-key map [mode-line mouse-1]
+                              #'ps/mode-line--agenda-conflicts-click)
+                            map))))
+     (t (concat " " title)))))
 
 (defun ps/mode-line--span-label (span)
   "Return a human label for an agenda SPAN symbol or day count."
@@ -264,6 +291,10 @@ otherwise it is the Agenda.  Robust regardless of how the build was triggered
                                        org-agenda-current-span))))
                         (t "Agenda")))
       (setq-local ps/mode-line--agenda-show-position tasks)
+      ;; The conflict count is Agenda-only (see `ps/conflicts--agenda-schedule-check');
+      ;; clear it on every other view so a stale count never leaks into Calendar/Tasks.
+      (when (or tasks calendar)
+        (setq-local ps/mode-line--agenda-conflict-count nil))
       ;; Disable the semantic-emoji decoration in the (long) Tasks view.
       (setq-local ps/agenda-emoji-enabled (not tasks))
       ;; Line-number gutter only in Tasks; re-applied so a redo can't drop it.
