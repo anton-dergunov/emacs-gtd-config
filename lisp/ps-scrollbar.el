@@ -481,16 +481,23 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
                 (set-frame-parameter child 'ps/scrollbar-geom geom)
                 (set-frame-size child pill-w thumb-h t)
                 (set-frame-position child fleft ftop))
-              ;; If we were just ducked out of a forwarded wheel event's
-              ;; way, stay invisible for a beat rather than re-showing on
-              ;; every tick: with the cursor still parked over the thumb,
-              ;; the very next wheel event would only duck it again,
-              ;; producing a rapid show/hide flicker instead of a calm,
-              ;; continuously-invisible pill until scrolling pauses.
+              ;; If we were ducked out of a forwarded wheel event's way,
+              ;; stay invisible.  Refresh `ducked-at' each time the
+              ;; suppression fires: once the pill is invisible, subsequent
+              ;; scroll ticks arrive from the *parent* frame (not the pill),
+              ;; so nothing would re-duck and the original timestamp would
+              ;; eventually expire mid-scroll, briefly revealing the pill
+              ;; before the next wheel event hits it and ducks it again --
+              ;; the repeating disappear/reappear cycle the user notices.
+              ;; Refreshing here keeps the suppression alive throughout the
+              ;; scroll.  `--tick-1' clears `ducked-at' when the trigger is
+              ;; hover-only (no scroll this tick), so the pill reappears
+              ;; once scrolling stops and the user is just hovering.
               (if (and ps/scrollbar--ducked-at
                        (< (- (float-time) ps/scrollbar--ducked-at)
                           (* 1.5 ps/scrollbar-tick-interval)))
-                  (setq ps/scrollbar--visible-frame nil)
+                  (setq ps/scrollbar--ducked-at (float-time)
+                        ps/scrollbar--visible-frame nil)
                 (ps/scrollbar--reveal child))
               ;; `ps/scrollbar--ensure-frame' may have just created a fresh
               ;; child frame above (e.g. after the previous one was ducked or
@@ -680,6 +687,15 @@ macOS lets the user move/resize the borderless pill window; we put it back."
           ;; New activity: cancel any in-progress fade so the next render
           ;; restores the full thumb colour (fade-cancel clears last-sig).
           (when ps/scrollbar--fade-start (ps/scrollbar--fade-cancel))
+          ;; If the trigger was hover-only (cursor over the track, but no
+          ;; scroll event this tick), the user has stopped scrolling and
+          ;; is just parked over the strip.  Clear the duck suppression so
+          ;; the pill can reappear -- scrolling was why we hid it, not the
+          ;; hover.  When both scroll and hover fire together we keep the
+          ;; suppression active (the wheel is still coming in).
+          (when (and ps/scrollbar--ducked-at
+                     (not mouse-scrolled) (not sel-scrolled))
+            (setq ps/scrollbar--ducked-at nil))
           (let ((res (ps/scrollbar--render target)))
             (unless (eq res 'skip)
               (setq ps/scrollbar--shown-at now))))

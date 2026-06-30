@@ -207,7 +207,7 @@ Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-
   (setq ps/scrollbar-width             6
         ps/scrollbar-fringe-width     14
         ps/scrollbar-hide-delay       1.0
-        ps/scrollbar-fade-duration    0.5
+        ps/scrollbar-fade-duration    0.25
         ps/scrollbar-show-on-hover    t
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
