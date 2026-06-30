@@ -587,7 +587,14 @@ track): jump to the clicked position."
        (not (ps/scrollbar--own-frame-p (window-frame window)))
        (not (eq (window-buffer window) (get-buffer " *ps-scrollbar*")))
        (not (memq (buffer-local-value 'major-mode (window-buffer window))
-                  ps/scrollbar-exclude-modes))))
+                  ps/scrollbar-exclude-modes))
+       ;; Claude Code (claude-code-ide.el) is an Ink/React TUI that manages
+       ;; scroll history entirely inside its JavaScript process.  eat's
+       ;; window-start never changes (always pmin), so our proportion math
+       ;; returns 'hidden permanently -- no meaningful pill is possible.
+       ;; See design-docs/scroll-bars.md for the full investigation.
+       (not (string-prefix-p "*claude-code["
+                             (buffer-name (window-buffer window))))))
 
 (defun ps/scrollbar--mouse-window ()
   "Return the live window under the mouse, or nil."
