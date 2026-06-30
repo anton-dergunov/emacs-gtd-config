@@ -624,6 +624,19 @@ underneath to act on.
     (dolist (mult '(double triple))
       (global-set-key (vector 'vertical-line (event-convert-list (list mult dir)))
                       #'ps/wheel-strip-multiplicity)))
+
+  ;; Silence echo-area messages triggered by hovering over window-chrome
+  ;; areas: "drag-mouse-1: resize window" (vertical-line divider) and
+  ;; "mouse-1: select window..." (mode-line).  Both come through
+  ;; `show-help-function'; `add-function :before-while' returns nil (blocking
+  ;; the main function) only for those specific strings, letting all other
+  ;; help-echo messages through normally.
+  (add-function :before-while show-help-function
+    (lambda (msg)
+      (or (null msg)
+          (not (string-match-p
+                "\\(drag-mouse-1\\|mouse-1: select window\\)" msg))))
+    '((name . ps/silence-window-chrome-hints)))
 #+end_src
 
 ** Indentation: always use spaces

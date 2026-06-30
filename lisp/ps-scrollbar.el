@@ -778,12 +778,15 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
 
 (defun ps/scrollbar--resize-advice (orig &rest args)
   "Hide the scrollbar pill while a vertical window divider is being dragged.
-Binds `ps/scrollbar--drag-in-progress' to t for the duration so the tick
-loop suppresses rendering even while the drag is in progress.
+Sets `ps/scrollbar--drag-in-progress' globally (not via `let') so that
+idle-timer callbacks -- which run with global dynamic bindings, not inside
+the let's scope -- also see it and suppress rendering for the duration.
 Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (ps/scrollbar--hide-now)
-  (let ((ps/scrollbar--drag-in-progress t))
-    (apply orig args)))
+  (setq ps/scrollbar--drag-in-progress t)
+  (unwind-protect
+      (apply orig args)
+    (setq ps/scrollbar--drag-in-progress nil)))
 
 (defun ps/scrollbar--delete-all-frames ()
   "Delete every cached pill frame."
