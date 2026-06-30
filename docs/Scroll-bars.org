@@ -11,8 +11,9 @@ your colour theme.
 * What it does
 - *Auto-hides.* The indicator is invisible until you need it. A small pill
   appears when you scroll a window, then fades a moment after you stop — like the
-  overlay scroll bars in macOS, VS Code, or Obsidian. (Set
-  =ps/scrollbar-show-on-hover= to also reveal it on mouse hover.)
+  overlay scroll bars in macOS, VS Code, or Obsidian. It also appears when you
+  hover the mouse directly over its own track, so you can find it without
+  scrolling first (set =ps/scrollbar-show-on-hover= to =nil= to turn that off).
 - *Shows your place.* The pill's height reflects how much of the buffer is on
   screen, and its position tracks where you are in the document.
 - *Calm and theme-aware.* It is a soft, muted pill that takes its colour from

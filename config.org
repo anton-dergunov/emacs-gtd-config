@@ -198,13 +198,14 @@ Custom auto-hiding scroll-position indicator (the native macOS bar can't be
 recoloured or made to auto-hide). A theme-coloured pill at the right edge shows
 where you are; it appears when you scroll and fades after =ps/scrollbar-hide-delay=
 seconds. =ps/scrollbar-width= is the pill width and =ps/scrollbar-fringe-width=
-the reserved edge strip. Set =ps/scrollbar-show-on-hover= to =t= to also reveal it
-on mouse hover.
+the reserved edge strip. =ps/scrollbar-show-on-hover= also reveals it while the
+mouse is over its own track (not the whole window) -- on by default, since it is
+how you find the track to interact with.
 #+begin_src emacs-lisp
   (setq ps/scrollbar-width            6
         ps/scrollbar-fringe-width    14
         ps/scrollbar-hide-delay      1.0
-        ps/scrollbar-show-on-hover   nil
+        ps/scrollbar-show-on-hover   t
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 
@@ -532,6 +533,68 @@ package). The two =scroll-= settings are required by ultra-scroll.
     :config
     ;; To turn smooth scrolling off, comment out the next line.
     (ultra-scroll-mode 1))
+#+end_src
+
+Scrolling past the start or end of a buffer normally echoes "Beginning of
+buffer"/"End of buffer" -- silence just that, leaving every other message
+intact. =pixel-scroll-precision= (the active backend here) catches that
+condition internally and calls =message= directly rather than signalling an
+error up to the command loop, so it has to be caught at the =message= level,
+not via =command-error-function= (kept below too, for the ordinary
+keyboard-scroll case where the error does reach the top level).
+#+begin_src emacs-lisp
+  (defun ps/quiet-buffer-bounds-error (data context caller)
+    (unless (memq (car data) '(beginning-of-buffer end-of-buffer))
+      (command-error-default-function data context caller)))
+  (setq command-error-function #'ps/quiet-buffer-bounds-error)
+
+  (define-advice message (:filter-args (args) ps/quiet-buffer-bounds-message)
+    (if (member (car args) '("Beginning of buffer" "End of buffer"))
+        (list nil)
+      args))
+#+end_src
+
+Fast trackpad scrolling synthesizes =double-wheel-up=/=triple-wheel-up= events
+(and the other three directions) the same way rapid clicks become
+=double-mouse-1=; neither =mwheel-scroll= nor =pixel-scroll-precision= bind
+those, so they flash "is undefined" in the echo area even though both already
+ignore the click-multiplicity once actually invoked. Re-dispatch them as their
+plain equivalent instead of leaving them unbound. Separately, a wheel event
+*or click* over pixels that belong to no window at all (the sliver between a
+window's edge and the literal frame border) is reported as the two-event key
+sequence =[nil wheel-up]=/=[nil down-mouse-1]= -- shown as "<nil> <wheel-up>"
+etc. -- which nothing binds; silence those outright since there is no window
+underneath to act on.
+#+begin_src emacs-lisp
+  (defun ps/wheel-strip-multiplicity (event)
+    "Re-dispatch a double/triple wheel EVENT as its plain (single) equivalent."
+    (interactive "e")
+    (let* ((mods (delq 'double (delq 'triple (event-modifiers event))))
+           (basic (event-basic-type event))
+           (type (if mods (event-convert-list (append mods (list basic))) basic))
+           (cmd (key-binding (vector type) t nil (event-start event))))
+      (when (commandp cmd)
+        (let ((last-input-event (cons type (cdr event))))
+          (call-interactively cmd)))))
+
+  (dolist (dir '(wheel-up wheel-down wheel-left wheel-right))
+    (dolist (mult '(double triple))
+      (let ((type (event-convert-list (list mult dir))))
+        (dolist (prefix '(right-fringe left-fringe mode-line header-line
+                           vertical-scroll-bar tool-bar left-margin right-margin))
+          (global-set-key (vector prefix type) #'ps/wheel-strip-multiplicity))))
+    (dolist (mult '(nil double triple))
+      (let ((type (if mult (event-convert-list (list mult dir)) dir)))
+        (global-set-key (vector nil type) #'ignore))))
+
+  ;; Same no-man's-land sliver, but for clicks: =[nil down-mouse-1]= ("<nil>
+  ;; <mouse-1>" in the echo area) falls through to Emacs's default click
+  ;; handling against whatever happens to be in that screen position, which
+  ;; can visibly corrupt unrelated faces elsewhere in the frame for a moment
+  ;; (e.g. org-modern TODO/tag pills rendering outline-only, the mode-line
+  ;; looking inactive) until something else forces a clean redisplay.
+  (dolist (type '(down-mouse-1 mouse-1 drag-mouse-1))
+    (global-set-key (vector nil type) #'ignore))
 #+end_src
 
 ** Indentation: always use spaces
@@ -896,6 +959,16 @@ function cell can't satisfy a runtime function call.
 
     ;; Disable modern bullets
     (setq org-modern-star nil)
+
+    ;; Disable the pill inset border. org-modern resyncs this box's colour to
+    ;; the *selected frame's* background on every redisplay
+    ;; (`org-modern--pre-redisplay'), so a momentary wrong-frame selection
+    ;; (e.g. a transiently focus-stealing floating child frame, such as the
+    ;; scrollbar pill) desyncs it and the box paints as a visible outline
+    ;; around every TODO/tag/priority pill until a later redisplay resyncs
+    ;; it. The border is a purely cosmetic inset; dropping it removes the
+    ;; failure mode entirely rather than chasing the underlying focus glitch.
+    (setq org-modern-label-border nil)
 
     ;; Let `valign' own table rendering (used in the docs reading view); when
     ;; both are active they fight and tables render misaligned.

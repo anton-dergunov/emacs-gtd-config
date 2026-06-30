@@ -3,10 +3,11 @@
 ;;; Commentary:
 ;; A minimal, auto-hiding scroll-position indicator: a small coloured "pill" at
 ;; the right edge of a window that appears while you scroll and fades when idle.
-;; It shows WHERE you are; it is not draggable -- scroll with the
-;; wheel/trackpad/keyboard (smooth via ultra-scroll).  The native scroll bar is
-;; disabled in config.org because the macOS NS toolkit ignores its face (it
-;; can't be themed or auto-hidden).
+;; It is not draggable (macOS would not let this borderless child frame stay
+;; put under a drag, see below) -- instead, click anywhere in the track to
+;; jump there, or scroll with the wheel/trackpad/keyboard (smooth via
+;; ultra-scroll).  The native scroll bar is disabled in config.org because the
+;; macOS NS toolkit ignores its face (it can't be themed or auto-hidden).
 ;;
 ;; The pill is a tiny child frame whose background colour is the thumb, sized to
 ;; the thumb and positioned at its location.  A few hard-won notes about the
@@ -45,6 +46,15 @@
 `window-size-change-functions' handler does not react to it.")
 (defvar ps/scrollbar--saved-right-fringe 'unset
   "Prior `default-frame-alist' right-fringe, restored on disable.")
+(defvar ps/scrollbar--ducked-at nil
+  "`float-time' the pill was last ducked (see `ps/scrollbar--duck'), or nil.")
+
+(defun ps/scrollbar--debug-log (fmt &rest args)
+  "Append a line to *ps-scrollbar-debug*.  Temporary, for diagnosing
+click-to-reposition; remove once that is confirmed solid."
+  (with-current-buffer (get-buffer-create "*ps-scrollbar-debug*")
+    (goto-char (point-max))
+    (insert (apply #'format fmt args) "\n")))
 
 ;;; Customization
 
@@ -66,9 +76,11 @@ scaled display it stays proportional rather than turning into a sliver."
   "Seconds of inactivity before the pill fades."
   :type 'number :group 'ps-scrollbar)
 
-(defcustom ps/scrollbar-show-on-hover nil
-  "When non-nil, also reveal the pill while the mouse is over a window.
-Off by default: the pill appears only when you scroll."
+(defcustom ps/scrollbar-show-on-hover t
+  "When non-nil, also reveal the pill while the mouse is over its track.
+Scoped to the scrollbar's own strip, not the whole window, so the bar does
+not turn into a permanent fixture -- on by default so the strip is visible
+to interact with even when you have not just scrolled."
   :type 'boolean :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-min-thumb-pixels 24
@@ -82,6 +94,12 @@ Off by default: the pill appears only when you scroll."
 (defcustom ps/scrollbar-exclude-modes '(treemacs-mode which-key-mode)
   "Major modes whose windows never get a pill."
   :type '(repeat symbol) :group 'ps-scrollbar)
+
+(defcustom ps/scrollbar-click-to-scroll t
+  "When non-nil, clicking anywhere in the scrollbar track jumps there,
+centering the thumb on the click point.  A quick kill switch in case click
+handling misbehaves in some configuration."
+  :type 'boolean :group 'ps-scrollbar)
 
 (defface ps/scrollbar-thumb
   '((t :inherit shadow))
@@ -103,11 +121,75 @@ MIN-H the minimum pill height."
              (y (max 0 (min (round (* top-frac strip-h)) (- strip-h h)))))
         (cons y h)))))
 
+(defun ps/scrollbar--frac-to-start (pmin pmax size-frac center-frac)
+  "Buffer position whose window-start centers the thumb at CENTER-FRAC of the
+track, given the thumb's SIZE-FRAC (fraction of the buffer visible at once).
+The mathematical inverse of `ps/scrollbar--thumb-span''s forward geometry, so
+clicking the rendered thumb's exact center round-trips to the window's
+current start."
+  (let* ((top-frac (max 0.0 (min (- 1.0 size-frac) (- center-frac (/ size-frac 2.0)))))
+         (total (- pmax pmin)))
+    (+ pmin (round (* top-frac total)))))
+
+(defun ps/scrollbar--in-strip-p (px py rect)
+  "Non-nil if pixel point PX,PY falls within RECT (LEFT TOP RIGHT BOTTOM)."
+  (pcase-let ((`(,l ,top ,r ,b) rect))
+    (and (>= px l) (< px r) (>= py top) (< py b))))
+
+(defun ps/scrollbar--strip-rect-1 (wr br bt pl pt it ib)
+  "Pure geometry behind `ps/scrollbar--strip-rect': a window's scrollbar
+track as (LEFT TOP RIGHT BOTTOM), in pixels relative to its frame's native
+origin.  WR/BR/BT are the window's (basic and body) right/bottom edges and
+PL/PT the parent frame's native origin, all in absolute screen pixels; IT/IB
+are the window's inside (text-area) top/bottom, already frame-relative."
+  (let* ((strip-w (max 2 (- wr br)))
+         (left (- br pl))
+         (top (- bt pt)))
+    (list left top (+ left strip-w) (+ top (- ib it)))))
+
 (defun ps/scrollbar--color ()
   "Resolve the pill colour from `ps/scrollbar-thumb'."
   (or (face-foreground 'ps/scrollbar-thumb nil t) "gray60"))
 
 ;;; Child frame
+
+(defun ps/scrollbar--forward-wheel (event)
+  "Forward a wheel/touch EVENT received by the pill frame to the real window
+beneath it.  The pill is a separate OS-level window, so the system delivers
+scroll input to it instead of the parent when the pointer is over the thumb;
+without this, scrolling appears to do nothing while the cursor is on the pill.
+Rewrites EVENT's window in place and re-dispatches via whatever command is
+actually bound to it in the target window (`mwheel-scroll' or
+`pixel-scroll-precision', without hardcoding either).  Re-injecting EVENT via
+`unread-command-events' instead and letting Emacs's own command loop dispatch
+it was tried and made the real window's mode-line selection state get stuck
+wrong more often, so this drives the scroll directly and pins the selection
+itself instead."
+  (interactive "e")
+  (let ((target (frame-parameter (selected-frame) 'ps/scrollbar-window)))
+    (when (and (window-live-p target) (consp event) (consp (nth 1 event)))
+      ;; Dispatching this command at all means Emacs already selected the
+      ;; pill's own window to look up its local map.  Select TARGET
+      ;; unconditionally and leave it selected -- it is in practice already
+      ;; the window the user is interacting with (the pill never steals
+      ;; OS-level keyboard focus), so this just pins down what would
+      ;; otherwise already be true, rather than relying on a temporary
+      ;; selection (e.g. via `with-selected-window') that reverts to
+      ;; whatever Emacs happened to select first, which is not reliable here.
+      (let ((inhibit-redisplay t))
+        ;; macOS won't move/repaint a child frame while it is itself
+        ;; mid-handling this wheel-event stream, so leaving the pill in place
+        ;; would freeze it under the cursor.  Get it out of the way now; the
+        ;; tick loop redraws it at the (by then non-overlapping) new position
+        ;; once scrolling settles.  `--duck' (not `--hide'/destroy) avoids
+        ;; doing a full native-window create/destroy on every wheel tick.
+        (ps/scrollbar--duck)
+        (setcar (nth 1 event) target)
+        (select-window target)
+        (let* ((cmd (key-binding (vector (event-basic-type event)) t nil (nth 1 event)))
+               (last-input-event event))
+          (when (commandp cmd)
+            (call-interactively cmd)))))))
 
 (defun ps/scrollbar--buffer ()
   "Return the shared pill child-frame buffer, creating it if needed.
@@ -124,6 +206,26 @@ The buffer is empty: the pill is the frame's own background colour."
                     truncate-lines t
                     line-spacing 0
                     show-trailing-whitespace nil)
+        (let ((map (make-sparse-keymap)))
+          (dolist (type '(wheel-up wheel-down wheel-left wheel-right touch-end))
+            (define-key map (vector type) #'ps/scrollbar--forward-wheel))
+          (define-key map [down-mouse-1] #'ps/scrollbar--click-on-pill)
+          ;; The matching release is never consumed by us, since
+          ;; `ps/scrollbar--click-on-pill' reacts to the press and returns
+          ;; immediately rather than running its own `track-mouse' loop like
+          ;; `mouse-drag-region' (the usual `down-mouse-1' binding) does.  By
+          ;; the time it fires, we have already repositioned the window
+          ;; underneath, so it falls through to Emacs's default handling
+          ;; against a now-different context -- and even a sub-pixel jitter
+          ;; between press and release reads as a drag there, silently
+          ;; setting the mark.  Swallow both event shapes explicitly.
+          (define-key map [mouse-1] #'ignore)
+          (define-key map [drag-mouse-1] #'ignore)
+          (use-local-map map)
+          ;; `pixel-scroll-precision-mode-map' is a minor-mode map and outranks
+          ;; a plain local map, so it must be beaten the same way.
+          (setq-local minor-mode-overriding-map-alist
+                      (list (cons 'pixel-scroll-precision-mode map))))
         (current-buffer))))
 
 (defun ps/scrollbar--make-frame (parent)
@@ -205,63 +307,223 @@ Deleting and recreating a fresh frame on the next show is self-healing."
   (setq ps/scrollbar--visible-frame nil
         ps/scrollbar--last-sig nil))
 
+(defun ps/scrollbar--duck ()
+  "Make the visible pill instantly invisible without destroying its frame.
+Used only to get the pill out of the way of an input event it just caught
+\(see `ps/scrollbar--forward-wheel'): destroying and recreating a native
+window on every wheel tick was visibly heavier on this NS build than just
+unmapping the same one, which is what caused the mode-line flicker `--hide'
+produced when called at that frequency.  The next render forces a fresh
+position/colour application and an explicit redisplay, which is relied on to
+avoid the \"visible but not painting\" failure a hidden-then-shown child frame
+can hit here (see `ps/scrollbar--destroy')."
+  (when (and ps/scrollbar--visible-frame
+             (frame-live-p ps/scrollbar--visible-frame))
+    (let ((ps/scrollbar--busy t))
+      (make-frame-invisible ps/scrollbar--visible-frame)))
+  (setq ps/scrollbar--visible-frame nil
+        ps/scrollbar--last-sig nil
+        ps/scrollbar--ducked-at (float-time)))
+
 ;;; Rendering
+
+(defun ps/scrollbar--strip-rect (window)
+  "Return WINDOW's scrollbar track as (LEFT TOP RIGHT BOTTOM), in pixels
+relative to its frame's native origin -- the same coordinate space as
+`mouse-pixel-position' and the pill child frame's own position.  Used both
+to position the pill and, by `ps/scrollbar--strip-hover-window', to test
+whether the mouse is within the track."
+  (let ((parent (window-frame window)))
+    (pcase-let* ((`(,_iL ,it ,_iR ,ib) (window-inside-pixel-edges window))
+                 (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
+                 (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
+                 (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native-edges)))
+      (ps/scrollbar--strip-rect-1 wr br bt pl pt it ib))))
 
 (defun ps/scrollbar--render (window)
   "Show/position the pill for WINDOW.
 Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
 \(content fits) or `rendered'."
   (let ((parent (window-frame window))
-        (wend (window-end window)))           ; no update flag (cheap)
+        (wend (window-end window))             ; no update flag (cheap)
+        ;; Creating/showing our own child frame can silently select it as a
+        ;; side effect of frame creation; nothing else here re-selects
+        ;; afterward, which left whatever window this is called for (often
+        ;; not the one the user is actually looking at, e.g. a hover on a
+        ;; window they're not editing) looking "unfocused" -- dimmed
+        ;; mode-line, outline-only org-modern TODO/tag pills -- for as long
+        ;; as the pill stayed visible.  Always restore the prior selection.
+        (orig-window (selected-window)))
     (if (null wend)
         'skip
-      (pcase-let* ((`(,_iL ,iT ,_iR ,iB) (window-inside-pixel-edges window))
-                   (buf (window-buffer window))
-                   (pmin (with-current-buffer buf (point-min)))
-                   (pmax (with-current-buffer buf (point-max)))
-                   (wstart (window-start window))
-                   (strip-h (- iB iT))
-                   (sig (list window pmax wstart wend iT strip-h
-                              (window-pixel-left window)
-                              (window-pixel-width window))))
-        (if (equal sig ps/scrollbar--last-sig)
-            'same
-          (setq ps/scrollbar--last-sig sig)
-          (let ((span (ps/scrollbar--thumb-span
-                       pmin pmax wstart wend strip-h
-                       ps/scrollbar-min-thumb-pixels)))
-            (if (null span)
-                (progn (ps/scrollbar--hide) 'hidden)
-              (pcase-let* ((`(,thumb-y . ,thumb-h) span)
-                           ;; The pill sits over the window's right fringe.  Its
-                           ;; position is PARENT-RELATIVE, so subtract the parent
-                           ;; frame's native origin (pl/pt).
-                           (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
-                           (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
-                           (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native-edges))
-                           (strip-w (max 2 (- wr br)))
-                           ;; Width as a fraction of the actual fringe width, so
-                           ;; it scales with the display.
-                           (pill-w (min strip-w
-                                        (max 2 (round (* strip-w
-                                                         (/ (float ps/scrollbar-width)
-                                                            (max 1 ps/scrollbar-fringe-width)))))))
-                           (pill-x (max 0 (round (/ (- strip-w pill-w) 2.0))))
-                           (fleft (+ (- br pl) pill-x))
-                           (ftop (+ (- bt pt) thumb-y))
-                           (color (ps/scrollbar--color)))
-                (let* ((ps/scrollbar--busy t)
-                       (child (ps/scrollbar--ensure-frame parent))
-                       (geom (list fleft ftop pill-w thumb-h)))
-                  (unless (equal color (frame-parameter child 'background-color))
-                    (set-frame-parameter child 'background-color color))
-                  (unless (equal geom (frame-parameter child 'ps/scrollbar-geom))
-                    (set-frame-parameter child 'ps/scrollbar-geom geom)
-                    (set-frame-size child pill-w thumb-h t)
-                    (set-frame-position child fleft ftop))
-                  (ps/scrollbar--reveal child)
-                  (redisplay t))
-                'rendered))))))))
+      (unwind-protect
+          (ps/scrollbar--render-1 window parent wend)
+        (unless (eq (selected-window) orig-window)
+          (select-window orig-window 'norecord))))))
+
+(defun ps/scrollbar--render-1 (window parent wend)
+  "Body of `ps/scrollbar--render', factored out so the selection-restoring
+`unwind-protect' there can wrap it cleanly."
+  (pcase-let* ((`(,_iL ,iT ,_iR ,iB) (window-inside-pixel-edges window))
+               (buf (window-buffer window))
+               (pmin (with-current-buffer buf (point-min)))
+               (pmax (with-current-buffer buf (point-max)))
+               (wstart (window-start window))
+               (strip-h (- iB iT))
+               (sig (list window pmax wstart wend iT strip-h
+                          (window-pixel-left window)
+                          (window-pixel-width window))))
+    (ps/scrollbar--debug-log
+     "render-1: window=%S wstart=%s wend=%s sig-same=%S ducked-at=%S visible-frame-live=%S"
+     window wstart wend (equal sig ps/scrollbar--last-sig) ps/scrollbar--ducked-at
+     (and ps/scrollbar--visible-frame (frame-live-p ps/scrollbar--visible-frame)
+          (frame-visible-p ps/scrollbar--visible-frame)))
+    (if (equal sig ps/scrollbar--last-sig)
+        'same
+      (setq ps/scrollbar--last-sig sig)
+      (let ((span (ps/scrollbar--thumb-span
+                   pmin pmax wstart wend strip-h
+                   ps/scrollbar-min-thumb-pixels)))
+        (if (null span)
+            (progn (ps/scrollbar--hide) 'hidden)
+          (pcase-let* ((`(,thumb-y . ,thumb-h) span)
+                       ;; The pill sits over the window's right fringe; its
+                       ;; position is PARENT-RELATIVE, matching the track
+                       ;; rect's own coordinate space.
+                       (`(,strip-l ,strip-t ,strip-r ,_strip-b)
+                        (ps/scrollbar--strip-rect window))
+                       (strip-w (max 2 (- strip-r strip-l)))
+                       ;; Width as a fraction of the actual fringe width, so
+                       ;; it scales with the display.
+                       (pill-w (min strip-w
+                                    (max 2 (round (* strip-w
+                                                     (/ (float ps/scrollbar-width)
+                                                        (max 1 ps/scrollbar-fringe-width)))))))
+                       (pill-x (max 0 (round (/ (- strip-w pill-w) 2.0))))
+                       (fleft (+ strip-l pill-x))
+                       (ftop (+ strip-t thumb-y))
+                       (color (ps/scrollbar--color)))
+            (let* ((ps/scrollbar--busy t)
+                   (child (ps/scrollbar--ensure-frame parent))
+                   (geom (list fleft ftop pill-w thumb-h)))
+              ;; Always refreshed (cheap): which real window the pill
+              ;; currently represents, read by `ps/scrollbar--forward-wheel'.
+              (set-frame-parameter child 'ps/scrollbar-window window)
+              (unless (equal color (frame-parameter child 'background-color))
+                (set-frame-parameter child 'background-color color))
+              (unless (equal geom (frame-parameter child 'ps/scrollbar-geom))
+                (set-frame-parameter child 'ps/scrollbar-geom geom)
+                (set-frame-size child pill-w thumb-h t)
+                (set-frame-position child fleft ftop))
+              ;; If we were just ducked out of a forwarded wheel event's
+              ;; way, stay invisible for a beat rather than re-showing on
+              ;; every tick: with the cursor still parked over the thumb,
+              ;; the very next wheel event would only duck it again,
+              ;; producing a rapid show/hide flicker instead of a calm,
+              ;; continuously-invisible pill until scrolling pauses.
+              (if (and ps/scrollbar--ducked-at
+                       (< (- (float-time) ps/scrollbar--ducked-at)
+                          (* 1.5 ps/scrollbar-tick-interval)))
+                  (progn
+                    (ps/scrollbar--debug-log "render-1: suppressing reveal (recently ducked)")
+                    (setq ps/scrollbar--visible-frame nil))
+                (ps/scrollbar--debug-log "render-1: revealing child=%S" child)
+                (ps/scrollbar--reveal child))
+              ;; `ps/scrollbar--ensure-frame' may have just created a fresh
+              ;; child frame above (e.g. after the previous one was ducked or
+              ;; destroyed), which can itself select that frame as a side
+              ;; effect of `make-frame'.  The caller's `unwind-protect' only
+              ;; restores the right selection once this function returns,
+              ;; which is too late for THIS explicit redisplay -- force it
+              ;; back before forcing the paint, or this one paints with the
+              ;; wrong window selected (dimmed mode-line, outline-only
+              ;; org-modern pills elsewhere in the parent's buffer).
+              (unless (eq (selected-window) window)
+                (select-window window 'norecord))
+              (redisplay t))
+            'rendered))))))
+
+(defun ps/scrollbar--reposition (window click-y)
+  "Scroll WINDOW so its thumb centers on CLICK-Y (pixels, relative to the top
+of WINDOW's own scrollbar track -- see `ps/scrollbar--strip-rect')."
+  (when (window-live-p window)
+    (pcase-let* ((`(,_iL ,it ,_iR ,ib) (window-inside-pixel-edges window))
+                 (strip-h (- ib it))
+                 (buf (window-buffer window))
+                 (pmin (with-current-buffer buf (point-min)))
+                 (pmax (with-current-buffer buf (point-max)))
+                 (wstart (window-start window))
+                 (wend (or (window-end window t) pmax))
+                 (total (- pmax pmin)))
+      (when (and (> total 0) (> strip-h 0))
+        (let* ((size-frac (/ (float (- wend wstart)) total))
+               (center-frac (/ (float click-y) strip-h))
+               ;; `--frac-to-start' is a linear interpolation over character
+               ;; count, with no reason to land on a line boundary; starting
+               ;; display mid-line shows only that line's tail and skips its
+               ;; line-number, until a later redisplay snaps it back -- so
+               ;; snap it ourselves first.
+               (target (with-current-buffer buf
+                         (save-excursion
+                           (goto-char (ps/scrollbar--frac-to-start
+                                       pmin pmax size-frac center-frac))
+                           (line-beginning-position)))))
+          ;; Move point along with the view: with the default NOFORCE=nil,
+          ;; `set-window-start' still gets silently overridden by the next
+          ;; redisplay whenever point would end up off-screen at the
+          ;; requested start -- which it almost always would be for a
+          ;; jump-to-click, since point is still wherever it was before the
+          ;; click -- so point has to move into the new view too.
+          (set-window-point window target)
+          (set-window-start window target)
+          ;; Force an immediate re-render so the pill snaps to the new
+          ;; position now, rather than waiting for the next tick.
+          (setq ps/scrollbar--last-sig nil)
+          (when (display-graphic-p (window-frame window))
+            (ps/scrollbar--render window)))))))
+
+(defun ps/scrollbar--click-on-pill (event)
+  "Handle a click on the pill frame itself by re-dispatching an equivalent
+click against the parent frame's bare fringe (`ps/scrollbar--click-on-fringe',
+via `unread-command-events'), rather than handling it here directly.  Driving
+the reposition from inside the pill's own event dispatch -- even with the
+real window explicitly selected throughout -- still left a transient
+mis-rendering elsewhere in the parent (dimmed mode-line, outline-only
+org-modern TODO/tag pills) that survived every selection fix tried; routing
+through the fringe-click path, which is not subject to Emacs selecting a
+*separate frame* to look up a local keymap in the first place, avoids the
+mechanism rather than chasing its side effects.  No need to duck the pill
+first: the re-dispatched click's position is synthesized to name the real
+window directly (not resolved from the click's physical screen pixel), and
+the reposition this triggers re-renders -- and so repositions -- this same
+pill frame momentarily afterward anyway."
+  (interactive "e")
+  (when ps/scrollbar-click-to-scroll
+    (let* ((frame (selected-frame))
+           (window (frame-parameter frame 'ps/scrollbar-window))
+           (geom (frame-parameter frame 'ps/scrollbar-geom)))
+      (when (and (window-live-p window) geom)
+        (pcase-let* ((`(,_fleft ,ftop ,_pill-w ,_thumb-h) geom)
+                     (local-y (cdr (posn-x-y (event-start event))))
+                     (`(,_l ,strip-t ,_r ,_b) (ps/scrollbar--strip-rect window))
+                     (click-y (+ (- ftop strip-t) local-y))
+                     (posn (list window 'right-fringe (cons 0 click-y) (float-time))))
+          (ps/scrollbar--debug-log "click-on-pill: window=%S click-y=%s re-injecting" window click-y)
+          (push (list 'down-mouse-1 posn) unread-command-events))))))
+
+(defun ps/scrollbar--click-on-fringe (event)
+  "Handle a click on the parent frame's bare scrollbar fringe (the common
+case, since the pill only covers the thumb's current pixels, not the whole
+track): jump to the clicked position."
+  (interactive "e")
+  (when ps/scrollbar-click-to-scroll
+    (let* ((posn (event-start event))
+           (window (posn-window posn)))
+      (ps/scrollbar--debug-log
+       "click-on-fringe: selected-window-before=%S window=%S candidate=%S"
+       (selected-window) window (and window (ps/scrollbar--candidate-window-p window)))
+      (when (and (window-live-p window) (ps/scrollbar--candidate-window-p window))
+        (ps/scrollbar--reposition window (cdr (posn-x-y posn)))))))
 
 ;;; Lifecycle / detection
 
@@ -280,6 +542,28 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
          (frame (car mp)) (x (cadr mp)) (y (cddr mp)))
     (and (frame-live-p frame) (numberp x) (numberp y)
          (window-at x y frame))))
+
+(defun ps/scrollbar--strip-hover-window ()
+  "Return the window whose scrollbar track the mouse is currently within, or
+nil.  Pixel-precise (`mouse-pixel-position'), unlike the coarse char-cell
+`ps/scrollbar--mouse-window' used for scroll detection -- the track is often
+narrower than one character cell, so a char-cell test would be too coarse."
+  (pcase-let ((`(,frame ,x . ,y) (mouse-pixel-position)))
+    (cond
+     ((not (frame-live-p frame)) nil)
+     ;; Hovering the pill itself: it only ever covers track pixels, and we
+     ;; already cached which window it represents.
+     ((ps/scrollbar--own-frame-p frame)
+      (frame-parameter frame 'ps/scrollbar-window))
+     ((not (and (integerp x) (integerp y))) nil)
+     (t
+      (let ((win (ignore-errors
+                   (window-at (/ x (frame-char-width frame))
+                              (/ y (frame-char-height frame))
+                              frame))))
+        (when (and win (ps/scrollbar--in-strip-p
+                         x y (ps/scrollbar--strip-rect win)))
+          win))))))
 
 (defun ps/scrollbar--scrolled-window (w)
   "Non-nil if W's `window-start' changed since the last tick (updates it)."
@@ -319,15 +603,19 @@ macOS lets the user move/resize the borderless pill window; we put it back."
          (mouse-scrolled (and mouse-win (ps/scrollbar--scrolled-window mouse-win)))
          (sel-scrolled (and (not (eq sel mouse-win))
                             (ps/scrollbar--scrolled-window sel)))
-         (hovered (and ps/scrollbar-show-on-hover mouse-win))
+         ;; Pixel-precise and scoped to the track itself, not the whole
+         ;; window; only computed when hover-reveal is on, so the common
+         ;; scroll-only path pays no extra cost.
+         (hovered (and ps/scrollbar-show-on-hover
+                       (ps/scrollbar--strip-hover-window)))
          target)
     (cond
      ((and mouse-scrolled (ps/scrollbar--candidate-window-p mouse-win))
       (setq target mouse-win))
      ((and sel-scrolled (ps/scrollbar--candidate-window-p sel))
       (setq target sel))
-     ((and hovered (ps/scrollbar--candidate-window-p mouse-win))
-      (setq target mouse-win)))
+     ((and hovered (ps/scrollbar--candidate-window-p hovered))
+      (setq target hovered)))
     (if (and target (display-graphic-p (window-frame target)))
         (let ((res (ps/scrollbar--render target)))
           (unless (eq res 'skip)
@@ -399,11 +687,22 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
   (setq ps/scrollbar--visible-frame nil
         ps/scrollbar--last-sig nil))
 
+(defvar ps/scrollbar-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;; The common click case: the parent frame's bare fringe (the pill only
+    ;; covers the thumb's current pixels, not the whole track).  A click that
+    ;; lands on the pill itself instead is handled by its own buffer-local map
+    ;; (see `ps/scrollbar--buffer'), since that is a different frame.
+    (define-key map [right-fringe down-mouse-1] #'ps/scrollbar--click-on-fringe)
+    map)
+  "Keymap for `ps/scrollbar-mode'.")
+
 ;;;###autoload
 (define-minor-mode ps/scrollbar-mode
   "Global minor mode: an auto-hiding scroll-position indicator pill."
   :global t
   :group 'ps-scrollbar
+  :keymap ps/scrollbar-mode-map
   (if ps/scrollbar-mode
       (ps/scrollbar--enable)
     (ps/scrollbar--disable)))

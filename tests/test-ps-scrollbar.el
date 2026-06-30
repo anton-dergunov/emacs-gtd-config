@@ -41,6 +41,47 @@
   (should-not (ps/scrollbar--thumb-span 1 1 1 1 400 24))     ; empty buffer
   (should-not (ps/scrollbar--thumb-span 1 1000 1 500 0 24))) ; zero track
 
+;;; Click-to-reposition geometry (inverse of thumb-span)
+
+(ert-deftest ps/scrollbar--frac-to-start-round-trips-thumb-span ()
+  "Clicking the rendered thumb's exact center reproduces the current start."
+  (let* ((span (ps/scrollbar--thumb-span 1 1001 251 501 400 24))
+         (size-frac 0.25)
+         (center-frac (/ (+ (car span) (/ (cdr span) 2.0)) 400.0)))
+    (should (= (ps/scrollbar--frac-to-start 1 1001 size-frac center-frac) 251))))
+
+(ert-deftest ps/scrollbar--frac-to-start-top-clamped ()
+  "Clicking above the track never asks for a start before PMIN."
+  (should (= (ps/scrollbar--frac-to-start 1 1001 0.25 0.0) 1)))
+
+(ert-deftest ps/scrollbar--frac-to-start-bottom-clamped ()
+  "Clicking below the track never pushes the thumb past the bottom."
+  (should (= (ps/scrollbar--frac-to-start 1 1001 0.25 1.0) 751)))
+
+;;; Track rect / hover hit-test (pixels)
+
+(ert-deftest ps/scrollbar--strip-rect-1-basic ()
+  "Track rect is window-right-edge-relative-to-parent, fringe-width wide."
+  ;; Window's right (basic) edge at absolute x=814, body edge at x=800 (a
+  ;; 14px fringe); parent frame's native origin at (100, 50); inside text
+  ;; area spans y=70..470 (frame-relative).
+  (should (equal (ps/scrollbar--strip-rect-1 814 800 120 100 50 70 470)
+                 (list 700 70 714 470))))
+
+(ert-deftest ps/scrollbar--strip-rect-1-min-width ()
+  "Track is at least 2px wide even if WR and BR coincide."
+  (let ((rect (ps/scrollbar--strip-rect-1 800 800 100 0 0 0 100)))
+    (should (= (- (nth 2 rect) (nth 0 rect)) 2))))
+
+(ert-deftest ps/scrollbar--in-strip-p-inside-and-outside ()
+  (let ((rect '(700 70 714 470)))
+    (should (ps/scrollbar--in-strip-p 705 200 rect))
+    (should (ps/scrollbar--in-strip-p 700 70 rect))       ; inclusive corner
+    (should-not (ps/scrollbar--in-strip-p 714 200 rect))  ; exclusive right
+    (should-not (ps/scrollbar--in-strip-p 705 470 rect))  ; exclusive bottom
+    (should-not (ps/scrollbar--in-strip-p 699 200 rect))
+    (should-not (ps/scrollbar--in-strip-p 705 69 rect))))
+
 ;;; API / face
 
 (ert-deftest ps/scrollbar--api-defined ()
@@ -56,6 +97,11 @@
   "Terminal majors (e.g. the Claude Code window) keep their pill."
   (should-not (memq 'eat-mode ps/scrollbar-exclude-modes))
   (should-not (memq 'term-mode ps/scrollbar-exclude-modes)))
+
+(ert-deftest ps/scrollbar--mode-map-binds-fringe-click ()
+  (should (keymapp ps/scrollbar-mode-map))
+  (should (eq (lookup-key ps/scrollbar-mode-map [right-fringe down-mouse-1])
+              #'ps/scrollbar--click-on-fringe)))
 
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here
