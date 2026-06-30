@@ -86,8 +86,12 @@ to interact with even when you have not just scrolled."
   "Minimum pill height in pixels."
   :type 'integer :group 'ps-scrollbar)
 
-(defcustom ps/scrollbar-tick-interval 0.12
-  "Seconds between refresh ticks (scroll/hover detection, snap-back)."
+(defcustom ps/scrollbar-tick-interval 0.05
+  "Seconds between refresh ticks (scroll/hover detection, snap-back).
+The pill's position only updates on a tick, so this is the upper bound on
+the lag between scrolling and the thumb visually catching up. Lower is
+snappier; each tick is cheap when nothing changed, so this can go fairly
+low without a real cost."
   :type 'number :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-exclude-modes '(treemacs-mode which-key-mode)
@@ -100,7 +104,7 @@ centering the thumb on the click point.  A quick kill switch in case click
 handling misbehaves in some configuration."
   :type 'boolean :group 'ps-scrollbar)
 
-(defcustom ps/scrollbar-fade-duration 0.5
+(defcustom ps/scrollbar-fade-duration 0.25
   "Seconds over which the pill fades out after `ps/scrollbar-hide-delay'.
 Set to 0 for the old abrupt-hide behaviour."
   :type 'number :group 'ps-scrollbar)

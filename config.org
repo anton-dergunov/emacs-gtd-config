@@ -203,12 +203,15 @@ an abrupt hide instead). =ps/scrollbar-width= is the pill width and
 also reveals it while the mouse is over its own track (not the whole window) --
 on by default, since it is how you find the track to interact with.
 Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-scroll= nil.
+=ps/scrollbar-tick-interval= bounds how stale the thumb's position can look while
+scrolling -- lower is snappier.
 #+begin_src emacs-lisp
   (setq ps/scrollbar-width             6
         ps/scrollbar-fringe-width     14
         ps/scrollbar-hide-delay       1.0
         ps/scrollbar-fade-duration    0.25
         ps/scrollbar-show-on-hover    t
+        ps/scrollbar-tick-interval    0.05
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 
