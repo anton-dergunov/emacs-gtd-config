@@ -132,14 +132,15 @@ Claude Code session buffers are excluded by name (not by mode) -- see
   (should (eq (lookup-key ps/scrollbar-mode-map [right-fringe down-mouse-1])
               #'ps/scrollbar--click-on-fringe)))
 
-(ert-deftest ps/scrollbar--mode-map-binds-vertical-line-click ()
-  "Vertical-line click/release bindings redirect misclassified fringe clicks."
-  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line down-mouse-1])
-              #'ps/scrollbar--click-on-vertical-line))
-  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line mouse-1])
-              #'ignore))
-  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line drag-mouse-1])
-              #'ignore)))
+(ert-deftest ps/scrollbar--mode-map-no-vertical-line-click ()
+  "The mode-map must NOT bind [vertical-line down-mouse-1] to a command.
+Calling a track-mouse-based drag command (mouse-drag-vertical-line) from
+a nested handler does not initialise the drag state correctly, so the
+fallback cannot work and the binding would break window resize."
+  ;; lookup-key returns an integer if the prefix is partially found in a
+  ;; parent map, or nil if absent entirely; neither is a command.
+  (should-not (commandp
+               (lookup-key ps/scrollbar-mode-map [vertical-line down-mouse-1]))))
 
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here
