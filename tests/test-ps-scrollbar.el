@@ -82,12 +82,39 @@
     (should-not (ps/scrollbar--in-strip-p 699 200 rect))
     (should-not (ps/scrollbar--in-strip-p 705 69 rect))))
 
+;;; Fade colour interpolation
+
+(ert-deftest ps/scrollbar--lerp-color-endpoints ()
+  "At frac 0 and 1 the result matches from and to exactly."
+  (let ((from "#3c3c3c") (to "#ffffff"))
+    ;; frac=0 → from color; allow ±1 in each channel for rounding
+    (should (string-match-p "^#" (ps/scrollbar--lerp-color from to 0.0)))
+    (should (equal (ps/scrollbar--lerp-color from to 0.0) from))
+    (should (equal (ps/scrollbar--lerp-color from to 1.0) to))))
+
+(ert-deftest ps/scrollbar--lerp-color-midpoint ()
+  "At frac 0.5 the channels are midway (±1 for rounding)."
+  (let* ((mid (ps/scrollbar--lerp-color "#000000" "#ffffff" 0.5))
+         (rgb (ps/scrollbar--hex-to-rgb mid)))
+    ;; Each channel should be near 0.5
+    (should (> (nth 0 rgb) 0.49))
+    (should (< (nth 0 rgb) 0.51))))
+
+(ert-deftest ps/scrollbar--lerp-color-clamped ()
+  "FRAC is clamped to [0,1]: out-of-range FRAC clips to the endpoint."
+  (let ((from "#3c3c3c") (to "#ffffff"))
+    (should (equal (ps/scrollbar--lerp-color from to -0.5) from))
+    (should (equal (ps/scrollbar--lerp-color from to  2.0) to))))
+
 ;;; API / face
 
 (ert-deftest ps/scrollbar--api-defined ()
   (should (fboundp 'ps/scrollbar-mode))
   (should (commandp 'ps/scrollbar-mode))
-  (should (fboundp 'ps/scrollbar--snap-back)))
+  (should (fboundp 'ps/scrollbar--snap-back))
+  (should (fboundp 'ps/scrollbar--hide-now))
+  (should (fboundp 'ps/scrollbar--hide))
+  (should (fboundp 'ps/scrollbar--lerp-color)))
 
 (ert-deftest ps/scrollbar--face-and-color ()
   (should (facep 'ps/scrollbar-thumb))

@@ -48,13 +48,12 @@
   "Prior `default-frame-alist' right-fringe, restored on disable.")
 (defvar ps/scrollbar--ducked-at nil
   "`float-time' the pill was last ducked (see `ps/scrollbar--duck'), or nil.")
-
-(defun ps/scrollbar--debug-log (fmt &rest args)
-  "Append a line to *ps-scrollbar-debug*.  Temporary, for diagnosing
-click-to-reposition; remove once that is confirmed solid."
-  (with-current-buffer (get-buffer-create "*ps-scrollbar-debug*")
-    (goto-char (point-max))
-    (insert (apply #'format fmt args) "\n")))
+(defvar ps/scrollbar--fade-start nil
+  "`float-time' when the current fade began, or nil (not fading).")
+(defvar ps/scrollbar--fade-from nil
+  "Starting color (hex string) of the current fade.")
+(defvar ps/scrollbar--fade-to nil
+  "Target color (hex string) of the current fade (parent's background).")
 
 ;;; Customization
 
@@ -100,6 +99,11 @@ to interact with even when you have not just scrolled."
 centering the thumb on the click point.  A quick kill switch in case click
 handling misbehaves in some configuration."
   :type 'boolean :group 'ps-scrollbar)
+
+(defcustom ps/scrollbar-fade-duration 0.5
+  "Seconds over which the pill fades out after `ps/scrollbar-hide-delay'.
+Set to 0 for the old abrupt-hide behaviour."
+  :type 'number :group 'ps-scrollbar)
 
 (defface ps/scrollbar-thumb
   '((t :inherit shadow))
@@ -150,6 +154,33 @@ are the window's inside (text-area) top/bottom, already frame-relative."
 (defun ps/scrollbar--color ()
   "Resolve the pill colour from `ps/scrollbar-thumb'."
   (or (face-foreground 'ps/scrollbar-thumb nil t) "gray60"))
+
+(defun ps/scrollbar--hex-to-rgb (color)
+  "Parse a #rrggbb COLOR string to a (r g b) list of [0,1] floats.
+Returns nil if COLOR is not a well-formed 6-digit hex color string.
+Does not call `x-color-values' so it works correctly in batch mode."
+  (when (and (stringp color)
+             (string-match
+              "^#\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)$"
+              color))
+    (list (/ (string-to-number (match-string 1 color) 16) 255.0)
+          (/ (string-to-number (match-string 2 color) 16) 255.0)
+          (/ (string-to-number (match-string 3 color) 16) 255.0))))
+
+(defun ps/scrollbar--lerp-color (from to frac)
+  "Linearly interpolate between #rrggbb hex colors FROM and TO at FRAC (0.0–1.0).
+FRAC is clamped to [0,1].  Returns a #rrggbb hex string.
+Parses hex directly, without `x-color-values', so it works in batch mode."
+  (let* ((f (or (ps/scrollbar--hex-to-rgb from) '(0.0 0.0 0.0)))
+         (t- (or (ps/scrollbar--hex-to-rgb to)  '(1.0 1.0 1.0)))
+         (frac (max 0.0 (min 1.0 frac)))
+         (r (+ (nth 0 f) (* frac (- (nth 0 t-) (nth 0 f)))))
+         (g (+ (nth 1 f) (* frac (- (nth 1 t-) (nth 1 f)))))
+         (b (+ (nth 2 f) (* frac (- (nth 2 t-) (nth 2 f))))))
+    (format "#%02x%02x%02x"
+            (max 0 (min 255 (round (* r 255))))
+            (max 0 (min 255 (round (* g 255))))
+            (max 0 (min 255 (round (* b 255)))))))
 
 ;;; Child frame
 
@@ -299,13 +330,52 @@ Deleting and recreating a fresh frame on the next show is self-healing."
   (unless (frame-visible-p child)
     (make-frame-visible child)))
 
-(defun ps/scrollbar--hide ()
-  "Hide the pill by destroying its frame (recreated on the next show)."
+(defun ps/scrollbar--fade-cancel ()
+  "Cancel an in-progress fade.
+Clears the fade state and invalidates the last render signature so the
+next render always does a full pass (restoring the full thumb colour)."
+  (setq ps/scrollbar--fade-start nil
+        ps/scrollbar--fade-from nil
+        ps/scrollbar--fade-to nil
+        ps/scrollbar--last-sig nil))
+
+(defun ps/scrollbar--hide-now ()
+  "Instantly hide the pill by destroying its frame.
+Used when the pill must vanish immediately: window resize, mode disable,
+content fits in view, or fade completion.  Normal idle hide uses
+`ps/scrollbar--hide' instead (which fades first)."
+  (ps/scrollbar--fade-cancel)
   (when (and ps/scrollbar--visible-frame
              (frame-live-p ps/scrollbar--visible-frame))
     (ps/scrollbar--destroy ps/scrollbar--visible-frame))
   (setq ps/scrollbar--visible-frame nil
         ps/scrollbar--last-sig nil))
+
+(defun ps/scrollbar--hide ()
+  "Begin fading the pill out (or hide it instantly if fade is disabled).
+Does nothing if a fade is already in progress."
+  (cond
+   ;; No frame to fade, or fade disabled: instant hide.
+   ((or (zerop ps/scrollbar-fade-duration)
+        (null ps/scrollbar--visible-frame)
+        (not (frame-live-p ps/scrollbar--visible-frame)))
+    (ps/scrollbar--hide-now))
+   ;; Already fading: let the existing fade run.
+   (ps/scrollbar--fade-start nil)
+   ;; Start a new fade.
+   (t
+    (let* ((child ps/scrollbar--visible-frame)
+           (from (or (frame-parameter child 'background-color)
+                     (ps/scrollbar--color)))
+           (parent (frame-parent child))
+           (to (if (and parent (frame-live-p parent))
+                   (or (frame-parameter parent 'background-color)
+                       (face-background 'default nil t)
+                       "white")
+                 "white")))
+      (setq ps/scrollbar--fade-start (float-time)
+            ps/scrollbar--fade-from from
+            ps/scrollbar--fade-to to)))))
 
 (defun ps/scrollbar--duck ()
   "Make the visible pill instantly invisible without destroying its frame.
@@ -323,7 +393,8 @@ can hit here (see `ps/scrollbar--destroy')."
       (make-frame-invisible ps/scrollbar--visible-frame)))
   (setq ps/scrollbar--visible-frame nil
         ps/scrollbar--last-sig nil
-        ps/scrollbar--ducked-at (float-time)))
+        ps/scrollbar--ducked-at (float-time))
+  (ps/scrollbar--fade-cancel))
 
 ;;; Rendering
 
@@ -373,11 +444,6 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
                (sig (list window pmax wstart wend iT strip-h
                           (window-pixel-left window)
                           (window-pixel-width window))))
-    (ps/scrollbar--debug-log
-     "render-1: window=%S wstart=%s wend=%s sig-same=%S ducked-at=%S visible-frame-live=%S"
-     window wstart wend (equal sig ps/scrollbar--last-sig) ps/scrollbar--ducked-at
-     (and ps/scrollbar--visible-frame (frame-live-p ps/scrollbar--visible-frame)
-          (frame-visible-p ps/scrollbar--visible-frame)))
     (if (equal sig ps/scrollbar--last-sig)
         'same
       (setq ps/scrollbar--last-sig sig)
@@ -385,7 +451,7 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
                    pmin pmax wstart wend strip-h
                    ps/scrollbar-min-thumb-pixels)))
         (if (null span)
-            (progn (ps/scrollbar--hide) 'hidden)
+            (progn (ps/scrollbar--hide-now) 'hidden)
           (pcase-let* ((`(,thumb-y . ,thumb-h) span)
                        ;; The pill sits over the window's right fringe; its
                        ;; position is PARENT-RELATIVE, matching the track
@@ -424,10 +490,7 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
               (if (and ps/scrollbar--ducked-at
                        (< (- (float-time) ps/scrollbar--ducked-at)
                           (* 1.5 ps/scrollbar-tick-interval)))
-                  (progn
-                    (ps/scrollbar--debug-log "render-1: suppressing reveal (recently ducked)")
-                    (setq ps/scrollbar--visible-frame nil))
-                (ps/scrollbar--debug-log "render-1: revealing child=%S" child)
+                  (setq ps/scrollbar--visible-frame nil)
                 (ps/scrollbar--reveal child))
               ;; `ps/scrollbar--ensure-frame' may have just created a fresh
               ;; child frame above (e.g. after the previous one was ducked or
@@ -508,7 +571,6 @@ pill frame momentarily afterward anyway."
                      (`(,_l ,strip-t ,_r ,_b) (ps/scrollbar--strip-rect window))
                      (click-y (+ (- ftop strip-t) local-y))
                      (posn (list window 'right-fringe (cons 0 click-y) (float-time))))
-          (ps/scrollbar--debug-log "click-on-pill: window=%S click-y=%s re-injecting" window click-y)
           (push (list 'down-mouse-1 posn) unread-command-events))))))
 
 (defun ps/scrollbar--click-on-fringe (event)
@@ -519,9 +581,6 @@ track): jump to the clicked position."
   (when ps/scrollbar-click-to-scroll
     (let* ((posn (event-start event))
            (window (posn-window posn)))
-      (ps/scrollbar--debug-log
-       "click-on-fringe: selected-window-before=%S window=%S candidate=%S"
-       (selected-window) window (and window (ps/scrollbar--candidate-window-p window)))
       (when (and (window-live-p window) (ps/scrollbar--candidate-window-p window))
         (ps/scrollbar--reposition window (cdr (posn-x-y posn)))))))
 
@@ -617,15 +676,34 @@ macOS lets the user move/resize the borderless pill window; we put it back."
      ((and hovered (ps/scrollbar--candidate-window-p hovered))
       (setq target hovered)))
     (if (and target (display-graphic-p (window-frame target)))
-        (let ((res (ps/scrollbar--render target)))
-          (unless (eq res 'skip)
-            (setq ps/scrollbar--shown-at now)))
-      ;; No activity: fade when idle, otherwise snap an accidental nudge back.
-      (if (and ps/scrollbar--visible-frame
-               ps/scrollbar--shown-at
-               (> (- now ps/scrollbar--shown-at) ps/scrollbar-hide-delay))
-          (ps/scrollbar--hide)
-        (ps/scrollbar--snap-back)))))
+        (progn
+          ;; New activity: cancel any in-progress fade so the next render
+          ;; restores the full thumb colour (fade-cancel clears last-sig).
+          (when ps/scrollbar--fade-start (ps/scrollbar--fade-cancel))
+          (let ((res (ps/scrollbar--render target)))
+            (unless (eq res 'skip)
+              (setq ps/scrollbar--shown-at now))))
+      ;; No activity.
+      (cond
+       ;; Fade in progress: advance one step.
+       (ps/scrollbar--fade-start
+        (let* ((elapsed (- now ps/scrollbar--fade-start))
+               (frac (min 1.0 (/ elapsed (max 0.001 ps/scrollbar-fade-duration))))
+               (f ps/scrollbar--visible-frame))
+          (if (or (>= frac 1.0) (null f) (not (frame-live-p f)))
+              (ps/scrollbar--hide-now)
+            (let ((color (ps/scrollbar--lerp-color
+                          ps/scrollbar--fade-from ps/scrollbar--fade-to frac)))
+              (let ((ps/scrollbar--busy t))
+                (set-frame-parameter f 'background-color color))))))
+       ;; Idle long enough: begin the fade.
+       ((and ps/scrollbar--visible-frame
+             ps/scrollbar--shown-at
+             (> (- now ps/scrollbar--shown-at) ps/scrollbar-hide-delay))
+        (ps/scrollbar--hide))
+       ;; Nothing else to do: just keep the pill snapped to its position.
+       (t
+        (ps/scrollbar--snap-back))))))
 
 (defun ps/scrollbar--on-size-change (frame)
   "Hide the pill only when a real (non-pill) FRAME's pixel size changes.
@@ -637,7 +715,7 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
           (prev (frame-parameter frame 'ps/scrollbar--last-size)))
       (unless (equal size prev)
         (set-frame-parameter frame 'ps/scrollbar--last-size size)
-        (when prev (ps/scrollbar--hide))))))
+        (when prev (ps/scrollbar--hide-now))))))
 
 ;;; Enable / disable
 
@@ -685,7 +763,8 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
      (list (cons 'right-fringe ps/scrollbar--saved-right-fringe)))
     (setq ps/scrollbar--saved-right-fringe 'unset))
   (setq ps/scrollbar--visible-frame nil
-        ps/scrollbar--last-sig nil))
+        ps/scrollbar--last-sig nil)
+  (ps/scrollbar--fade-cancel))
 
 (defvar ps/scrollbar-mode-map
   (let ((map (make-sparse-keymap)))

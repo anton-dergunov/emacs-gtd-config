@@ -196,16 +196,19 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
 ** Scroll bars (ps-scrollbar.el)
 Custom auto-hiding scroll-position indicator (the native macOS bar can't be
 recoloured or made to auto-hide). A theme-coloured pill at the right edge shows
-where you are; it appears when you scroll and fades after =ps/scrollbar-hide-delay=
-seconds. =ps/scrollbar-width= is the pill width and =ps/scrollbar-fringe-width=
-the reserved edge strip. =ps/scrollbar-show-on-hover= also reveals it while the
-mouse is over its own track (not the whole window) -- on by default, since it is
-how you find the track to interact with.
+where you are; it appears when you scroll, idles for =ps/scrollbar-hide-delay=
+seconds, then fades out over =ps/scrollbar-fade-duration= seconds (set to 0 for
+an abrupt hide instead). =ps/scrollbar-width= is the pill width and
+=ps/scrollbar-fringe-width= the reserved edge strip. =ps/scrollbar-show-on-hover=
+also reveals it while the mouse is over its own track (not the whole window) --
+on by default, since it is how you find the track to interact with.
+Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-scroll= nil.
 #+begin_src emacs-lisp
-  (setq ps/scrollbar-width            6
-        ps/scrollbar-fringe-width    14
-        ps/scrollbar-hide-delay      1.0
-        ps/scrollbar-show-on-hover   t
+  (setq ps/scrollbar-width             6
+        ps/scrollbar-fringe-width     14
+        ps/scrollbar-hide-delay       1.0
+        ps/scrollbar-fade-duration    0.5
+        ps/scrollbar-show-on-hover    t
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 
