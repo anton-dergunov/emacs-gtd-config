@@ -132,5 +132,14 @@ Claude Code session buffers are excluded by name (not by mode) -- see
   (should (eq (lookup-key ps/scrollbar-mode-map [right-fringe down-mouse-1])
               #'ps/scrollbar--click-on-fringe)))
 
+(ert-deftest ps/scrollbar--mode-map-binds-vertical-line-click ()
+  "Vertical-line click/release bindings redirect misclassified fringe clicks."
+  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line down-mouse-1])
+              #'ps/scrollbar--click-on-vertical-line))
+  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line mouse-1])
+              #'ignore))
+  (should (eq (lookup-key ps/scrollbar-mode-map [vertical-line drag-mouse-1])
+              #'ignore)))
+
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here

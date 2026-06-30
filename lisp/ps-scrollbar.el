@@ -578,6 +578,31 @@ track): jump to the clicked position."
       (when (and (window-live-p window) (ps/scrollbar--candidate-window-p window))
         (ps/scrollbar--reposition window (cdr (posn-x-y posn)))))))
 
+(defun ps/scrollbar--click-on-vertical-line (event)
+  "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
+On some platforms the vertical-line grab zone extends several pixels into the
+adjacent right fringe, so clicks intended for the scrollbar track are
+misclassified as window-resize attempts.  Use pixel-precise mouse position to
+check against every scrollbar strip; if the click is inside one, reposition
+that window; otherwise pass through to the standard window-resize handler
+\(`mouse-drag-vertical-line')."
+  (interactive "e")
+  (let* ((ppos (mouse-pixel-position))
+         (frame (car ppos)) (px (cadr ppos)) (py (cddr ppos))
+         handled)
+    (when (and ps/scrollbar-click-to-scroll
+               (frame-live-p frame) (integerp px) (integerp py))
+      (catch 'found
+        (dolist (win (window-list frame))
+          (when (ps/scrollbar--candidate-window-p win)
+            (let ((rect (ps/scrollbar--strip-rect win)))
+              (when (ps/scrollbar--in-strip-p px py rect)
+                (ps/scrollbar--reposition win (- py (nth 1 rect)))
+                (setq handled t)
+                (throw 'found nil)))))))
+    (unless handled
+      (mouse-drag-vertical-line event))))
+
 ;;; Lifecycle / detection
 
 (defun ps/scrollbar--candidate-window-p (window)
@@ -774,6 +799,17 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
     ;; lands on the pill itself instead is handled by its own buffer-local map
     ;; (see `ps/scrollbar--buffer'), since that is a different frame.
     (define-key map [right-fringe down-mouse-1] #'ps/scrollbar--click-on-fringe)
+    ;; On some platforms the vertical-line grab zone extends several pixels
+    ;; into the right fringe, misclassifying scrollbar-track clicks as window-
+    ;; resize attempts.  Intercept those and check the pixel position: if
+    ;; inside a scrollbar strip, reposition; otherwise fall through to
+    ;; `mouse-drag-vertical-line' (the normal resize handler).
+    (define-key map [vertical-line down-mouse-1] #'ps/scrollbar--click-on-vertical-line)
+    ;; Swallow the matching release events (same reason as the pill buffer's
+    ;; [mouse-1]/[drag-mouse-1] bindings): when our handler ran, the release
+    ;; must not fall through to default handling or it sets the mark.
+    (define-key map [vertical-line mouse-1]      #'ignore)
+    (define-key map [vertical-line drag-mouse-1] #'ignore)
     map)
   "Keymap for `ps/scrollbar-mode'.")
 

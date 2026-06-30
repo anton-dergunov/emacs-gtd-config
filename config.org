@@ -601,6 +601,29 @@ underneath to act on.
   ;; looking inactive) until something else forces a clean redisplay.
   (dolist (type '(down-mouse-1 mouse-1 drag-mouse-1))
     (global-set-key (vector nil type) #'ignore))
+
+  ;; Wheel events in the vertical-line area (window divider) are also
+  ;; unbound and produce echo-area noise when the mouse is near the scrollbar
+  ;; track adjacent to a split.  Single variants forward to the left window
+  ;; (`posn-window' for vertical-line events is the left window whose right
+  ;; fringe IS the scrollbar track); double/triple strip multiplicity as usual.
+  (defun ps/vertical-line-forward-wheel (event)
+    "Forward a wheel EVENT in the vertical-line area to the adjacent window."
+    (interactive "e")
+    (let* ((win (posn-window (event-start event)))
+           (basic (event-basic-type event))
+           (cmd (when (window-live-p win)
+                  (key-binding (vector basic) t nil (event-start event)))))
+      (when (commandp cmd)
+        (setcar (nth 1 event) win)
+        (let ((last-input-event (cons basic (cdr event))))
+          (call-interactively cmd)))))
+
+  (dolist (dir '(wheel-up wheel-down wheel-left wheel-right))
+    (global-set-key (vector 'vertical-line dir) #'ps/vertical-line-forward-wheel)
+    (dolist (mult '(double triple))
+      (global-set-key (vector 'vertical-line (event-convert-list (list mult dir)))
+                      #'ps/wheel-strip-multiplicity)))
 #+end_src
 
 ** Indentation: always use spaces
