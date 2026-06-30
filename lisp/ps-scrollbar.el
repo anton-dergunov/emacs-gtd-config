@@ -28,6 +28,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 ;;; State
 
 (defvar ps/scrollbar-mode)              ; defined by `define-minor-mode' below
@@ -48,6 +50,10 @@
   "Prior `default-frame-alist' right-fringe, restored on disable.")
 (defvar ps/scrollbar--ducked-at nil
   "`float-time' the pill was last ducked (see `ps/scrollbar--duck'), or nil.")
+(defvar ps/scrollbar--drag-in-progress nil
+  "Non-nil while a window-divider drag (`mouse-drag-vertical-line') is active.
+Dynamically bound to t in `ps/scrollbar--resize-advice' so the tick loop
+suppresses all rendering for the duration of the drag.")
 (defvar ps/scrollbar--fade-start nil
   "`float-time' when the current fade began, or nil (not fading).")
 (defvar ps/scrollbar--fade-from nil
@@ -213,7 +219,12 @@ itself instead."
       ;; whatever Emacs happened to select first, which is not reliable here.
       (let ((inhibit-redisplay t))
         (setcar (nth 1 event) target)
-        (select-window target)
+        ;; Do NOT call (select-window target) here: the scroll command reads
+        ;; its target window from the event's posn-window (which we've just
+        ;; rewritten to `target'), so it scrolls the correct window without
+        ;; needing it to be selected.  Selecting it would persistently
+        ;; "activate" the window (darken its mode-line), which is the wrong
+        ;; UX when scrolling over the pill of an inactive window.
         (let* ((cmd (key-binding (vector (event-basic-type event)) t nil (nth 1 event)))
                (last-input-event event))
           (when (commandp cmd)
@@ -425,13 +436,16 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
     (if (null wend)
         'skip
       (unwind-protect
-          (ps/scrollbar--render-1 window parent wend)
+          (ps/scrollbar--render-1 window parent wend orig-window)
         (unless (eq (selected-window) orig-window)
           (select-window orig-window 'norecord))))))
 
-(defun ps/scrollbar--render-1 (window parent wend)
+(defun ps/scrollbar--render-1 (window parent wend orig-window)
   "Body of `ps/scrollbar--render', factored out so the selection-restoring
-`unwind-protect' there can wrap it cleanly."
+`unwind-protect' there can wrap it cleanly.  ORIG-WINDOW is the window
+that was selected before this render was triggered; it is restored before
+the forced redisplay so the mode-line of WINDOW (which may be an inactive
+window the user is just hovering over) does not flash active."
   (pcase-let* ((`(,_iL ,iT ,_iR ,iB) (window-inside-pixel-edges window))
                (buf (window-buffer window))
                (pmin (with-current-buffer buf (point-min)))
@@ -486,17 +500,18 @@ Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
                           (* 1.5 ps/scrollbar-tick-interval)))
                   (setq ps/scrollbar--visible-frame nil)
                 (ps/scrollbar--reveal child))
-              ;; `ps/scrollbar--ensure-frame' may have just created a fresh
-              ;; child frame above (e.g. after the previous one was ducked or
-              ;; destroyed), which can itself select that frame as a side
-              ;; effect of `make-frame'.  The caller's `unwind-protect' only
-              ;; restores the right selection once this function returns,
-              ;; which is too late for THIS explicit redisplay -- force it
-              ;; back before forcing the paint, or this one paints with the
-              ;; wrong window selected (dimmed mode-line, outline-only
-              ;; org-modern pills elsewhere in the parent's buffer).
-              (unless (eq (selected-window) window)
-                (select-window window 'norecord))
+              ;; `ps/scrollbar--ensure-frame' may have just selected the
+              ;; pill's own frame as a side effect of `make-frame'.  Restore
+              ;; ORIG-WINDOW before forcing redisplay so the paint uses the
+              ;; *correct* selection (the window the user was in before the
+              ;; tick fired), not WINDOW (which may be an inactive window
+              ;; the user is hovering over -- selecting it here would make
+              ;; its mode-line flash active).  org-modern's border-syncing
+              ;; hook is disabled (org-modern-label-border = nil) so it no
+              ;; longer reads selected-frame's background during redisplay,
+              ;; removing the earlier reason to select WINDOW specifically.
+              (unless (eq (selected-window) orig-window)
+                (select-window orig-window 'norecord))
               (redisplay t))
             'rendered))))))
 
@@ -567,6 +582,42 @@ pill frame momentarily afterward anyway."
                      (posn (list window 'right-fringe (cons 0 click-y) (float-time))))
           (push (list 'down-mouse-1 posn) unread-command-events))))))
 
+(defun ps/scrollbar--reposition-at-mouse ()
+  "Reposition the scrollbar of whichever window the mouse is over.
+Used after `mouse-drag-vertical-line' returns without resizing (click case)."
+  (let* ((ppos (mouse-pixel-position))
+         (frame (car ppos)) (px (cadr ppos)) (py (cddr ppos)))
+    (when (and (frame-live-p frame) (integerp px) (integerp py))
+      (catch 'found
+        (dolist (win (window-list frame))
+          (when (ps/scrollbar--candidate-window-p win)
+            (let ((rect (ps/scrollbar--strip-rect win)))
+              (when (ps/scrollbar--in-strip-p px py rect)
+                (ps/scrollbar--reposition win (- py (nth 1 rect)))
+                (throw 'found nil)))))))))
+
+(defun ps/scrollbar--click-on-vertical-line (event)
+  "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
+Always delegates to `mouse-drag-vertical-line' first (confirmed to work
+from this handler context via live testing).  After it returns, checks
+whether any window actually changed width:
+- If yes: genuine resize drag -- done.
+- If no:  quick click with no movement -- reposition the scrollbar.
+This avoids trying to detect drag vs. click at down-mouse-1 time; on this
+platform `read-event' inside `track-mouse' never delivers mouse-movement
+events when called from a mode-map handler, making that approach hopeless."
+  (interactive "e")
+  (let* ((wins   (window-list))
+         (widths (mapcar #'window-pixel-width wins)))
+    (mouse-drag-vertical-line event)
+    (let ((resized nil))
+      (cl-mapc (lambda (win w0)
+                 (when (and (window-live-p win)
+                            (/= (window-pixel-width win) w0))
+                   (setq resized t)))
+               wins widths)
+      (when (and (not resized) ps/scrollbar-click-to-scroll)
+        (ps/scrollbar--reposition-at-mouse)))))
 (defun ps/scrollbar--click-on-fringe (event)
   "Handle a click on the parent frame's bare scrollbar fringe (the common
 case, since the pill only covers the thumb's current pixels, not the whole
@@ -649,7 +700,7 @@ macOS lets the user move/resize the borderless pill window; we put it back."
 
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
-  (when ps/scrollbar-mode
+  (when (and ps/scrollbar-mode (not ps/scrollbar--drag-in-progress))
     (condition-case err
         (ps/scrollbar--tick-1)
       (error (message "ps/scrollbar: %S" err)))))
@@ -674,7 +725,12 @@ macOS lets the user move/resize the borderless pill window; we put it back."
       (setq target mouse-win))
      ((and sel-scrolled (ps/scrollbar--candidate-window-p sel))
       (setq target sel))
-     ((and hovered (ps/scrollbar--candidate-window-p hovered))
+     ;; Hover: only reveal for the currently selected (active) window.
+     ;; An inactive window keeps its mode-line dim; showing its pill on
+     ;; hover would make it briefly appear active.
+     ((and hovered
+           (eq hovered (selected-window))
+           (ps/scrollbar--candidate-window-p hovered))
       (setq target hovered)))
     (if (and target (display-graphic-p (window-frame target)))
         (progn
@@ -720,6 +776,15 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
 
 ;;; Enable / disable
 
+(defun ps/scrollbar--resize-advice (orig &rest args)
+  "Hide the scrollbar pill while a vertical window divider is being dragged.
+Binds `ps/scrollbar--drag-in-progress' to t for the duration so the tick
+loop suppresses rendering even while the drag is in progress.
+Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
+  (ps/scrollbar--hide-now)
+  (let ((ps/scrollbar--drag-in-progress t))
+    (apply orig args)))
+
 (defun ps/scrollbar--delete-all-frames ()
   "Delete every cached pill frame."
   (maphash (lambda (_parent child)
@@ -746,6 +811,7 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
    (list (cons 'right-fringe ps/scrollbar-fringe-width)))
   (add-hook 'delete-frame-functions #'ps/scrollbar--on-delete-frame)
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
   (setq ps/scrollbar--last-sig nil)
   (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
   (setq ps/scrollbar--timer
@@ -758,6 +824,7 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
     (setq ps/scrollbar--timer nil))
   (remove-hook 'delete-frame-functions #'ps/scrollbar--on-delete-frame)
   (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
   (ps/scrollbar--delete-all-frames)
   (unless (eq ps/scrollbar--saved-right-fringe 'unset)
     (modify-all-frames-parameters
@@ -774,17 +841,16 @@ only on a genuine resize.  Ignored while `--busy' and for our own frames."
     ;; lands on the pill itself instead is handled by its own buffer-local map
     ;; (see `ps/scrollbar--buffer'), since that is a different frame.
     (define-key map [right-fringe down-mouse-1] #'ps/scrollbar--click-on-fringe)
-    ;; Note: [vertical-line down-mouse-1] is NOT intercepted here.  The
-    ;; vertical-line grab zone extends several pixels into the right fringe on
-    ;; some platforms, making the fringe's leftmost pixels behave as if they
-    ;; are the divider rather than a scrollbar track.  A handler that tries to
-    ;; redirect those to the scrollbar AND still fall through to
-    ;; `mouse-drag-vertical-line' for genuine resize clicks cannot work:
-    ;; calling a `track-mouse'-based drag command from within a nested command
-    ;; handler does not initialise the drag state correctly.  Wheel events in
-    ;; the vertical-line area are forwarded by `ps/vertical-line-forward-wheel'
-    ;; in config.org; clicks in that zone remain bound to the global
-    ;; `mouse-drag-vertical-line' so window resize is not broken.
+    ;; Vertical-line area: the grab zone for window-divider resizing extends
+    ;; several pixels into the right fringe, so clicks there arrive as
+    ;; [vertical-line ...] rather than [right-fringe ...].
+    ;; down-mouse-1: redirect to scrollbar if pixel is in our strip, or
+    ;;   re-inject to let mouse-drag-vertical-line handle resize.
+    ;; mouse-1 / drag-mouse-1: swallow so the release events don't fall
+    ;;   through to default Emacs handling after our reposition ran.
+    (define-key map [vertical-line down-mouse-1] #'ps/scrollbar--click-on-vertical-line)
+    (define-key map [vertical-line mouse-1]      #'ignore)
+    (define-key map [vertical-line drag-mouse-1] #'ignore)
     map)
   "Keymap for `ps/scrollbar-mode'.")
 
