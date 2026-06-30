@@ -31,8 +31,8 @@ setup or borrow pieces for your own.
   one-key insertion of a web link with its page title fetched automatically.
 - **Many themes** — switch the entire look with one setting, or audition themes
   live.
-- **Modern scrollbars** — auto-hiding, theme-coloured scrollbars you can drag,
-  plus smooth pixel scrolling.
+- **Modern scrollbars** — an auto-hiding, theme-coloured scroll-position
+  indicator, plus smooth pixel scrolling.
 - **Quiet quality-of-life touches** — multilingual typo checking, faded/folded
   DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
   and automatic background Git sync of your Org files.

@@ -4,37 +4,37 @@
 
 [[file:Index.org][↑ Back to the documentation index]]
 
-This config replaces the native scroll bar with a custom one drawn at the right
-edge of every window. It stays out of the way and matches your colour theme.
+This config replaces the native scroll bar with a custom scroll-position
+indicator at the right edge of every window. It stays out of the way and matches
+your colour theme.
 
 * What it does
-- *Auto-hides.* The scrollbar is invisible until you need it. It appears when
-  you scroll a window, then fades a moment after you stop — just like the overlay
-  scroll bars in macOS, VS Code, or Obsidian. (Set =ps/scrollbar-show-on-hover=
-  to also reveal it on mouse hover.)
-- *Shows your place.* The thumb's height reflects how much of the buffer is on
+- *Auto-hides.* The indicator is invisible until you need it. A small pill
+  appears when you scroll a window, then fades a moment after you stop — like the
+  overlay scroll bars in macOS, VS Code, or Obsidian. (Set
+  =ps/scrollbar-show-on-hover= to also reveal it on mouse hover.)
+- *Shows your place.* The pill's height reflects how much of the buffer is on
   screen, and its position tracks where you are in the document.
 - *Calm and theme-aware.* It is a soft, muted pill that takes its colour from
   your theme, so it never looks harsh — unlike the native macOS bar, which is
   always a hard, dark stripe that can't be recoloured or hidden.
-- *Click and drag.* Press and drag the thumb with the mouse to scroll, the same
-  way you would in any other app.
 - *Everywhere.* It works in all windows — Org files, =*Messages*=, the Claude
   Code terminal, and any split.
 
-Smooth, pixel-precise momentum scrolling with the trackpad or mouse wheel is
+It is a position *indicator*, not a draggable control: scroll with the
+trackpad, mouse wheel, or keyboard. Smooth, pixel-precise momentum scrolling is
 enabled alongside it.
 
 * Tuning it
-The thumb is on by default. A few things you can adjust (see below for where):
+The indicator is on by default. A few things you can adjust (see below for
+where):
 - how long it stays before fading,
 - whether it also appears on mouse hover (not just on scroll),
 - how wide the pill is.
 
 * Under the hood / Customize
-- Scrollbar: =lisp/ps-scrollbar.el=; settings live in =config.org= → /Settings →
+- Indicator: =lisp/ps-scrollbar.el=; settings live in =config.org= → /Settings →
   Scroll bars/ (=ps/scrollbar-hide-delay=, =ps/scrollbar-show-on-hover=,
-  =ps/scrollbar-width=, =ps/scrollbar-min-thumb-pixels=). The colour comes
-  from the =ps/scrollbar-thumb= face (and =ps/scrollbar-thumb-active= while
-  hovering or dragging). Turn the whole thing off with =M-x ps/scrollbar-mode=.
+  =ps/scrollbar-width=, =ps/scrollbar-min-thumb-pixels=). The colour comes from
+  the =ps/scrollbar-thumb= face. Turn it off with =M-x ps/scrollbar-mode=.
 - Smooth scrolling: =config.org= → /Editor & UI → Smooth scrolling (ultra-scroll)/.

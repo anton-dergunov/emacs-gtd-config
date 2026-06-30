@@ -1,121 +1,99 @@
-;;; ps-scrollbar.el --- Auto-hiding, theme-colored child-frame scrollbar -*- lexical-binding: t; -*-
+;;; ps-scrollbar.el --- Auto-hiding scroll-position indicator -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; A custom, auto-hiding scrollbar drawn as a single floating child frame
-;; containing one contiguous SVG rounded pill.
+;; A minimal, auto-hiding scroll-position indicator: a small coloured "pill" at
+;; the right edge of a window that appears while you scroll and fades when idle.
+;; It shows WHERE you are; it is not draggable -- scroll with the
+;; wheel/trackpad/keyboard (smooth via ultra-scroll).  The native scroll bar is
+;; disabled in config.org because the macOS NS toolkit ignores its face (it
+;; can't be themed or auto-hidden).
 ;;
-;; Why a child frame rather than the fringe: on the macOS GNU Emacs NS (Cocoa)
-;; build the native scroll bar ignores the `scroll-bar' face (can't be recolored
-;; or auto-hidden).  An earlier fringe-bitmap version drew the thumb per screen
-;; row, which (a) segmented on soft-wrapped lines -- a fringe bitmap only renders
-;; on the first screen row of a logical line -- and (b) perturbed layout at wrap
-;; boundaries (text reflow), and (c) was slow (per-row overlay churn + forced
-;; `window-end' redisplay every timer tick).  Drawing the thumb as one image in a
-;; floating frame fixes all three: nothing touches buffer text, the pill is
-;; contiguous, and rendering is cheap.
-;;
-;; Design notes:
-;; - ONE child frame per parent OS frame, cached in `ps/scrollbar--frames' and
-;;   never reparented (reparenting is the worst NS flicker source).
-;; - NS flicker comes from frame-PARAMETER changes (size/position/visibility),
-;;   not from swapping the buffer's image.  So frame geometry is only touched
-;;   when the target window or its geometry changes; during plain scrolling we
-;;   only swap the SVG image.
-;; - All work runs from one low-frequency timer, never a redisplay hook.
-;; - `(window-end window)' is read WITHOUT the update flag (the update flag forces
-;;   a redisplay); when it returns nil we skip the tick.
+;; The pill is a tiny child frame whose background colour is the thumb, sized to
+;; the thumb and positioned at its location.  A few hard-won notes about the
+;; macOS NS build (especially behind a scaled / mirrored virtual display, e.g.
+;; BetterDisplay):
+;; - The thumb is a solid-coloured frame, not an image: a narrow rectangle drawn
+;;   inside an SVG collapses to ~1px on a scaled display, while frame sizes
+;;   render correctly.
+;; - A child frame composites on a mirrored display (a top-level frame would,
+;;   but it carries an unremovable window shadow); however it is invisible if
+;;   its content is painted before it is shown, so we show first, then redisplay.
+;; - Our own `window-size-change-functions' handler must ignore the size changes
+;;   we make, or it destroys the pill mid-render.
+;; - The pill width scales with the actual fringe width (a fixed pixel count is
+;;   too thin on a HiDPI screen).
+;; - macOS lets the user move/resize this borderless window and no frame
+;;   parameter prevents it; an accidental nudge is snapped back from the timer.
 
 ;;; Code:
-
-(require 'svg)
-(require 'cl-lib)
 
 ;;; State
 
 (defvar ps/scrollbar-mode)              ; defined by `define-minor-mode' below
 
-(defvar ps/scrollbar--drag-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [down-mouse-1] #'ps/scrollbar--start-drag)
-    (define-key map [drag-mouse-1] #'ignore)
-    (define-key map [mouse-1] #'ignore)
-    map)
-  "Keymap of the scrollbar child-frame buffer.")
-
 (defvar ps/scrollbar--frames (make-hash-table :test 'eq)
-  "Hash of parent frame -> its scrollbar child frame.")
-(defvar ps/scrollbar--busy nil
-  "Non-nil while we are creating/showing/deleting our own frame.
-Our `window-size-change-functions' handler must not react then, or it
-would hide/destroy the frame mid-render (which corrupts it on a mirrored
-display).")
+  "Hash of parent frame -> its pill child frame.")
 (defvar ps/scrollbar--timer nil)
 (defvar ps/scrollbar--visible-frame nil
-  "The child frame currently visible, or nil.")
-(defvar ps/scrollbar--target nil
-  "The window the thumb is currently attached to (used by drag).")
+  "The pill frame currently visible, or nil.")
 (defvar ps/scrollbar--last-sig nil
   "Signature of the last render, to skip redundant work.")
 (defvar ps/scrollbar--shown-at nil
   "`float-time' of the last scroll/hover activity.")
-(defvar ps/scrollbar--svg-p nil
-  "Non-nil when SVG images are available (set at mode enable).")
+(defvar ps/scrollbar--busy nil
+  "Non-nil while we create/show/move/delete our own frame, so our
+`window-size-change-functions' handler does not react to it.")
 (defvar ps/scrollbar--saved-right-fringe 'unset
   "Prior `default-frame-alist' right-fringe, restored on disable.")
 
 ;;; Customization
 
 (defgroup ps-scrollbar nil
-  "Auto-hiding, theme-colored child-frame scrollbar."
+  "Auto-hiding scroll-position indicator."
   :group 'ps)
 
 (defcustom ps/scrollbar-width 6
-  "Visible thumb pill width in pixels (drawn flush-right inside the strip)."
+  "Visible pill width, in pixels at `ps/scrollbar-fringe-width'.
+The pill scales with the window's actual fringe width, so on a HiDPI /
+scaled display it stays proportional rather than turning into a sliver."
   :type 'integer :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-fringe-width 14
-  "Right fringe reserved (in pixels).  This is the full clickable strip width
-\(the drag hit area); the visible pill (`ps/scrollbar-width') is slimmer."
+  "Right fringe reserved (in pixels) for the pill strip."
   :type 'integer :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-hide-delay 1.0
-  "Seconds of inactivity (no scroll, no hover) before the thumb fades."
+  "Seconds of inactivity before the pill fades."
   :type 'number :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-show-on-hover nil
-  "When non-nil, also reveal the thumb whenever the mouse is over a window.
-Off by default: the thumb appears only when you scroll (macOS/Obsidian style)."
+  "When non-nil, also reveal the pill while the mouse is over a window.
+Off by default: the pill appears only when you scroll."
   :type 'boolean :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-min-thumb-pixels 24
-  "Minimum thumb height in pixels."
+  "Minimum pill height in pixels."
   :type 'integer :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-tick-interval 0.12
-  "Seconds between scrollbar refresh ticks."
+  "Seconds between refresh ticks (scroll/hover detection, snap-back)."
   :type 'number :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-exclude-modes '(treemacs-mode which-key-mode)
-  "Major modes whose windows never get a scrollbar.
-Terminal modes (e.g. `eat-mode') are deliberately not excluded."
+  "Major modes whose windows never get a pill."
   :type '(repeat symbol) :group 'ps-scrollbar)
 
 (defface ps/scrollbar-thumb
   '((t :inherit shadow))
-  "Face whose foreground colors the thumb.  Inherits `shadow' (theme-aware)."
-  :group 'ps-scrollbar)
-
-(defface ps/scrollbar-thumb-active
-  '((t :inherit (shadow bold)))
-  "Face for the thumb while the window is hovered or the thumb is dragged."
+  "Face whose foreground colours the pill (calm, theme-aware via `shadow')."
   :group 'ps-scrollbar)
 
 ;;; Pure geometry (unit-tested)
 
 (defun ps/scrollbar--thumb-span (pmin pmax wstart wend strip-h min-h)
-  "Return (Y . H) thumb pixels within a STRIP-H tall strip, or nil if content fits.
+  "Return (Y . H) pill pixels within a STRIP-H tall track, or nil if content fits.
 PMIN/PMAX are buffer bounds, WSTART/WEND the window's visible char range,
-MIN-H the minimum thumb height in pixels."
+MIN-H the minimum pill height."
   (let ((total (- pmax pmin)))
     (when (and (> total 0) (> strip-h 0)
                (or (> wstart pmin) (< wend pmax)))
@@ -125,39 +103,15 @@ MIN-H the minimum thumb height in pixels."
              (y (max 0 (min (round (* top-frac strip-h)) (- strip-h h)))))
         (cons y h)))))
 
-(defun ps/scrollbar--drag-frac (y abs-top strip-h thumb-h offset)
-  "Map absolute cursor Y to a [0,1] scroll fraction over the thumb travel.
-ABS-TOP is the window text area's absolute screen top, STRIP-H its pixel
-height, THUMB-H the thumb height, OFFSET the grab offset within the thumb."
-  (let ((travel (- strip-h thumb-h)))
-    (if (<= travel 0)
-        0.0
-      (max 0.0 (min 1.0 (/ (float (- y abs-top offset)) travel))))))
-
-;;; Colors / image
-
-(defun ps/scrollbar--color (active)
-  "Resolve the thumb fill color for ACTIVE state."
-  (or (face-foreground (if active 'ps/scrollbar-thumb-active 'ps/scrollbar-thumb)
-                       nil t)
-      "gray60"))
-
-(defun ps/scrollbar--image (canvas-w h x pill-w y th color bg)
-  "Return a fresh SVG image: a CANVAS-W*H canvas with a rounded pill.
-The canvas is filled opaque with BG (a partially transparent canvas does
-not composite on a mirrored display); the COLOR-filled pill is PILL-W wide
-at X, TH tall starting at Y."
-  (let ((svg (svg-create canvas-w h)))
-    (svg-rectangle svg 0 0 canvas-w h :fill bg)
-    (svg-rectangle svg x y pill-w th
-                   :rx (/ pill-w 2.0) :ry (/ pill-w 2.0)
-                   :fill color)
-    (svg-image svg :ascent 'center :margin 0)))
+(defun ps/scrollbar--color ()
+  "Resolve the pill colour from `ps/scrollbar-thumb'."
+  (or (face-foreground 'ps/scrollbar-thumb nil t) "gray60"))
 
 ;;; Child frame
 
 (defun ps/scrollbar--buffer ()
-  "Return the shared scrollbar child-frame buffer, creating it if needed."
+  "Return the shared pill child-frame buffer, creating it if needed.
+The buffer is empty: the pill is the frame's own background colour."
   (or (get-buffer " *ps-scrollbar*")
       (with-current-buffer (get-buffer-create " *ps-scrollbar*")
         (setq-local mode-line-format nil
@@ -169,17 +123,11 @@ at X, TH tall starting at Y."
                     right-margin-width 0
                     truncate-lines t
                     line-spacing 0
-                    show-trailing-whitespace nil
-                    buffer-read-only nil)
-        (use-local-map ps/scrollbar--drag-map)
+                    show-trailing-whitespace nil)
         (current-buffer))))
 
 (defun ps/scrollbar--make-frame (parent)
-  "Create the invisible scrollbar child frame for PARENT.
-A child frame (`parent-frame') has no window shadow/border and -- unlike a
-top-level frame -- composites correctly on a mirrored/virtual display, but
-ONLY if its image is painted AFTER it is made visible (see
-`ps/scrollbar--render')."
+  "Create the invisible pill child frame for PARENT."
   (let* ((buf (ps/scrollbar--buffer))
          (frame (make-frame
                  `((parent-frame . ,parent)
@@ -200,26 +148,20 @@ ONLY if its image is painted AFTER it is made visible (see
                    (tab-bar-lines . 0)
                    (line-spacing . 0)
                    (cursor-type . nil)
-                   ;; Without min-width/min-height 0, Emacs clamps the frame to a
-                   ;; large character-based minimum (~15 cols) and our pixel size
-                   ;; is ignored, so the strip spills off the frame's right edge.
+                   ;; min-width/height 0 so the pixel size we set is honoured
+                   ;; (otherwise Emacs clamps to a ~15-char minimum).
                    (min-width . 0)
                    (min-height . 0)
-                   ;; Background matches the buffer; the strip sits over the
-                   ;; same-coloured right fringe, so it reads as invisible and
-                   ;; never paints over text.
                    (background-color . ,(frame-parameter parent 'background-color))
                    (width . 1) (height . 1)
                    (desktop-dont-save . t)))))
-    ;; The pill is the frame's own background colour; keep the buffer empty.
-    (with-current-buffer buf
-      (let ((inhibit-read-only t)) (erase-buffer)))
+    (with-current-buffer buf (let ((inhibit-read-only t)) (erase-buffer)))
     (set-window-buffer (frame-root-window frame) buf)
     (set-window-dedicated-p (frame-root-window frame) t)
     frame))
 
 (defun ps/scrollbar--ensure-frame (parent)
-  "Return PARENT's scrollbar child frame, creating it if needed."
+  "Return PARENT's pill frame, creating it if needed."
   (let ((child (gethash parent ps/scrollbar--frames)))
     (unless (and child (frame-live-p child))
       (setq child (ps/scrollbar--make-frame parent))
@@ -227,27 +169,11 @@ ONLY if its image is painted AFTER it is made visible (see
     child))
 
 (defun ps/scrollbar--own-frame-p (frame)
-  "Non-nil if FRAME is one of our scrollbar child frames."
+  "Non-nil if FRAME is one of our pill frames."
   (let (found)
     (maphash (lambda (_p c) (when (eq c frame) (setq found t)))
              ps/scrollbar--frames)
     found))
-
-(defun ps/scrollbar--show-image (image)
-  "Display IMAGE (or clear) as the sole content of the scrollbar buffer."
-  (with-current-buffer (ps/scrollbar--buffer)
-    (let ((inhibit-read-only t))
-      (erase-buffer)
-      (when image (insert-image image)))))
-
-(defun ps/scrollbar--set-geom (child left top width height)
-  "Reposition/resize CHILD only when its geometry actually changed."
-  (let ((cur (frame-parameter child 'ps/scrollbar-geom))
-        (new (list left top width height)))
-    (unless (equal cur new)
-      (set-frame-size child width height t)
-      (set-frame-position child left top)
-      (set-frame-parameter child 'ps/scrollbar-geom new))))
 
 (defun ps/scrollbar--destroy (frame)
   "Delete FRAME and drop it from the cache.
@@ -262,7 +188,7 @@ Deleting and recreating a fresh frame on the next show is self-healing."
         (delete-frame frame)))))
 
 (defun ps/scrollbar--reveal (child)
-  "Make CHILD the single visible scrollbar frame, destroying any other."
+  "Make CHILD the single visible pill frame, destroying any other."
   (when (and ps/scrollbar--visible-frame
              (not (eq ps/scrollbar--visible-frame child))
              (frame-live-p ps/scrollbar--visible-frame))
@@ -272,22 +198,21 @@ Deleting and recreating a fresh frame on the next show is self-healing."
     (make-frame-visible child)))
 
 (defun ps/scrollbar--hide ()
-  "Hide the scrollbar by destroying its frame (recreated on the next show)."
+  "Hide the pill by destroying its frame (recreated on the next show)."
   (when (and ps/scrollbar--visible-frame
              (frame-live-p ps/scrollbar--visible-frame))
     (ps/scrollbar--destroy ps/scrollbar--visible-frame))
   (setq ps/scrollbar--visible-frame nil
-        ps/scrollbar--last-sig nil
-        ps/scrollbar--target nil))
+        ps/scrollbar--last-sig nil))
 
 ;;; Rendering
 
-(defun ps/scrollbar--render (window active)
-  "Render the thumb for WINDOW.
-Return `skip' when `window-end' is not yet known, `same' when nothing
-changed, `hidden' when content fits, `rendered' otherwise."
+(defun ps/scrollbar--render (window)
+  "Show/position the pill for WINDOW.
+Return `skip' (window-end unknown), `same' (nothing changed), `hidden'
+\(content fits) or `rendered'."
   (let ((parent (window-frame window))
-        (wend (window-end window)))      ; no update flag (cheap)
+        (wend (window-end window)))           ; no update flag (cheap)
     (if (null wend)
         'skip
       (pcase-let* ((`(,_iL ,iT ,_iR ,iB) (window-inside-pixel-edges window))
@@ -298,29 +223,25 @@ changed, `hidden' when content fits, `rendered' otherwise."
                    (strip-h (- iB iT))
                    (sig (list window pmax wstart wend iT strip-h
                               (window-pixel-left window)
-                              (window-pixel-width window) active)))
+                              (window-pixel-width window))))
         (if (equal sig ps/scrollbar--last-sig)
             'same
-          (setq ps/scrollbar--last-sig sig
-                ps/scrollbar--target window)
+          (setq ps/scrollbar--last-sig sig)
           (let ((span (ps/scrollbar--thumb-span
                        pmin pmax wstart wend strip-h
                        ps/scrollbar-min-thumb-pixels)))
             (if (null span)
                 (progn (ps/scrollbar--hide) 'hidden)
-              ;; The thumb IS the frame: a small solid-coloured child frame sized
-              ;; to the thumb and positioned at its location.  (Drawing a narrow
-              ;; pill inside an SVG fails on scaled/mirrored displays -- horizontal
-              ;; sub-rectangles collapse -- but frame sizes render correctly.)
-              ;; Position is PARENT-RELATIVE (subtract the parent's native origin).
               (pcase-let* ((`(,thumb-y . ,thumb-h) span)
+                           ;; The pill sits over the window's right fringe.  Its
+                           ;; position is PARENT-RELATIVE, so subtract the parent
+                           ;; frame's native origin (pl/pt).
                            (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
                            (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
                            (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native-edges))
                            (strip-w (max 2 (- wr br)))
-                           ;; Pill width as a fraction of the actual fringe width,
-                           ;; so it scales with the display (a fixed pixel count is
-                           ;; ~3x too thin on a HiDPI/virtual screen).
+                           ;; Width as a fraction of the actual fringe width, so
+                           ;; it scales with the display.
                            (pill-w (min strip-w
                                         (max 2 (round (* strip-w
                                                          (/ (float ps/scrollbar-width)
@@ -328,14 +249,16 @@ changed, `hidden' when content fits, `rendered' otherwise."
                            (pill-x (max 0 (round (/ (- strip-w pill-w) 2.0))))
                            (fleft (+ (- br pl) pill-x))
                            (ftop (+ (- bt pt) thumb-y))
-                           (color (ps/scrollbar--color active)))
-                ;; `--busy' so our own window-size-change handler ignores the
-                ;; size/position changes we are about to make.
+                           (color (ps/scrollbar--color)))
                 (let* ((ps/scrollbar--busy t)
-                       (child (ps/scrollbar--ensure-frame parent)))
+                       (child (ps/scrollbar--ensure-frame parent))
+                       (geom (list fleft ftop pill-w thumb-h)))
                   (unless (equal color (frame-parameter child 'background-color))
                     (set-frame-parameter child 'background-color color))
-                  (ps/scrollbar--set-geom child fleft ftop pill-w thumb-h)
+                  (unless (equal geom (frame-parameter child 'ps/scrollbar-geom))
+                    (set-frame-parameter child 'ps/scrollbar-geom geom)
+                    (set-frame-size child pill-w thumb-h t)
+                    (set-frame-position child fleft ftop))
                   (ps/scrollbar--reveal child)
                   (redisplay t))
                 'rendered))))))))
@@ -343,7 +266,7 @@ changed, `hidden' when content fits, `rendered' otherwise."
 ;;; Lifecycle / detection
 
 (defun ps/scrollbar--candidate-window-p (window)
-  "Non-nil if WINDOW should display a scrollbar."
+  "Non-nil if WINDOW should display a pill."
   (and (window-live-p window)
        (not (window-minibuffer-p window))
        (not (ps/scrollbar--own-frame-p (window-frame window)))
@@ -359,17 +282,29 @@ changed, `hidden' when content fits, `rendered' otherwise."
          (window-at x y frame))))
 
 (defun ps/scrollbar--scrolled-window (w)
-  "Non-nil if W's `window-start' changed since the last tick.
-Updates the stored value.  Returns nil on first sight (so merely focusing
-a window doesn't reveal the bar)."
+  "Non-nil if W's `window-start' changed since the last tick (updates it)."
   (and (window-live-p w)
        (let ((cur (window-start w))
              (prev (window-parameter w 'ps/scrollbar--last-start)))
          (set-window-parameter w 'ps/scrollbar--last-start cur)
          (and prev (not (eql cur prev))))))
 
+(defun ps/scrollbar--snap-back ()
+  "Re-apply the visible pill's intended geometry (undo an accidental nudge).
+macOS lets the user move/resize the borderless pill window; we put it back."
+  (let ((f ps/scrollbar--visible-frame))
+    (when (and f (frame-live-p f))
+      (let ((geom (frame-parameter f 'ps/scrollbar-geom)))
+        (when geom
+          (pcase-let ((`(,l ,tp ,w ,h) geom)
+                      (ps/scrollbar--busy t))
+            (unless (and (= (frame-pixel-width f) w)
+                         (= (frame-pixel-height f) h))
+              (set-frame-size f w h t))
+            (set-frame-position f l tp)))))))
+
 (defun ps/scrollbar--tick ()
-  "Refresh the thumb: reveal on scroll, fade after the idle delay."
+  "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
   (when ps/scrollbar-mode
     (condition-case err
         (ps/scrollbar--tick-1)
@@ -379,118 +314,54 @@ a window doesn't reveal the bar)."
   (let* ((now (float-time))
          (mouse-win (ps/scrollbar--mouse-window))
          (sel (selected-window))
-         ;; Mouse-wheel scrolls the window under the pointer (which may not be
-         ;; selected); keyboard scrolls the selected one.  Watch both.
+         ;; Mouse-wheel scrolls the window under the pointer (maybe not selected);
+         ;; keyboard scrolls the selected one.  Watch both.
          (mouse-scrolled (and mouse-win (ps/scrollbar--scrolled-window mouse-win)))
          (sel-scrolled (and (not (eq sel mouse-win))
                             (ps/scrollbar--scrolled-window sel)))
          (hovered (and ps/scrollbar-show-on-hover mouse-win))
-         target active)
+         target)
     (cond
      ((and mouse-scrolled (ps/scrollbar--candidate-window-p mouse-win))
       (setq target mouse-win))
      ((and sel-scrolled (ps/scrollbar--candidate-window-p sel))
       (setq target sel))
      ((and hovered (ps/scrollbar--candidate-window-p mouse-win))
-      (setq target mouse-win active t)))
-    ;; Keep it alive while the pointer is over the visible strip, so you can
-    ;; move onto it and grab it without it fading first.
-    (when (and (null target)
-               ps/scrollbar--visible-frame
-               (eq (car (mouse-position)) ps/scrollbar--visible-frame))
-      (setq ps/scrollbar--shown-at now))
+      (setq target mouse-win)))
     (if (and target (display-graphic-p (window-frame target)))
-        (let ((res (ps/scrollbar--render target active)))
+        (let ((res (ps/scrollbar--render target)))
           (unless (eq res 'skip)
             (setq ps/scrollbar--shown-at now)))
-      (when (and ps/scrollbar--visible-frame
-                 ps/scrollbar--shown-at
-                 (> (- now ps/scrollbar--shown-at) ps/scrollbar-hide-delay))
-        (ps/scrollbar--hide)))))
+      ;; No activity: fade when idle, otherwise snap an accidental nudge back.
+      (if (and ps/scrollbar--visible-frame
+               ps/scrollbar--shown-at
+               (> (- now ps/scrollbar--shown-at) ps/scrollbar-hide-delay))
+          (ps/scrollbar--hide)
+        (ps/scrollbar--snap-back)))))
 
 (defun ps/scrollbar--on-size-change (frame)
-  "Hide the bar only when FRAME's actual pixel size changes (a real resize).
+  "Hide the pill only when a real (non-pill) FRAME's pixel size changes.
 `window-size-change-functions' also fires merely from creating/showing our
-own child frame; reacting to that would destroy the bar we just painted.
-So we compare FRAME's outer size to its last known size and act only on a
-genuine change.  Ignored while `--busy' and for our own frames."
+own pill, so we compare FRAME's outer size to its last known size and act
+only on a genuine resize.  Ignored while `--busy' and for our own frames."
   (unless (or ps/scrollbar--busy (ps/scrollbar--own-frame-p frame))
     (let ((size (cons (frame-pixel-width frame) (frame-pixel-height frame)))
           (prev (frame-parameter frame 'ps/scrollbar--last-size)))
       (unless (equal size prev)
         (set-frame-parameter frame 'ps/scrollbar--last-size size)
-        ;; Don't fade on the very first sighting (prev nil) -- nothing is shown.
         (when prev (ps/scrollbar--hide))))))
-
-;;; Click-drag (event arrives in the child-frame buffer)
-
-(defun ps/scrollbar--scroll-to (window pmin pmax frac)
-  "Scroll WINDOW so FRAC (0..1) of its buffer is above the top."
-  (let ((target (+ pmin (floor (* frac (- pmax pmin))))))
-    (with-current-buffer (window-buffer window)
-      (set-window-start
-       window
-       (save-excursion (goto-char (max pmin (min pmax target)))
-                       (line-beginning-position))))))
-
-(defun ps/scrollbar--start-drag (_event)
-  "Drag the thumb to scroll its window.  Bound in the child-frame buffer.
-Tracks the mouse by ABSOLUTE pixel position and polls on a timeout, so the
-drag keeps following the pointer even when it wanders off the thin strip
-\(left/right or onto the parent frame) -- like a real scroll bar.  Ends only
-on a button release."
-  (interactive "e")
-  (let ((window ps/scrollbar--target))
-    (when (window-live-p window)
-      (pcase-let* ((parent (window-frame window))
-                   (`(,_iL ,iT ,_iR ,iB) (window-inside-pixel-edges window))
-                   (`(,_fL ,fT ,_fR ,_fB) (frame-edges parent 'native-edges))
-                   (strip-h (- iB iT))
-                   (abs-top (+ fT iT))
-                   (buf (window-buffer window))
-                   (pmin (with-current-buffer buf (point-min)))
-                   (pmax (with-current-buffer buf (point-max)))
-                   (span (ps/scrollbar--thumb-span
-                          pmin pmax (window-start window) (window-end window)
-                          strip-h ps/scrollbar-min-thumb-pixels))
-                   (thumb-h (if span (cdr span) strip-h))
-                   (thumb-y (if span (car span) 0))
-                   (y0 (cdr (mouse-absolute-pixel-position)))
-                   (local (- y0 abs-top))
-                   (offset (if (and (>= local thumb-y) (<= local (+ thumb-y thumb-h)))
-                               (- local thumb-y)
-                             (/ thumb-h 2))))
-        (cl-flet ((follow ()
-                    (let* ((y (cdr (mouse-absolute-pixel-position)))
-                           (frac (ps/scrollbar--drag-frac
-                                  y abs-top strip-h thumb-h offset)))
-                      (ps/scrollbar--scroll-to window pmin pmax frac)
-                      (ps/scrollbar--render window t))))
-          (track-mouse
-            (setq track-mouse 'dragging)
-            (let (done)
-              (while (not done)
-                (let ((ev (read-event nil nil 0.03)))
-                  (cond
-                   ;; timeout or movement -> follow the pointer wherever it is
-                   ((or (null ev) (mouse-movement-p ev)) (follow))
-                   ;; any button release ends the drag
-                   ((memq (event-basic-type ev) '(mouse-1 mouse-2 mouse-3))
-                    (setq done t))
-                   ;; ignore switch-frame and everything else (keep dragging)
-                   (t nil)))))))))))
 
 ;;; Enable / disable
 
 (defun ps/scrollbar--delete-all-frames ()
-  "Delete every cached child frame."
+  "Delete every cached pill frame."
   (maphash (lambda (_parent child)
              (when (frame-live-p child) (delete-frame child)))
            ps/scrollbar--frames)
   (clrhash ps/scrollbar--frames))
 
 (defun ps/scrollbar--on-delete-frame (frame)
-  "Drop cache entries when FRAME (a parent or a child) is deleted."
+  "Drop cache entries when FRAME (a parent or a pill) is deleted."
   (let ((child (gethash frame ps/scrollbar--frames)))
     (when child
       (remhash frame ps/scrollbar--frames)
@@ -500,8 +371,7 @@ on a button release."
            ps/scrollbar--frames))
 
 (defun ps/scrollbar--enable ()
-  (setq ps/scrollbar--svg-p (image-type-available-p 'svg)
-        frame-resize-pixelwise t)
+  (setq frame-resize-pixelwise t)
   (when (eq ps/scrollbar--saved-right-fringe 'unset)
     (setq ps/scrollbar--saved-right-fringe
           (cdr (assq 'right-fringe default-frame-alist))))
@@ -527,12 +397,11 @@ on a button release."
      (list (cons 'right-fringe ps/scrollbar--saved-right-fringe)))
     (setq ps/scrollbar--saved-right-fringe 'unset))
   (setq ps/scrollbar--visible-frame nil
-        ps/scrollbar--last-sig nil
-        ps/scrollbar--target nil))
+        ps/scrollbar--last-sig nil))
 
 ;;;###autoload
 (define-minor-mode ps/scrollbar-mode
-  "Global minor mode: an auto-hiding, theme-colored child-frame scrollbar."
+  "Global minor mode: an auto-hiding scroll-position indicator pill."
   :global t
   :group 'ps-scrollbar
   (if ps/scrollbar-mode
