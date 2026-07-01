@@ -635,7 +635,7 @@ underneath to act on.
     (lambda (msg)
       (or (null msg)
           (not (string-match-p
-                "\\(drag-mouse-1\\|mouse-1: select window\\)" msg))))
+                "\\(?:drag-mouse-[0-9]+\\|mouse-[0-9]+.*\\(?:window\\|frame\\)\\)" msg))))
     '((name . ps/silence-window-chrome-hints)))
 #+end_src
 
@@ -1518,6 +1518,42 @@ in place while choosing; it is restored after the agenda is built either way."
         "Show the agenda dispatcher as a bottom strip without collapsing the frame."
         (cl-letf (((symbol-function 'delete-other-windows) #'ignore))
           (apply orig-fn args)))))
+
+  ;; Keep the File View at a fixed width when the Emacs frame is resized.
+  ;; Emacs redistributes horizontal space proportionally across all windows
+  ;; when the frame grows/shrinks; the tree should ignore that and hold its
+  ;; current column width.  We distinguish auto-resize (frame pixel width
+  ;; changed) from a deliberate user resize (frame width stable) by comparing
+  ;; against the frame width seen on the previous call.  After a user drag the
+  ;; new width becomes the new target; after a frame resize we push treemacs
+  ;; back to the saved target.
+  (defvar ps/treemacs--last-frame-px nil)
+  (defvar ps/treemacs--saved-cols    nil)
+
+  (defun ps/treemacs--pin-width (frame)
+    "Restore the treemacs window width after FRAME resizes."
+    (let* ((fw (frame-pixel-width frame))
+           (tw (and (fboundp 'treemacs-get-local-window)
+                    (treemacs-get-local-window))))
+      (if (null tw)
+          ;; Tree not open: just track frame width so first open is baseline.
+          (setq ps/treemacs--last-frame-px fw)
+        (let ((cols (window-total-width tw)))
+          (cond
+           ;; First call with tree visible: initialise baseline.
+           ((null ps/treemacs--last-frame-px)
+            (setq ps/treemacs--last-frame-px fw
+                  ps/treemacs--saved-cols    cols))
+           ;; Frame pixel width changed → auto-resize happened; push back.
+           ((/= fw ps/treemacs--last-frame-px)
+            (ignore-errors
+              (window-resize tw (- ps/treemacs--saved-cols cols) t))
+            (setq ps/treemacs--last-frame-px fw))
+           ;; Frame width stable but tree width changed → user resized.
+           ((/= cols ps/treemacs--saved-cols)
+            (setq ps/treemacs--saved-cols cols)))))))
+
+  (add-hook 'window-size-change-functions #'ps/treemacs--pin-width)
 
   ;; Open the file tree at `my-org-base-directory' on startup, one project per
   ;; immediate subdirectory, fully expanded. treemacs expands directories
