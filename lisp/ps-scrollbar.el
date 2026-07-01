@@ -62,6 +62,9 @@ Lisp handler exits, so the advice alone is not enough).")
 (defvar ps/scrollbar--drag-initial-widths nil
   "Alist of (window . pixel-width) captured at start of VL press.
 Used by the release handler to distinguish click from drag.")
+(defvar ps/scrollbar--drag-switch-timer nil
+  "Timer that switches the selected window 200 ms after a VL press.
+Cancelled by `ps/scrollbar--vl-release' on quick releases (clicks).")
 (defvar ps/scrollbar--fade-start nil
   "`float-time' when the current fade began, or nil (not fading).")
 (defvar ps/scrollbar--fade-from nil
@@ -618,15 +621,19 @@ switch.  The release event (`ps/scrollbar--vl-release') restores
 everything and handles click-to-reposition."
   (interactive "e")
   (let ((posn-win (posn-window (event-start event))))
-    ;; First press: save state and switch window.
+    ;; First press only: save state and schedule a delayed window switch.
+    ;; The switch fires after 200 ms -- long enough to confirm a drag, short
+    ;; enough not to matter for scrollbar clicks.  `vl-release' cancels it
+    ;; on quick releases so clicks never see a window switch.
     (when (and (window-live-p posn-win)
                (eq posn-win (selected-window))
                (null ps/scrollbar--drag-saved-window))
       (setq ps/scrollbar--drag-saved-window  (selected-window)
             ps/scrollbar--drag-initial-widths
             (mapcar (lambda (w) (cons w (window-pixel-width w)))
-                    (window-list)))
-      (other-window 1 nil t)))
+                    (window-list))
+            ps/scrollbar--drag-switch-timer
+            (run-with-timer 0.2 nil #'ps/scrollbar--drag-do-switch))))
   (condition-case nil
       (mouse-drag-vertical-line event)
     (user-error nil))
@@ -700,7 +707,9 @@ narrower than one character cell, so a char-cell test would be too coarse."
 
 (defun ps/scrollbar--snap-back ()
   "Re-apply the visible pill's intended geometry (undo an accidental nudge).
-macOS lets the user move/resize the borderless pill window; we put it back."
+macOS lets the user move/resize the borderless pill window; we put it back.
+Position is only written when the frame has actually moved, to avoid
+triggering a redisplay on every tick while the pill is stationary."
   (let ((f ps/scrollbar--visible-frame))
     (when (and f (frame-live-p f))
       (let ((geom (frame-parameter f 'ps/scrollbar-geom)))
@@ -710,7 +719,9 @@ macOS lets the user move/resize the borderless pill window; we put it back."
             (unless (and (= (frame-pixel-width f) w)
                          (= (frame-pixel-height f) h))
               (set-frame-size f w h t))
-            (set-frame-position f l tp)))))))
+            (let ((cur (frame-position f)))
+              (unless (and (= (car cur) l) (= (cdr cur) tp))
+                (set-frame-position f l tp)))))))))
 
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
@@ -776,11 +787,24 @@ macOS lets the user move/resize the borderless pill window; we put it back."
        (t
         (ps/scrollbar--snap-back))))))
 
+(defun ps/scrollbar--drag-do-switch ()
+  "Switch the selected window 200 ms after a VL press (drag confirmed).
+If the press was a quick click, `ps/scrollbar--vl-release' cancels this
+timer before it fires and no switch occurs."
+  (setq ps/scrollbar--drag-switch-timer nil)
+  (when (and ps/scrollbar--drag-saved-window
+             (window-live-p ps/scrollbar--drag-saved-window)
+             (eq ps/scrollbar--drag-saved-window (selected-window)))
+    (other-window 1 nil t)))
+
 (defun ps/scrollbar--drag-suppress-end ()
   "Fallback timer callback: 2 s with no VL events → drag is done.
 Restores window selection and clears all drag state.  Under normal
 conditions `ps/scrollbar--vl-release' handles this on the release event;
 this fallback covers areas whose drag-mouse-1 we do not have a binding for."
+  (when ps/scrollbar--drag-switch-timer
+    (cancel-timer ps/scrollbar--drag-switch-timer)
+    (setq ps/scrollbar--drag-switch-timer nil))
   (setq ps/scrollbar--drag-in-progress    nil
         ps/scrollbar--drag-suppress-timer nil
         ps/scrollbar--drag-initial-widths nil)
@@ -814,6 +838,10 @@ scrollbar at the current mouse position."
                                    (/= (window-pixel-width (car entry))
                                        (cdr entry))))
                             ps/scrollbar--drag-initial-widths)))))
+    ;; Cancel the delayed window-switch (click was quick enough).
+    (when ps/scrollbar--drag-switch-timer
+      (cancel-timer ps/scrollbar--drag-switch-timer)
+      (setq ps/scrollbar--drag-switch-timer nil))
     (when ps/scrollbar--drag-suppress-timer
       (cancel-timer ps/scrollbar--drag-suppress-timer))
     (setq ps/scrollbar--drag-in-progress    nil
