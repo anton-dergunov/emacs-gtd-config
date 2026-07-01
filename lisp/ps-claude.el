@@ -211,14 +211,20 @@ frame's current shape rather than whatever it was when Emacs started."
          (if (> (frame-pixel-width) (frame-pixel-height)) 'right 'bottom)))
     (apply orig-fn args)))
 
+(defun ps/claude--install-mode-line ()
+  "Replace the default eat mode line with a plain \"Claude Code\" label."
+  (when (ps/claude--session-buffer-p (current-buffer))
+    (setq-local mode-line-format
+                '(" " (:propertize "Claude Code" face mode-line-emphasis)))))
+
 (defun ps/claude-setup ()
   "Apply Claude Code IDE window-size, working-directory and reliability tweaks.
 Sets `claude-code-ide-window-width' from `ps/claude-window-width', installs
 the debounced resize-resync hook, pins the working directory and project key
 to `my-org-base-directory', silences the post-write \"Reread from disk?\"
 race for unmodified buffers, guards eat's output timer against transient
-`args-out-of-range' glitches, docks the panel `right'/`bottom' to match the
-frame's current shape, and enables the compact session mode line.  Idempotent."
+`args-out-of-range' glitches, and docks the panel `right'/`bottom' to match
+the frame's current shape.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
   (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
   (advice-add 'claude-code-ide--get-working-directory
@@ -233,8 +239,7 @@ frame's current shape, and enables the compact session mode line.  Idempotent."
               :around #'ps/claude--eat-output-guard)
   (advice-add 'claude-code-ide--display-buffer-in-side-window
               :around #'ps/claude--adaptive-side-advice)
-  (when (featurep 'ps-claude-status)
-    (ps/claude-status-setup)))
+  (add-hook 'eat-mode-hook #'ps/claude--install-mode-line))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here

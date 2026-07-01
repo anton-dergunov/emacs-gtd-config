@@ -97,7 +97,6 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-file-tree)
   (require 'ps-file-tree-icons)
   (require 'ps-claude)
-  (require 'ps-claude-status)
   (require 'ps-ai-context)
   (require 'ps-typo)
   (require 'ps-org-src-comment)
@@ -504,14 +503,6 @@ that otherwise persists until a second resize.
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
         ps/claude-resize-debounce-delay 0.3)
-#+end_src
-
-** Claude Code session mode line (ps-claude-status.el)
-=ps/claude-status-refresh-interval= is the polling interval in seconds for
-reading the JSONL session file. A file-notify watch supplements the timer so
-model switches (=/model=) and session resumes (=/resume=) are reflected faster.
-#+begin_src emacs-lisp
-  (setq ps/claude-status-refresh-interval 8)
 #+end_src
 
 ** AI context sync (ps-ai-context.el)
