@@ -51,9 +51,13 @@
 (defvar ps/scrollbar--ducked-at nil
   "`float-time' the pill was last ducked (see `ps/scrollbar--duck'), or nil.")
 (defvar ps/scrollbar--drag-in-progress nil
-  "Non-nil while a window-divider drag (`mouse-drag-vertical-line') is active.
-Dynamically bound to t in `ps/scrollbar--resize-advice' so the tick loop
-suppresses all rendering for the duration of the drag.")
+  "Non-nil while a window-divider drag is active; suppresses the tick.
+Set by `ps/scrollbar--resize-advice' and by `ps/scrollbar--click-on-vertical-line'
+(because on macOS NS the divider drag is handled at C/OS level after our
+Lisp handler exits, so the advice alone is not enough).")
+(defvar ps/scrollbar--drag-suppress-timer nil
+  "One-shot timer that clears `ps/scrollbar--drag-in-progress' after the
+NS-level divider drag ends (no more window-size changes for 200 ms).")
 (defvar ps/scrollbar--fade-start nil
   "`float-time' when the current fade began, or nil (not fading).")
 (defvar ps/scrollbar--fade-from nil
@@ -600,15 +604,24 @@ Used after `mouse-drag-vertical-line' returns without resizing (click case)."
   "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
 Delegates to `mouse-drag-vertical-line' for window resizing.
 
-On macOS NS, the divider drag is handled at the C/OS level after this
-handler returns, so `mouse-drag-vertical-line' always exits immediately
-with no window-width change and mouse-dx=0 -- making it impossible to
-distinguish a drag from a click at this point.  Calling
-`ps/scrollbar--reposition-at-mouse' here would show the pill on every
-drag, which is worse than losing reposition for the narrow vertical-line
-grab zone.  Use the right-fringe handler for click-to-reposition instead."
+On macOS NS, the actual divider drag is handled at the C/OS level after
+this handler exits -- `mouse-drag-vertical-line' returns immediately with
+no window-width change.  `ps/scrollbar--resize-advice' sets
+`drag-in-progress' around that call but its unwind-protect clears it as
+soon as MDV returns, leaving a window where the tick can fire and show
+the pill via hover detection before the NS drag even starts.
+
+Fix: re-set `drag-in-progress' after MDV returns and schedule a 300 ms
+fallback clear.  As the NS drag causes window-size changes,
+`ps/scrollbar--on-size-change' calls `ps/scrollbar--drag-suppress-extend'
+which resets the timer on every resize step, keeping the flag live for the
+full duration of the drag and clearing it 200 ms after the last step."
   (interactive "e")
-  (mouse-drag-vertical-line event))
+  (mouse-drag-vertical-line event)
+  ;; Re-assert suppression: resize-advice's unwind cleared drag-in-progress
+  ;; when MDV exited, but the NS drag is only starting now.
+  (ps/scrollbar--hide-now)
+  (ps/scrollbar--drag-suppress-extend))
 (defun ps/scrollbar--click-on-fringe (event)
   "Handle a click on the parent frame's bare scrollbar fringe (the common
 case, since the pill only covers the thumb's current pixels, not the whole
@@ -753,17 +766,38 @@ macOS lets the user move/resize the borderless pill window; we put it back."
        (t
         (ps/scrollbar--snap-back))))))
 
+(defun ps/scrollbar--drag-suppress-extend ()
+  "Keep `ps/scrollbar--drag-in-progress' set while windows are being resized.
+Called from `ps/scrollbar--on-size-change' on every window-layout change.
+Schedules a 200 ms one-shot timer; each resize resets it, so the flag stays
+t throughout a continuous NS-level divider drag and clears 200 ms after the
+last resize step."
+  (setq ps/scrollbar--drag-in-progress t)
+  (when ps/scrollbar--drag-suppress-timer
+    (cancel-timer ps/scrollbar--drag-suppress-timer))
+  (setq ps/scrollbar--drag-suppress-timer
+    (run-with-timer 0.2 nil
+      (lambda ()
+        (setq ps/scrollbar--drag-in-progress nil
+              ps/scrollbar--drag-suppress-timer nil)))))
+
 (defun ps/scrollbar--on-size-change (frame)
-  "Hide the pill only when a real (non-pill) FRAME's pixel size changes.
-`window-size-change-functions' also fires merely from creating/showing our
-own pill, so we compare FRAME's outer size to its last known size and act
-only on a genuine resize.  Ignored while `--busy' and for our own frames."
+  "React to window-layout changes in FRAME.
+`window-size-change-functions' fires both when the frame itself is resized
+and when windows within it rearrange (e.g. a vertical-line divider drag).
+We ignore our own changes (`--busy') and our own pill frames.
+- Frame pixel size changed → hide pill (frame resize).
+- Any window-layout change → extend drag suppression so the tick does not
+  show the pill via hover detection during an ongoing NS-level VL drag."
   (unless (or ps/scrollbar--busy (ps/scrollbar--own-frame-p frame))
     (let ((size (cons (frame-pixel-width frame) (frame-pixel-height frame)))
           (prev (frame-parameter frame 'ps/scrollbar--last-size)))
       (unless (equal size prev)
         (set-frame-parameter frame 'ps/scrollbar--last-size size)
-        (when prev (ps/scrollbar--hide-now))))))
+        (when prev (ps/scrollbar--hide-now))))
+    ;; Extend drag suppression for any window-layout change (covers the
+    ;; NS-level VL drag that runs outside our Lisp handler).
+    (ps/scrollbar--drag-suppress-extend)))
 
 ;;; Enable / disable
 
