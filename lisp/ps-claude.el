@@ -217,8 +217,8 @@ Sets `claude-code-ide-window-width' from `ps/claude-window-width', installs
 the debounced resize-resync hook, pins the working directory and project key
 to `my-org-base-directory', silences the post-write \"Reread from disk?\"
 race for unmodified buffers, guards eat's output timer against transient
-`args-out-of-range' glitches, and docks the panel `right'/`bottom' to match
-the frame's current shape.  Idempotent."
+`args-out-of-range' glitches, docks the panel `right'/`bottom' to match the
+frame's current shape, and enables the compact session mode line.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
   (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
   (advice-add 'claude-code-ide--get-working-directory
@@ -232,7 +232,9 @@ the frame's current shape.  Idempotent."
   (advice-add 'eat--process-output-queue
               :around #'ps/claude--eat-output-guard)
   (advice-add 'claude-code-ide--display-buffer-in-side-window
-              :around #'ps/claude--adaptive-side-advice))
+              :around #'ps/claude--adaptive-side-advice)
+  (when (featurep 'ps-claude-status)
+    (ps/claude-status-setup)))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here
