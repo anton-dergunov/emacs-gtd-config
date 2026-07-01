@@ -782,8 +782,8 @@ Sets `ps/scrollbar--drag-in-progress' globally (not via `let') so that
 idle-timer callbacks -- which run with global dynamic bindings, not inside
 the let's scope -- also see it and suppress rendering for the duration.
 Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
-  (ps/scrollbar--hide-now)
   (setq ps/scrollbar--drag-in-progress t)
+  (ps/scrollbar--hide-now)
   (unwind-protect
       (apply orig args)
     (setq ps/scrollbar--drag-in-progress nil)))
