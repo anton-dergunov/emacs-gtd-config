@@ -56,8 +56,12 @@ Set by `ps/scrollbar--resize-advice' and by `ps/scrollbar--click-on-vertical-lin
 (because on macOS NS the divider drag is handled at C/OS level after our
 Lisp handler exits, so the advice alone is not enough).")
 (defvar ps/scrollbar--drag-suppress-timer nil
-  "One-shot timer that clears `ps/scrollbar--drag-in-progress' after the
-NS-level divider drag ends (no more window-size changes for 200 ms).")
+  "Fallback timer that clears drag-in-progress 2 s after last VL event.")
+(defvar ps/scrollbar--drag-saved-window nil
+  "Window selected when VL drag started; restored by release event or timer.")
+(defvar ps/scrollbar--drag-initial-widths nil
+  "Alist of (window . pixel-width) captured at start of VL press.
+Used by the release handler to distinguish click from drag.")
 (defvar ps/scrollbar--fade-start nil
   "`float-time' when the current fade began, or nil (not fading).")
 (defvar ps/scrollbar--fade-from nil
@@ -602,21 +606,27 @@ Used after `mouse-drag-vertical-line' returns without resizing (click case)."
 
 (defun ps/scrollbar--click-on-vertical-line (event)
   "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
-Delegates to `mouse-drag-vertical-line' for window resizing.
+On macOS NS the backend fires this repeatedly during a drag.
 
-On macOS NS the backend generates repeated `[vertical-line down-mouse-1]'
-events while the button is held, so this handler fires many times per
-drag.  `mouse-drag-vertical-line' often signals `user-error' (\"No
-resizable window on the left\") for some of those positions.  Without
-error handling that user-error propagates out of the handler before
-`ps/scrollbar--drag-suppress-extend' is reached, leaving
-`drag-in-progress' nil and letting the tick show the pill via hover.
+Two-layer suppression to prevent the pill appearing during the drag:
+1. `drag-in-progress' = t  → tick is suppressed directly.
+2. Switch selected window away from the dragged window → even if the tick
+   fires, the hover check `(eq hovered (selected-window))' is nil.
 
-Fix: silence the user-error with `condition-case' so that
-`drag-suppress-extend' is called on every invocation.  Each call resets
-the 200 ms suppress timer; as long as NS fires events faster than 200 ms
-`drag-in-progress' stays t for the full drag."
+On the first event: save the selected window and window widths, then
+switch.  The release event (`ps/scrollbar--vl-release') restores
+everything and handles click-to-reposition."
   (interactive "e")
+  (let ((posn-win (posn-window (event-start event))))
+    ;; First press: save state and switch window.
+    (when (and (window-live-p posn-win)
+               (eq posn-win (selected-window))
+               (null ps/scrollbar--drag-saved-window))
+      (setq ps/scrollbar--drag-saved-window  (selected-window)
+            ps/scrollbar--drag-initial-widths
+            (mapcar (lambda (w) (cons w (window-pixel-width w)))
+                    (window-list)))
+      (other-window 1 nil t)))
   (condition-case nil
       (mouse-drag-vertical-line event)
     (user-error nil))
@@ -766,20 +776,56 @@ macOS lets the user move/resize the borderless pill window; we put it back."
        (t
         (ps/scrollbar--snap-back))))))
 
+(defun ps/scrollbar--drag-suppress-end ()
+  "Fallback timer callback: 2 s with no VL events → drag is done.
+Restores window selection and clears all drag state.  Under normal
+conditions `ps/scrollbar--vl-release' handles this on the release event;
+this fallback covers areas whose drag-mouse-1 we do not have a binding for."
+  (setq ps/scrollbar--drag-in-progress    nil
+        ps/scrollbar--drag-suppress-timer nil
+        ps/scrollbar--drag-initial-widths nil)
+  (when (and ps/scrollbar--drag-saved-window
+             (window-live-p ps/scrollbar--drag-saved-window))
+    (select-window ps/scrollbar--drag-saved-window 'norecord))
+  (setq ps/scrollbar--drag-saved-window nil))
+
 (defun ps/scrollbar--drag-suppress-extend ()
-  "Keep `ps/scrollbar--drag-in-progress' set while windows are being resized.
-Called from `ps/scrollbar--on-size-change' on every window-layout change.
-Schedules a 200 ms one-shot timer; each resize resets it, so the flag stays
-t throughout a continuous NS-level divider drag and clears 200 ms after the
-last resize step."
+  "Assert drag suppression and reset the 2 s fallback timer.
+NS fires [vertical-line down-mouse-1] repeatedly during a drag, so each
+call pushes the fallback further out.  The release event fires
+`ps/scrollbar--vl-release' to clean up immediately in the common case."
   (setq ps/scrollbar--drag-in-progress t)
   (when ps/scrollbar--drag-suppress-timer
     (cancel-timer ps/scrollbar--drag-suppress-timer))
   (setq ps/scrollbar--drag-suppress-timer
-    (run-with-timer 0.2 nil
-      (lambda ()
-        (setq ps/scrollbar--drag-in-progress nil
-              ps/scrollbar--drag-suppress-timer nil)))))
+    (run-with-timer 2.0 nil #'ps/scrollbar--drag-suppress-end)))
+
+(defun ps/scrollbar--vl-release (event)
+  "Handle mouse-1/drag-mouse-1 after a vertical-line down-mouse-1.
+Immediately restores the window selection saved by the press handler.
+If no windows were resized (plain click, not drag), repositions the
+scrollbar at the current mouse position."
+  (interactive "e")
+  (ignore event)
+  (let ((was-click
+         (and ps/scrollbar--drag-initial-widths
+              (not (cl-some (lambda (entry)
+                              (and (window-live-p (car entry))
+                                   (/= (window-pixel-width (car entry))
+                                       (cdr entry))))
+                            ps/scrollbar--drag-initial-widths)))))
+    (when ps/scrollbar--drag-suppress-timer
+      (cancel-timer ps/scrollbar--drag-suppress-timer))
+    (setq ps/scrollbar--drag-in-progress    nil
+          ps/scrollbar--drag-suppress-timer nil
+          ps/scrollbar--drag-initial-widths nil)
+    ;; Reposition before restoring window (mouse is still at click spot).
+    (when (and was-click ps/scrollbar-click-to-scroll)
+      (ps/scrollbar--reposition-at-mouse))
+    (when (and ps/scrollbar--drag-saved-window
+               (window-live-p ps/scrollbar--drag-saved-window))
+      (select-window ps/scrollbar--drag-saved-window 'norecord))
+    (setq ps/scrollbar--drag-saved-window nil)))
 
 (defun ps/scrollbar--on-size-change (frame)
   "React to window-layout changes in FRAME.
@@ -877,8 +923,10 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
     ;; mouse-1 / drag-mouse-1: swallow so the release events don't fall
     ;;   through to default Emacs handling after our reposition ran.
     (define-key map [vertical-line down-mouse-1] #'ps/scrollbar--click-on-vertical-line)
-    (define-key map [vertical-line mouse-1]      #'ignore)
-    (define-key map [vertical-line drag-mouse-1] #'ignore)
+    (define-key map [vertical-line mouse-1]      #'ps/scrollbar--vl-release)
+    (define-key map [vertical-line drag-mouse-1] #'ps/scrollbar--vl-release)
+    ;; Drag often ends in the left-fringe area; handle the release there too.
+    (define-key map [left-fringe drag-mouse-1]   #'ps/scrollbar--vl-release)
     map)
   "Keymap for `ps/scrollbar-mode'.")
 

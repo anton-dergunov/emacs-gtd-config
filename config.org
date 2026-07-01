@@ -76,6 +76,8 @@ Sets =my-org-base-directory=. Copy =local.el.template= → =local.el= on first r
 All self-contained logic lives in =lisp/ps-*.el=.
 #+begin_src emacs-lisp
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  ;; Prefer source (.el) over stale bytecode (.elc) for local modules.
+  (setq load-prefer-newer t)
   (require 'ps-utils)
   (require 'ps-window)
   (require 'ps-links)

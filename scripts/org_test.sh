@@ -22,6 +22,7 @@ while IFS= read -r file; do
 done < <(find tests -name 'test-*.el' | sort)
 
 "$EMACS_BIN" -Q --batch \
+  --eval "(setq load-prefer-newer t)" \
   -L lisp \
   -L tests \
   "${TEST_FILES[@]}" \
