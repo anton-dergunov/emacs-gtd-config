@@ -728,9 +728,22 @@ triggering a redisplay on every tick while the pill is stationary."
                 (set-frame-position f l tp)))))))))
 
 (defun ps/scrollbar--on-focus-change ()
-  "Hide the pill immediately when Emacs loses OS focus.
-Added to `after-focus-change-function' by `ps/scrollbar--enable'."
-  (unless (frame-focus-state)
+  "Pause or resume the tick timer when Emacs gains or loses OS focus.
+Wired into `after-focus-change-function' by `ps/scrollbar--enable'.
+On focus loss: cancel the timer and hide the pill -- no CPU used while
+Emacs is in the background.  On focus gain: restart the timer so scroll
+and hover detection resume immediately."
+  (if (frame-focus-state)
+      ;; Emacs regained focus: restart the timer if it was stopped.
+      (when (and ps/scrollbar-mode (null ps/scrollbar--timer))
+        (setq ps/scrollbar--timer
+              (run-with-timer ps/scrollbar-tick-interval
+                              ps/scrollbar-tick-interval
+                              #'ps/scrollbar--tick)))
+    ;; Emacs lost focus: stop the timer and hide the pill.
+    (when ps/scrollbar--timer
+      (cancel-timer ps/scrollbar--timer)
+      (setq ps/scrollbar--timer nil))
     (ps/scrollbar--hide-now)))
 
 (defun ps/scrollbar--tick ()
