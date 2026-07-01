@@ -206,14 +206,21 @@ also reveals it while the mouse is over its own track (not the whole window) --
 on by default, since it is how you find the track to interact with.
 Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-scroll= nil.
 =ps/scrollbar-tick-interval= bounds how stale the thumb's position can look while
-scrolling -- lower is snappier.
+scrolling -- lower is snappier but costs more CPU (each tick calls =mouse-position=,
+an NS cross-process call).
+
+To disable the custom scrollbar entirely (revert to native bars), set
+=ps/scrollbar-enabled= to =nil= in =local.el=.
 #+begin_src emacs-lisp
+  (defvar ps/scrollbar-enabled t
+    "Set to nil in local.el to disable the custom scrollbar entirely.")
+
   (setq ps/scrollbar-width             6
         ps/scrollbar-fringe-width     14
         ps/scrollbar-hide-delay       1.0
         ps/scrollbar-fade-duration    0.25
         ps/scrollbar-show-on-hover    t
-        ps/scrollbar-tick-interval    0.05
+        ps/scrollbar-tick-interval    0.15
         ps/scrollbar-min-thumb-pixels 24)
 #+end_src
 
@@ -518,11 +525,14 @@ tagging/journal facts below are kept in sync with this config's =AGENTS.md=
   ;; Disable the toolbar
   (tool-bar-mode -1)
 
-  ;; Disable the native scroll bars (the NS toolkit ignores their face, so they
-  ;; can't be themed or auto-hidden) and use our custom fringe scrollbars instead.
-  (scroll-bar-mode -1)
-  (horizontal-scroll-bar-mode -1)
-  (ps/scrollbar-mode 1)
+  ;; Custom fringe scrollbars (ps-scrollbar.el).
+  ;; Set ps/scrollbar-enabled nil in local.el to revert to native bars.
+  (if ps/scrollbar-enabled
+      (progn
+        (scroll-bar-mode -1)
+        (horizontal-scroll-bar-mode -1)
+        (ps/scrollbar-mode 1))
+    (scroll-bar-mode 1))
 #+end_src
 
 ** Smooth scrolling (ultra-scroll)

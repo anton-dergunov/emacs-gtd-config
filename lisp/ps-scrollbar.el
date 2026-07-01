@@ -62,6 +62,10 @@ Lisp handler exits, so the advice alone is not enough).")
 (defvar ps/scrollbar--drag-initial-widths nil
   "Alist of (window . pixel-width) captured at start of VL press.
 Used by the release handler to distinguish click from drag.")
+(defvar ps/scrollbar--last-mp nil
+  "Cached (frame col row) from the previous `mouse-position' call.
+Used by `ps/scrollbar--tick-1' to skip expensive work when the mouse
+has not moved since the last tick.")
 (defvar ps/scrollbar--drag-switch-timer nil
   "Timer that switches the selected window 200 ms after a VL press.
 Cancelled by `ps/scrollbar--vl-release' on quick releases (clicks).")
@@ -723,28 +727,51 @@ triggering a redisplay on every tick while the pill is stationary."
               (unless (and (= (car cur) l) (= (cdr cur) tp))
                 (set-frame-position f l tp)))))))))
 
+(defun ps/scrollbar--on-focus-change ()
+  "Hide the pill immediately when Emacs loses OS focus.
+Added to `after-focus-change-function' by `ps/scrollbar--enable'."
+  (unless (frame-focus-state)
+    (ps/scrollbar--hide-now)))
+
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
-  (when (and ps/scrollbar-mode (not ps/scrollbar--drag-in-progress))
+  (when (and ps/scrollbar-mode
+             (not ps/scrollbar--drag-in-progress)
+             ;; Skip entirely when Emacs is definitely not focused: no hover
+             ;; is possible and no keyboard scroll can happen, so the expensive
+             ;; mouse-position call would be wasted.  nil = definitely unfocused;
+             ;; t or 'unknown = run normally.
+             (not (null (frame-focus-state))))
     (condition-case err
         (ps/scrollbar--tick-1)
       (error (message "ps/scrollbar: %S" err)))))
 
 (defun ps/scrollbar--tick-1 ()
   (let* ((now (float-time))
-         (mouse-win (ps/scrollbar--mouse-window))
          (sel (selected-window))
-         ;; Mouse-wheel scrolls the window under the pointer (maybe not selected);
-         ;; keyboard scrolls the selected one.  Watch both.
+         ;; Call mouse-position ONCE and cache the result.  The cached value is
+         ;; compared each tick to avoid calling mouse-pixel-position (the more
+         ;; expensive strip-hover check) when the mouse hasn't moved.
+         (mp (mouse-position))
+         (mouse-moved (not (equal mp ps/scrollbar--last-mp)))
+         ;; Derive mouse-win from the already-computed mp — no second call.
+         (mouse-win (pcase-let ((`(,frame ,x . ,y) mp))
+                      (and (frame-live-p frame) (numberp x) (numberp y)
+                           (window-at x y frame))))
+         ;; Scroll detection always runs: it is cheap (just window-start + window
+         ;; parameter) and must not be called speculatively before the render
+         ;; decision — ps/scrollbar--scrolled-window has a side effect (updates
+         ;; the cache), so calling it twice for the same window in the same tick
+         ;; would make the second call always return nil.
          (mouse-scrolled (and mouse-win (ps/scrollbar--scrolled-window mouse-win)))
-         (sel-scrolled (and (not (eq sel mouse-win))
-                            (ps/scrollbar--scrolled-window sel)))
-         ;; Pixel-precise and scoped to the track itself, not the whole
-         ;; window; only computed when hover-reveal is on, so the common
-         ;; scroll-only path pays no extra cost.
+         (sel-scrolled   (and (not (eq sel mouse-win))
+                              (ps/scrollbar--scrolled-window sel)))
+         ;; Hover: only when mouse moved — skips mouse-pixel-position otherwise.
          (hovered (and ps/scrollbar-show-on-hover
+                       mouse-moved
                        (ps/scrollbar--strip-hover-window)))
          target)
+    (setq ps/scrollbar--last-mp mp)
     (cond
      ((and mouse-scrolled (ps/scrollbar--candidate-window-p mouse-win))
       (setq target mouse-win))
@@ -911,8 +938,9 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
           (cdr (assq 'right-fringe default-frame-alist))))
   (modify-all-frames-parameters
    (list (cons 'right-fringe ps/scrollbar-fringe-width)))
-  (add-hook 'delete-frame-functions #'ps/scrollbar--on-delete-frame)
+  (add-hook 'delete-frame-functions       #'ps/scrollbar--on-delete-frame)
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (add-function :after after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
   (setq ps/scrollbar--last-sig nil)
   (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
@@ -924,8 +952,9 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (when ps/scrollbar--timer
     (cancel-timer ps/scrollbar--timer)
     (setq ps/scrollbar--timer nil))
-  (remove-hook 'delete-frame-functions #'ps/scrollbar--on-delete-frame)
+  (remove-hook 'delete-frame-functions       #'ps/scrollbar--on-delete-frame)
   (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (remove-function after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
   (ps/scrollbar--delete-all-frames)
   (unless (eq ps/scrollbar--saved-right-fringe 'unset)
