@@ -598,26 +598,17 @@ Used after `mouse-drag-vertical-line' returns without resizing (click case)."
 
 (defun ps/scrollbar--click-on-vertical-line (event)
   "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
-Always delegates to `mouse-drag-vertical-line' first (confirmed to work
-from this handler context via live testing).  After it returns, checks
-whether any window actually changed width:
-- If yes: genuine resize drag -- done.
-- If no:  quick click with no movement -- reposition the scrollbar.
-This avoids trying to detect drag vs. click at down-mouse-1 time; on this
-platform `read-event' inside `track-mouse' never delivers mouse-movement
-events when called from a mode-map handler, making that approach hopeless."
+Delegates to `mouse-drag-vertical-line' for window resizing.
+
+On macOS NS, the divider drag is handled at the C/OS level after this
+handler returns, so `mouse-drag-vertical-line' always exits immediately
+with no window-width change and mouse-dx=0 -- making it impossible to
+distinguish a drag from a click at this point.  Calling
+`ps/scrollbar--reposition-at-mouse' here would show the pill on every
+drag, which is worse than losing reposition for the narrow vertical-line
+grab zone.  Use the right-fringe handler for click-to-reposition instead."
   (interactive "e")
-  (let* ((wins   (window-list))
-         (widths (mapcar #'window-pixel-width wins)))
-    (mouse-drag-vertical-line event)
-    (let ((resized nil))
-      (cl-mapc (lambda (win w0)
-                 (when (and (window-live-p win)
-                            (/= (window-pixel-width win) w0))
-                   (setq resized t)))
-               wins widths)
-      (when (and (not resized) ps/scrollbar-click-to-scroll)
-        (ps/scrollbar--reposition-at-mouse)))))
+  (mouse-drag-vertical-line event))
 (defun ps/scrollbar--click-on-fringe (event)
   "Handle a click on the parent frame's bare scrollbar fringe (the common
 case, since the pill only covers the thumb's current pixels, not the whole
