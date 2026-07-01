@@ -1584,6 +1584,18 @@ natively — no API key or token handling needed.
 #+end_src
 
 * Keybindings & Menu
+** macOS: keyboard layout
+On a UK Mac keyboard, Option-3 should type =#= but Emacs intercepts it as
+=M-3= (digit-argument). Translate =M-3= → =#= at the input level so org-mode's
+own =#= handling still applies. Also unset =M-0= through =M-9= as digit
+arguments — use =C-u N= or =C-N= instead.
+#+begin_src emacs-lisp
+  (when (eq system-type 'darwin)
+    (define-key key-translation-map (kbd "M-3") (kbd "#"))
+    (dotimes (i 10)
+      (global-unset-key (kbd (format "M-%d" i)))))
+#+end_src
+
 ** F7 — reinsert empty lines
 Logic lives in =lisp/ps-blank-lines.el=.
 #+begin_src emacs-lisp

@@ -188,44 +188,36 @@
     (should (eq (lookup-key global-map [mode-line mouse-3]) #'ignore))))
 
 ;;; -------------------------------------------------------
-;;; ps/mode-line--update-now (cache gating)
+;;; ps/mode-line--render-window-cached (per-window cache gating)
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/mode-line--update-now-gates-on-line ()
-  "Same-line calls (e.g. each keystroke while typing) leave the cached
-string untouched and never force a redraw; a line change recomputes and
-forces one.  This is the synchronous worker the idle debounce drives."
+(ert-deftest ps/mode-line--render-window-cached-gates-on-line ()
+  "Same-line calls return the cached string without recomputing; a line
+change recomputes and updates the window-parameter cache."
   (with-temp-buffer
     (insert "line one\nline two\n")
     (goto-char (point-min))
-    (let ((ps/mode-line--last-bol nil)
-          (ps/mode-line--cached-string nil)
-          (render-calls 0)
-          (force-calls 0))
+    (let ((render-calls 0))
       (cl-letf (((symbol-function 'ps/mode-line--render)
-                 (lambda () (cl-incf render-calls) (format "render-%d" render-calls)))
-                ((symbol-function 'force-mode-line-update)
-                 (lambda (&optional _all) (cl-incf force-calls))))
-        ;; Initial call on line 1 establishes the cache.
-        (ps/mode-line--update-now (current-buffer))
-        (should (= render-calls 1))
-        (should (= force-calls 1))
-        (should (equal ps/mode-line--cached-string "render-1"))
-        ;; Same line (simulated keystrokes): no recompute, no forced redraw.
+                 (lambda () (cl-incf render-calls) (format "render-%d" render-calls))))
+        ;; Seed the cache for the selected window on line 1.
+        (set-window-parameter nil 'ps-ml-bol nil)
+        (set-window-parameter nil 'ps-ml-str nil)
+        (let ((result1 (ps/mode-line--render-window-cached)))
+          (should (= render-calls 1))
+          (should (equal result1 "render-1"))
+          (should (equal (window-parameter nil 'ps-ml-str) "render-1")))
+        ;; Same line: cache hit, no recompute.
         (forward-char 3)
-        (ps/mode-line--update-now (current-buffer))
-        (forward-char 2)
-        (ps/mode-line--update-now (current-buffer))
-        (should (= render-calls 1))
-        (should (= force-calls 1))
-        (should (equal ps/mode-line--cached-string "render-1"))
-        ;; Moving to a different line recomputes and forces a redraw.
-        (goto-char (point-min))
+        (let ((result2 (ps/mode-line--render-window-cached)))
+          (should (= render-calls 1))
+          (should (equal result2 "render-1")))
+        ;; New line: cache miss, recompute.
         (forward-line 1)
-        (ps/mode-line--update-now (current-buffer))
-        (should (= render-calls 2))
-        (should (= force-calls 2))
-        (should (equal ps/mode-line--cached-string "render-2"))))))
+        (let ((result3 (ps/mode-line--render-window-cached)))
+          (should (= render-calls 2))
+          (should (equal result3 "render-2"))
+          (should (equal (window-parameter nil 'ps-ml-str) "render-2")))))))
 
 ;;; -------------------------------------------------------
 ;;; ps/mode-line--agenda-render (view-switcher)
