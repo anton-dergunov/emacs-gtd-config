@@ -604,22 +604,22 @@ Used after `mouse-drag-vertical-line' returns without resizing (click case)."
   "Handle down-mouse-1 in the vertical-line area near a scrollbar track.
 Delegates to `mouse-drag-vertical-line' for window resizing.
 
-On macOS NS, the actual divider drag is handled at the C/OS level after
-this handler exits -- `mouse-drag-vertical-line' returns immediately with
-no window-width change.  `ps/scrollbar--resize-advice' sets
-`drag-in-progress' around that call but its unwind-protect clears it as
-soon as MDV returns, leaving a window where the tick can fire and show
-the pill via hover detection before the NS drag even starts.
+On macOS NS the backend generates repeated `[vertical-line down-mouse-1]'
+events while the button is held, so this handler fires many times per
+drag.  `mouse-drag-vertical-line' often signals `user-error' (\"No
+resizable window on the left\") for some of those positions.  Without
+error handling that user-error propagates out of the handler before
+`ps/scrollbar--drag-suppress-extend' is reached, leaving
+`drag-in-progress' nil and letting the tick show the pill via hover.
 
-Fix: re-set `drag-in-progress' after MDV returns and schedule a 300 ms
-fallback clear.  As the NS drag causes window-size changes,
-`ps/scrollbar--on-size-change' calls `ps/scrollbar--drag-suppress-extend'
-which resets the timer on every resize step, keeping the flag live for the
-full duration of the drag and clearing it 200 ms after the last step."
+Fix: silence the user-error with `condition-case' so that
+`drag-suppress-extend' is called on every invocation.  Each call resets
+the 200 ms suppress timer; as long as NS fires events faster than 200 ms
+`drag-in-progress' stays t for the full drag."
   (interactive "e")
-  (mouse-drag-vertical-line event)
-  ;; Re-assert suppression: resize-advice's unwind cleared drag-in-progress
-  ;; when MDV exited, but the NS drag is only starting now.
+  (condition-case nil
+      (mouse-drag-vertical-line event)
+    (user-error nil))
   (ps/scrollbar--hide-now)
   (ps/scrollbar--drag-suppress-extend))
 (defun ps/scrollbar--click-on-fringe (event)
