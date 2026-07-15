@@ -207,7 +207,10 @@ on by default, since it is how you find the track to interact with.
 Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-scroll= nil.
 =ps/scrollbar-tick-interval= bounds how stale the thumb's position can look while
 scrolling -- lower is snappier but costs more CPU (each tick calls =mouse-position=,
-an NS cross-process call).
+an NS cross-process call). Losing OS focus (e.g. minimizing Emacs) already pauses
+that timer; after =ps/scrollbar-teardown-delay= seconds still unfocused, the
+remaining hooks/advice are fully uninstalled too (reinstalled transparently on
+focus gain), so nothing in this module runs at all during a long idle stretch.
 
 To disable the custom scrollbar entirely (revert to native bars), set
 =ps/scrollbar-enabled= to =nil= in =local.el=.
@@ -221,7 +224,8 @@ To disable the custom scrollbar entirely (revert to native bars), set
         ps/scrollbar-fade-duration    0.25
         ps/scrollbar-show-on-hover    t
         ps/scrollbar-tick-interval    0.15
-        ps/scrollbar-min-thumb-pixels 24)
+        ps/scrollbar-min-thumb-pixels 24
+        ps/scrollbar-teardown-delay   (* 30 60))
 #+end_src
 
 ** Mode line (ps-mode-line.el)
@@ -1202,12 +1206,51 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
   ;; Obsidian-like persistence. The idle auto-save above keeps files current
   ;; while editing; these two close the remaining gaps so the mode line never
   ;; needs a "modified" indicator:
-  ;;   - save the moment Emacs loses focus (e.g. switching to another app), and
+  ;;   - save the moment Emacs loses focus (e.g. switching to another app,
+  ;;     which is also how Claude Code picks up the latest file content), and
   ;;   - save just before exit, so quitting never prompts "Save buffer?".
+  (defcustom ps/org-save-on-focus-loss-idle-threshold 300
+    "Seconds since the last command above which a focus-loss save is skipped.
+The org files here live on a Dropbox-backed CloudStorage mount; a save
+triggered long after Emacs was last actually used (e.g. a focus event
+generated around system sleep/wake) is exactly when that mount is most
+likely to be slow to respond -- and is not a deliberate hand-off to another
+app, since nothing has happened in Emacs for a while anyway. Skipping it
+there avoids blocking all of Emacs on that write; the next real save (the
+periodic auto-save-hook one above, or a later focus-loss save) still covers
+it."
+    :type 'number)
+
+  (defvar ps/org-save--last-command-time (float-time)
+    "`float-time' of the most recent command Emacs processed.
+Compared against `ps/org-save-on-focus-loss-idle-threshold' by
+`ps/org-save-on-focus-loss' -- more direct than `current-idle-time', which
+is not reliably meaningful from inside a focus-change callback.")
+  (add-hook 'post-command-hook
+            (lambda () (setq ps/org-save--last-command-time (float-time))))
+
+  (defun ps/org-save--any-org-buffer-modified-p ()
+    "Non-nil if any live Org buffer has unsaved changes."
+    (seq-some (lambda (b)
+                (and (buffer-modified-p b)
+                     (with-current-buffer b (derived-mode-p 'org-mode))))
+              (buffer-list)))
+
   (defun ps/org-save-on-focus-loss ()
-    "Save all Org buffers when Emacs loses focus."
+    "Save all Org buffers when Emacs loses focus.
+Skipped outright when nothing is modified, or when Emacs has been idle
+longer than `ps/org-save-on-focus-loss-idle-threshold' (see its docstring).
+The save itself is bounded by a timeout and never lets an error escape, so a
+slow or failing save cannot take the rest of `after-focus-change-function'
+-- e.g. `ps/scrollbar--on-focus-change' -- down with it."
     (unless (frame-focus-state)
-      (ps/org-save-all-org-buffers-quietly)))
+      (when (and (ps/org-save--any-org-buffer-modified-p)
+                 (< (- (float-time) ps/org-save--last-command-time)
+                    ps/org-save-on-focus-loss-idle-threshold))
+        (with-timeout (5 (message "ps/org-save-on-focus-loss: timed out, skipped"))
+          (condition-case err
+              (ps/org-save-all-org-buffers-quietly)
+            (error (message "ps/org-save-on-focus-loss: %S" err)))))))
   (add-function :after after-focus-change-function #'ps/org-save-on-focus-loss)
   (advice-add 'save-buffers-kill-emacs :before
               (lambda (&rest _) (ps/org-save-all-org-buffers-quietly)))

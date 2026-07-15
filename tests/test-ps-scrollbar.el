@@ -1,6 +1,7 @@
 ;;; test-ps-scrollbar.el --- ERT tests for ps-scrollbar -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-scrollbar)
 
@@ -142,6 +143,89 @@ Claude Code session buffers are excluded by name (not by mode) -- see
               #'ps/scrollbar--vl-release))
   (should (eq (lookup-key ps/scrollbar-mode-map [left-fringe drag-mouse-1])
               #'ps/scrollbar--vl-release)))
+
+;;; Long-unfocus teardown / reinstall
+
+(defmacro ps/scrollbar--with-clean-focus-state (&rest body)
+  "Run BODY with fresh, isolated teardown-related state, restored after."
+  (declare (indent 0))
+  `(let ((ps/scrollbar-mode t)
+         (ps/scrollbar--timer nil)
+         (ps/scrollbar--teardown-timer nil)
+         (ps/scrollbar--torn-down nil))
+     (unwind-protect (progn ,@body)
+       (when (timerp ps/scrollbar--timer) (cancel-timer ps/scrollbar--timer))
+       (when (timerp ps/scrollbar--teardown-timer)
+         (cancel-timer ps/scrollbar--teardown-timer)))))
+
+(ert-deftest ps/scrollbar--focus-loss-arms-teardown-timer ()
+  "Losing focus pauses the tick timer and arms the teardown timer."
+  (ps/scrollbar--with-clean-focus-state
+    (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) nil))
+              ((symbol-function 'ps/scrollbar--hide-now) #'ignore))
+      (ps/scrollbar--on-focus-change)
+      (should (null ps/scrollbar--timer))
+      (should (timerp ps/scrollbar--teardown-timer))
+      (should-not ps/scrollbar--torn-down))))
+
+(ert-deftest ps/scrollbar--quick-refocus-cancels-teardown-without-tearing-down ()
+  "Regaining focus before the teardown delay elapses never tears anything down."
+  (ps/scrollbar--with-clean-focus-state
+    (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) nil))
+              ((symbol-function 'ps/scrollbar--hide-now) #'ignore))
+      (ps/scrollbar--on-focus-change))    ; lose focus: arms teardown timer
+    (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) t)))
+      (ps/scrollbar--on-focus-change))    ; regain focus quickly
+    (should (null ps/scrollbar--teardown-timer))
+    (should-not ps/scrollbar--torn-down)
+    (should (timerp ps/scrollbar--timer))))
+
+(ert-deftest ps/scrollbar--teardown-hooks-removes-size-hook-and-advice ()
+  "After the long-unfocus delay, the size-change hook and drag advice are gone,
+and the module reports itself torn down."
+  (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
+  (unwind-protect
+      (progn
+        (ps/scrollbar--teardown-hooks)
+        (should-not (memq 'ps/scrollbar--on-size-change
+                          window-size-change-functions))
+        (should-not (advice-member-p 'ps/scrollbar--resize-advice
+                                     'mouse-drag-vertical-line))
+        (should ps/scrollbar--torn-down))
+    (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+    (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
+    (setq ps/scrollbar--torn-down nil)))
+
+(ert-deftest ps/scrollbar--reinstall-hooks-undoes-teardown ()
+  "Reinstalling after a teardown restores the size-change hook and advice."
+  (ps/scrollbar--teardown-hooks)
+  (unwind-protect
+      (progn
+        (ps/scrollbar--reinstall-hooks)
+        (should (memq 'ps/scrollbar--on-size-change window-size-change-functions))
+        (should (advice-member-p 'ps/scrollbar--resize-advice
+                                 'mouse-drag-vertical-line))
+        (should-not ps/scrollbar--torn-down))
+    (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+    (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
+    (setq ps/scrollbar--torn-down nil)))
+
+(ert-deftest ps/scrollbar--refocus-after-teardown-reinstalls-hooks ()
+  "Regaining focus after a real teardown reinstalls hooks and resumes the timer."
+  (ps/scrollbar--with-clean-focus-state
+    (ps/scrollbar--teardown-hooks)
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) t)))
+            (ps/scrollbar--on-focus-change))
+          (should-not ps/scrollbar--torn-down)
+          (should (memq 'ps/scrollbar--on-size-change window-size-change-functions))
+          (should (advice-member-p 'ps/scrollbar--resize-advice
+                                   'mouse-drag-vertical-line))
+          (should (timerp ps/scrollbar--timer)))
+      (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+      (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice))))
 
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here

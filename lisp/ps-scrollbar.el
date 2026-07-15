@@ -75,6 +75,17 @@ Cancelled by `ps/scrollbar--vl-release' on quick releases (clicks).")
   "Starting color (hex string) of the current fade.")
 (defvar ps/scrollbar--fade-to nil
   "Target color (hex string) of the current fade (parent's background).")
+(defvar ps/scrollbar--teardown-timer nil
+  "Timer that fully removes scrollbar hooks after a long unfocused stretch.
+Set on focus loss (alongside pausing the tick timer), cancelled on focus
+gain. See `ps/scrollbar--teardown-hooks'.")
+(defvar ps/scrollbar--torn-down nil
+  "Non-nil while the hooks/advice below are fully uninstalled.
+Set by `ps/scrollbar--teardown-hooks', cleared by
+`ps/scrollbar--reinstall-hooks'. Distinct from the tick timer alone being
+paused: this additionally removes `window-size-change-functions' and the
+`mouse-drag-vertical-line' advice, so nothing in this module runs at all
+while Emacs sits unfocused for a long time.")
 
 ;;; Customization
 
@@ -118,6 +129,17 @@ low without a real cost."
 (defcustom ps/scrollbar-exclude-modes '(treemacs-mode which-key-mode)
   "Major modes whose windows never get a pill."
   :type '(repeat symbol) :group 'ps-scrollbar)
+
+(defcustom ps/scrollbar-teardown-delay (* 30 60)
+  "Seconds Emacs must stay unfocused before scrollbar hooks are fully removed.
+Losing OS focus already pauses the tick timer (no CPU used in the
+background), but `window-size-change-functions' and the
+`mouse-drag-vertical-line' advice stay installed and can still fire from
+non-timer events. After this many seconds unfocused, `ps/scrollbar--enable's
+hooks/advice are fully uninstalled (`ps/scrollbar--teardown-hooks') and
+transparently reinstalled the moment focus returns -- so nothing in this
+module is reachable at all during a long idle stretch (e.g. overnight)."
+  :type 'number :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-click-to-scroll t
   "When non-nil, clicking anywhere in the scrollbar track jumps there,
@@ -731,20 +753,55 @@ triggering a redisplay on every tick while the pill is stationary."
   "Pause or resume the tick timer when Emacs gains or loses OS focus.
 Wired into `after-focus-change-function' by `ps/scrollbar--enable'.
 On focus loss: cancel the timer and hide the pill -- no CPU used while
-Emacs is in the background.  On focus gain: restart the timer so scroll
-and hover detection resume immediately."
+Emacs is in the background -- and arm `ps/scrollbar--teardown-timer' to
+fully uninstall the remaining hooks/advice if the loss lasts long enough
+\(see `ps/scrollbar-teardown-delay').  On focus gain: cancel that timer,
+reinstall the hooks/advice if they were torn down, and restart the tick
+timer so scroll and hover detection resume immediately."
   (if (frame-focus-state)
-      ;; Emacs regained focus: restart the timer if it was stopped.
-      (when (and ps/scrollbar-mode (null ps/scrollbar--timer))
-        (setq ps/scrollbar--timer
-              (run-with-timer ps/scrollbar-tick-interval
-                              ps/scrollbar-tick-interval
-                              #'ps/scrollbar--tick)))
+      (progn
+        (when ps/scrollbar--teardown-timer
+          (cancel-timer ps/scrollbar--teardown-timer)
+          (setq ps/scrollbar--teardown-timer nil))
+        (when ps/scrollbar--torn-down
+          (ps/scrollbar--reinstall-hooks))
+        ;; Emacs regained focus: restart the timer if it was stopped.
+        (when (and ps/scrollbar-mode (null ps/scrollbar--timer))
+          (setq ps/scrollbar--timer
+                (run-with-timer ps/scrollbar-tick-interval
+                                ps/scrollbar-tick-interval
+                                #'ps/scrollbar--tick))))
     ;; Emacs lost focus: stop the timer and hide the pill.
     (when ps/scrollbar--timer
       (cancel-timer ps/scrollbar--timer)
       (setq ps/scrollbar--timer nil))
-    (ps/scrollbar--hide-now)))
+    (ps/scrollbar--hide-now)
+    (when ps/scrollbar--teardown-timer
+      (cancel-timer ps/scrollbar--teardown-timer))
+    (setq ps/scrollbar--teardown-timer
+          (run-with-timer ps/scrollbar-teardown-delay nil
+                          #'ps/scrollbar--teardown-hooks))))
+
+(defun ps/scrollbar--teardown-hooks ()
+  "Fully remove scrollbar hooks/advice after a long unfocused stretch.
+Called by the timer `ps/scrollbar--on-focus-change' arms on focus loss.
+Leaves `ps/scrollbar-mode' itself enabled (from the user's perspective the
+mode is still on) -- `ps/scrollbar--reinstall-hooks' puts everything back
+the moment focus returns.  `delete-frame-functions' is left installed: it
+only fires on the rare deletion of a whole frame, not periodically, so it
+is not part of what this guards against."
+  (setq ps/scrollbar--teardown-timer nil)
+  (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
+  (ps/scrollbar--delete-all-frames)
+  (ps/scrollbar--hide-now)
+  (setq ps/scrollbar--torn-down t))
+
+(defun ps/scrollbar--reinstall-hooks ()
+  "Undo `ps/scrollbar--teardown-hooks': reinstall hooks/advice on focus gain."
+  (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
+  (setq ps/scrollbar--torn-down nil))
 
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
@@ -955,7 +1012,8 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (add-function :after after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
-  (setq ps/scrollbar--last-sig nil)
+  (setq ps/scrollbar--last-sig nil
+        ps/scrollbar--torn-down nil)
   (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
   (setq ps/scrollbar--timer
         (run-with-timer ps/scrollbar-tick-interval ps/scrollbar-tick-interval
@@ -965,7 +1023,11 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (when ps/scrollbar--timer
     (cancel-timer ps/scrollbar--timer)
     (setq ps/scrollbar--timer nil))
+  (when ps/scrollbar--teardown-timer
+    (cancel-timer ps/scrollbar--teardown-timer)
+    (setq ps/scrollbar--teardown-timer nil))
   (remove-hook 'delete-frame-functions       #'ps/scrollbar--on-delete-frame)
+  ;; Harmless no-ops if `ps/scrollbar--teardown-hooks' already removed these.
   (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (remove-function after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
@@ -975,7 +1037,8 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
      (list (cons 'right-fringe ps/scrollbar--saved-right-fringe)))
     (setq ps/scrollbar--saved-right-fringe 'unset))
   (setq ps/scrollbar--visible-frame nil
-        ps/scrollbar--last-sig nil)
+        ps/scrollbar--last-sig nil
+        ps/scrollbar--torn-down nil)
   (ps/scrollbar--fade-cancel))
 
 (defvar ps/scrollbar-mode-map
