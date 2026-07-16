@@ -78,6 +78,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   ;; Prefer source (.el) over stale bytecode (.elc) for local modules.
   (setq load-prefer-newer t)
+  (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
   (require 'ps-window)
   (require 'ps-links)
@@ -226,6 +227,22 @@ To disable the custom scrollbar entirely (revert to native bars), set
         ps/scrollbar-tick-interval    0.15
         ps/scrollbar-min-thumb-pixels 24
         ps/scrollbar-teardown-delay   (* 30 60))
+#+end_src
+
+** Freeze diagnostics (ps-freeze-log.el)
+Temporary instrumentation for the intermittent whole-Emacs freeze (main thread
+wedged in =ns_flush_display= on return from background). Writes a heartbeat +
+focus + risky-op log; set =ps/freeze-log-enabled= to =nil= to turn it all off.
+Remove once the root cause is found.
+#+begin_src emacs-lisp
+  (setq ps/freeze-log-enabled            t
+        ps/freeze-log-heartbeat-interval 2
+        ps/freeze-log-max-bytes          (* 5 1024 1024))
+  ;; Start instrumentation now that settings (above) are applied.  Writes to
+  ;; `user-emacs-directory'/tmp/ps-freeze.log; the tail names whatever ran
+  ;; last before a freeze, and the ps-freeze-current-op.txt marker names any
+  ;; high-frequency op (eat output) in progress at the wedge.
+  (ps/freeze-log-setup)
 #+end_src
 
 ** Mode line (ps-mode-line.el)

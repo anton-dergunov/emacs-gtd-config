@@ -373,7 +373,11 @@ Deleting and recreating a fresh frame on the next show is self-healing."
     (ps/scrollbar--destroy ps/scrollbar--visible-frame))
   (setq ps/scrollbar--visible-frame child)
   (unless (frame-visible-p child)
-    (make-frame-visible child)))
+    (when (fboundp 'ps/freeze-log)
+      (ps/freeze-log 'scrollbar "make-frame-visible BEGIN"))
+    (make-frame-visible child)
+    (when (fboundp 'ps/freeze-log)
+      (ps/freeze-log 'scrollbar "make-frame-visible END"))))
 
 (defun ps/scrollbar--fade-cancel ()
   "Cancel an in-progress fade.
@@ -549,7 +553,17 @@ window the user is just hovering over) does not flash active."
               ;; removing the earlier reason to select WINDOW specifically.
               (unless (eq (selected-window) orig-window)
                 (select-window orig-window 'norecord))
-              (redisplay t))
+              ;; Diagnostic: bracket the forced synchronous flush (`redisplay
+              ;; t' -> `ns_flush_display' on the NS build), the prime suspect
+              ;; for the whole-main-thread freeze.  A BEGIN with no matching
+              ;; END in ps-freeze.log means the wedge happened right here.
+              ;; See lisp/ps-freeze-log.el.
+              (when (fboundp 'ps/freeze-log)
+                (ps/freeze-log 'scrollbar "redisplay BEGIN win=%s geom=%s"
+                               window geom))
+              (redisplay t)
+              (when (fboundp 'ps/freeze-log)
+                (ps/freeze-log 'scrollbar "redisplay END win=%s" window)))
             'rendered))))))
 
 (defun ps/scrollbar--reposition (window click-y)

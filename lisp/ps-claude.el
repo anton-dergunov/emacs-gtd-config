@@ -192,14 +192,26 @@ left alone so genuine edit conflicts still prompt (\"Discard your edits?\")."
 When the Claude diff window first opens, eat's terminal width state can
 momentarily desync, making `eat--process-output-queue' signal
 `args-out-of-range' from inside its timer.  Catch it, schedule a window
-resync so the terminal re-renders cleanly, and continue."
-  (condition-case err
-      (apply orig-fn args)
-    (args-out-of-range
-     (ps/claude--schedule-resync)
-     (message "ps/claude: recovered from eat output glitch (%s)"
-              (error-message-string err))
-     nil)))
+resync so the terminal re-renders cleanly, and continue.
+
+Also brackets the call with the freeze-log op marker (see
+`lisp/ps-freeze-log.el'): eat's output processing forces terminal redraws
+and is a suspect for the whole-main-thread `ns_flush_display' freeze.  The
+marker (not the append log) is used because this runs per output chunk; if
+Emacs wedges here, the marker file still names this op."
+  ;; `unwind-protect' so the marker is cleared even on the caught error.
+  (when (fboundp 'ps/freeze-log-op-begin)
+    (ps/freeze-log-op-begin "eat--process-output-queue"))
+  (unwind-protect
+      (condition-case err
+          (apply orig-fn args)
+        (args-out-of-range
+         (ps/claude--schedule-resync)
+         (message "ps/claude: recovered from eat output glitch (%s)"
+                  (error-message-string err))
+         nil))
+    (when (fboundp 'ps/freeze-log-op-end)
+      (ps/freeze-log-op-end))))
 
 ;;; Adaptive dock side (fix #7)
 
