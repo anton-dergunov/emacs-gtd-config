@@ -123,6 +123,13 @@ rest — so text appears to shift as those characters scroll past or animate.
 down so every line keeps the same height. If some character still sits taller,
 add its font to that list with a smaller factor.
 
+* Line numbers
+Line numbers show in file buffers and in the Tasks view, in a gutter of a fixed
+four columns. The width is deliberately fixed: left to size itself, the gutter
+grows and shrinks by a column as you scroll, which nudges the numbers and the
+text sideways. Change the width in =config.org= → /Editor & UI → Line numbers/,
+or set it to =nil= there to let Emacs size the gutter itself.
+
 * Category icons
 Icons in the agenda and file tree come from the *Material Symbols Outlined* font
 (install it per [[file:Installation.org][Installation]]). They're assigned *declaratively*, mapping a
@@ -183,6 +190,8 @@ The design rationale is in =design-docs/typo-checker.md=.
 * Under the hood / Customize
 - Theme machinery and live preview: =config.org= → /Editor & UI/
   (=ps/color-theme=, =ps/preview-theme=).
+- Line-number gutter width: =config.org= → /Editor & UI → Line numbers/
+  (=display-line-numbers-width=).
 - Live markup preview: the =org-appear= package, wired in =config.org= →
   /Appearance → Show formatting markup only at point/.
 - Literal heading stars while typing: =lisp/ps-heading-stars.el=, wired in

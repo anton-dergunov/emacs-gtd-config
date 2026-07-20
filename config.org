@@ -727,6 +727,25 @@ underneath to act on.
   ;; Show column number in mode line
   (column-number-mode)
 
+  ;; Reserve a fixed 4-column gutter.
+  ;;
+  ;; Left nil, Emacs recomputes the width on every redisplay as
+  ;; log10(MAX-LNUM)+1, where MAX-LNUM is the line at window start plus the
+  ;; window's `desired_matrix->nrows'. That row count is
+  ;; (window-pixel-height + |vscroll|) / FRAME_SMALLEST_FONT_HEIGHT, and
+  ;; FRAME_SMALLEST_FONT_HEIGHT is hardcoded to 1 on this build (matrices are
+  ;; deliberately over-allocated) — so nrows is the window's height in *pixels*,
+  ;; not lines, and MAX-LNUM near the top of a buffer is ~1000 regardless of how
+  ;; long the file actually is. Sitting on that power-of-ten boundary, the
+  ;; sub-line `vscroll' that pixel-precise scrolling sets during a gesture is
+  ;; enough to flip the width 4 -> 3 -> 4; since line numbers are right-aligned
+  ;; within the gutter, the digits and the text jump left and back together.
+  ;; 4 is the width the estimate settles on anyway once you scroll past the
+  ;; boundary, so pinning it removes the flicker without preventing genuine
+  ;; growth (files past ~9000 lines still get a 5th column). `setq-default' is
+  ;; required: the variable is permanently buffer-local.
+  (setq-default display-line-numbers-width 4)
+
   ;; Display line numbers globally
   (global-display-line-numbers-mode t)
 
