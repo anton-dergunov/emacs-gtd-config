@@ -23,6 +23,7 @@
 ;; Provided by other modules / Org; declared so this file loads and its pure
 ;; helpers are testable in isolation.
 (declare-function ps/file-tree--strip-org-extension "ps-file-tree" (name))
+(declare-function ps/claude--session-buffer-p "ps-claude" (buffer-or-name))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-up-heading-safe "org" ())
@@ -322,8 +323,13 @@ otherwise it is the Agenda.  Robust regardless of how the build was triggered
 ;;; Frame title
 
 (defun ps/mode-line--frame-title ()
-  "Return the current buffer's name without a trailing \".org\"."
-  (ps/mode-line--buffer-name))
+  "Return the frame title for the current buffer.
+The Claude Code session buffer shows as \"Claude Code\"; everything else
+falls back to `ps/mode-line--buffer-name'."
+  (if (and (fboundp 'ps/claude--session-buffer-p)
+           (ps/claude--session-buffer-p (current-buffer)))
+      "Claude Code"
+    (ps/mode-line--buffer-name)))
 
 ;;; Mouse
 
