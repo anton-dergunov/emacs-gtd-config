@@ -55,3 +55,24 @@ program) also changes it on disk, Emacs will ask before discarding your edits.
 To compare your buffer against what is on disk, run =M-x ediff-current-file=
 (or =M-x diff-buffer-with-file= for a quick diff), then decide whether to keep
 your version or reload.
+
+* If the assistant window looks wrong after resizing
+The session window is a terminal, and resizing it makes the assistant redraw
+its whole display. If it ever ends up showing blank space, missing text at the
+top, or content that stops part-way down, resizing it again (or scrolling)
+redraws it correctly.
+
+Dragging the divider repaints the panel continuously, so it may flicker while
+you drag. =ps/claude-resize-throttle-interval= (in =config.org= → /Package
+Management → Claude Code/) controls how often it repaints mid-drag — raise it
+for less flicker, lower it for closer tracking as you drag.
+
+If the panel still misbehaves, set =ps/claude-debug-resize= to =t=, reproduce
+the problem once, and inspect the log named by =ps/claude-debug-resize-file=.
+
+** Under the hood
+Module: =lisp/ps-claude.el=. Settings block: =config.org= → /Package Management
+→ Claude Code (ps-claude.el)/ — =ps/claude-window-width=,
+=ps/claude-resize-debounce-delay=, =ps/claude-reanchor-delay=,
+=ps/claude-resize-throttle-interval=, =ps/claude-spinner-glyph-replacements=,
+=ps/claude-debug-resize=.

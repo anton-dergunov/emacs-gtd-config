@@ -146,6 +146,180 @@
     (when (timerp ps/claude--resize-timer)
       (cancel-timer ps/claude--resize-timer))))
 
+;;; Resync dimensions: eat-term-size over window-body-height/width
+
+(ert-deftest ps/claude-test-resync-window-uses-eat-term-size ()
+  "Resync sends eat's own `eat-term-size', not a recomputed value, and
+forces an immediate `eat-term-redisplay'."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
+        sent-height sent-width redisplayed)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (setq-local eat-terminal 'fake-terminal))
+          (cl-letf (((symbol-function 'eat-term-size)
+                     (lambda (_term) (cons 77 22)))
+                    ((symbol-function 'eat-term-redisplay)
+                     (lambda (_term) (setq redisplayed t)))
+                    ((symbol-function 'get-buffer-process)
+                     (lambda (_buf) 'fake-proc))
+                    ((symbol-function 'set-process-window-size)
+                     (lambda (_proc height width)
+                       (setq sent-height height sent-width width)))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf)))
+            (ps/claude--resync-window 'fake-window))
+          (should (= sent-height 22))
+          (should (= sent-width 77))
+          (should redisplayed))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-resync-window-falls-back-without-eat-terminal ()
+  "Without a live `eat-terminal', falls back to `claude-code-ide--sync-terminal-dimensions'."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
+        fallback-called)
+    (unwind-protect
+        (cl-letf (((symbol-function 'claude-code-ide--sync-terminal-dimensions)
+                   (lambda (_buf _win) (setq fallback-called t)))
+                  ((symbol-function 'window-live-p) (lambda (_w) t))
+                  ((symbol-function 'window-buffer) (lambda (_w) buf)))
+          (ps/claude--resync-window 'fake-window)
+          (should fallback-called))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-resync-window-skips-non-claude-buffer ()
+  "Does nothing for a window not showing a Claude Code session buffer."
+  (let ((buf (generate-new-buffer "*not-claude*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'window-live-p) (lambda (_w) t))
+                  ((symbol-function 'window-buffer) (lambda (_w) buf)))
+          (should-not (ps/claude--resync-window 'fake-window)))
+      (kill-buffer buf))))
+
+;;; Window re-anchoring (window-start clamping)
+
+(ert-deftest ps/claude-test-clamp-window-start-valid-needs-no-change ()
+  "A start already inside the valid range needs no correction."
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n")
+    (should-not (ps/claude--clamp-window-start 3 8))))
+
+(ert-deftest ps/claude-test-clamp-window-start-past-display-begin ()
+  "A start below the display beginning is pulled back to it."
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n")
+    (should (= (ps/claude--clamp-window-start 12 8) 8))))
+
+(ert-deftest ps/claude-test-clamp-window-start-before-point-min ()
+  "A start above `point-min' is clamped to `point-min'."
+  (with-temp-buffer
+    (insert "one\ntwo\n")
+    (should (= (ps/claude--clamp-window-start 0 5) (point-min)))))
+
+(ert-deftest ps/claude-test-clamp-window-start-non-integer ()
+  "A missing/invalid start falls back to the display beginning."
+  (should (= (ps/claude--clamp-window-start nil 42) 42)))
+
+;;; Reflow throttling
+
+(ert-deftest ps/claude-test-no-throttle-when-not-dragging ()
+  "A settled resize always reflows, however recent the last one was."
+  (let ((ps/claude--last-reflow-time (current-time))
+        (track-mouse nil))
+    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+
+(ert-deftest ps/claude-test-throttle-during-drag-within-interval ()
+  "During a drag, a reflow inside the interval is skipped."
+  (let ((ps/claude--last-reflow-time (current-time))
+        (ps/claude-resize-throttle-interval 10)
+        (track-mouse 'dragging))
+    (should (ps/claude--throttle-reflow-p (current-time)))))
+
+(ert-deftest ps/claude-test-no-throttle-during-drag-past-interval ()
+  "During a drag, a reflow past the interval is allowed through."
+  (let ((ps/claude--last-reflow-time (time-subtract (current-time) 5))
+        (ps/claude-resize-throttle-interval 0.1)
+        (track-mouse 'dragging))
+    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+
+(ert-deftest ps/claude-test-no-throttle-on-first-reflow ()
+  "With no recorded reflow yet, nothing is throttled."
+  (let ((ps/claude--last-reflow-time nil)
+        (track-mouse 'dragging))
+    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+
+(ert-deftest ps/claude-test-throttle-advice-passes-through ()
+  "The advice runs ORIG-FN and records the time when not throttled."
+  (let ((ps/claude--last-reflow-time nil)
+        (track-mouse nil)
+        called)
+    (should (eq (ps/claude--reflow-throttle-advice
+                 (lambda (&rest _) (setq called t) 'size))
+                'size))
+    (should called)
+    (should ps/claude--last-reflow-time)))
+
+(ert-deftest ps/claude-test-throttle-advice-skips-during-drag ()
+  "The advice returns nil without calling ORIG-FN while throttled."
+  (let ((ps/claude--last-reflow-time (current-time))
+        (ps/claude-resize-throttle-interval 10)
+        (track-mouse 'dragging))
+    (should-not (ps/claude--reflow-throttle-advice
+                 (lambda (&rest _) (error "ORIG-FN should not be called"))))))
+
+;;; Spinner display table
+
+(ert-deftest ps/claude-test-spinner-display-table-maps-glyphs ()
+  "Each configured character maps to its replacement's glyph code."
+  (let ((ps/claude-spinner-glyph-replacements '((?\N{U+273B} . ?*))))
+    (let ((table (ps/claude--make-spinner-display-table)))
+      (should table)
+      (should (equal (aref table ?\N{U+273B})
+                     (vector (make-glyph-code ?*)))))))
+
+(ert-deftest ps/claude-test-spinner-display-table-nil-when-disabled ()
+  "No table is built when the replacement list is empty."
+  (let ((ps/claude-spinner-glyph-replacements nil))
+    (should-not (ps/claude--make-spinner-display-table))))
+
+(ert-deftest ps/claude-test-spinner-display-table-installed-buffer-locally ()
+  "Installing sets `buffer-display-table' in the current buffer only."
+  (let ((ps/claude-spinner-glyph-replacements '((?\N{U+273B} . ?*))))
+    (with-temp-buffer
+      (ps/claude--install-spinner-display-table)
+      (should (local-variable-p 'buffer-display-table))
+      (should buffer-display-table))))
+
+;;; Debug logging toggle
+
+(ert-deftest ps/claude-test-debug-log-off-by-default ()
+  "Writes nothing when `ps/claude-debug-resize' is nil (the default)."
+  (let* ((file (make-temp-name (expand-file-name "ps-claude-log-"
+                                                 temporary-file-directory)))
+         (ps/claude-debug-resize nil)
+         (ps/claude-debug-resize-file file))
+    (ps/claude--debug-log "test %d" 1)
+    (should-not (file-exists-p file))))
+
+(ert-deftest ps/claude-test-debug-log-appends-when-enabled ()
+  "Appends a tagged line to the log file when enabled."
+  (let* ((file (make-temp-name (expand-file-name "ps-claude-log-"
+                                                 temporary-file-directory)))
+         (ps/claude-debug-resize t)
+         (ps/claude-debug-resize-file file))
+    (unwind-protect
+        (progn
+          (ps/claude--debug-log "hello %d" 42)
+          (ps/claude--debug-log "again")
+          (should (file-exists-p file))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents file)
+                           (buffer-string))))
+            (should (string-match-p "claude-resize" content))
+            (should (string-match-p "hello 42" content))
+            (should (string-match-p "again" content))))
+      (ignore-errors (delete-file file)))))
+
 ;;; adaptive dock side
 
 (ert-deftest ps/claude-test-adaptive-side-docks-right-when-wide ()

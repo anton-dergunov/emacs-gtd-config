@@ -6,17 +6,33 @@
 ;; 1. The side window opens too wide by default (100 columns); we offer a
 ;;    tunable `ps/claude-window-width' instead.
 ;;
-;; 2. Resizing the Claude Code window can leave new output garbled until a
-;;    second resize.  `claude-code-ide--terminal-reflow-filter' (the
-;;    workaround for upstream claude-code#1422) suppresses
-;;    `eat--adjust-process-window-size' for height-only changes, but that
-;;    function has *already* resized eat's internal terminal by the time it
-;;    runs -- the underlying `claude' process is never told its new
-;;    dimensions via `set-process-window-size'/SIGWINCH, so it keeps
-;;    rendering for the old size until something else triggers a resync.
-;;    We add a debounced `window-size-change-functions' hook that re-syncs
-;;    the process size via `claude-code-ide--sync-terminal-dimensions' once
-;;    the resize settles, regardless of what the reflow filter suppressed.
+;; 2. Resizing the Claude Code window can leave new output rendering into
+;;    only part of the window (e.g. the top half) until something forces a
+;;    redraw.  `claude-code-ide--terminal-reflow-filter' (the workaround for
+;;    upstream claude-code#1422) suppresses `eat--adjust-process-window-size'
+;;    for height-only changes, but that function has *already* resized eat's
+;;    internal terminal by the time it runs -- the underlying `claude'
+;;    process is never told its new dimensions via
+;;    `set-process-window-size'/SIGWINCH, so it keeps rendering for the old,
+;;    smaller size while eat's buffer/window is already the new, larger one.
+;;    We add a `window-size-change-functions' hook that re-syncs the process
+;;    size once the resize settles, using eat's own `eat-term-size' (the
+;;    terminal's already-resized internal model) rather than recomputing the
+;;    size independently via `window-body-height'/`window-body-width' --
+;;    that second computation could drift from eat's own by a row or column
+;;    and never converge, which is why a stuck window sometimes needed
+;;    several manual resizes before it "caught".  We also force an
+;;    immediate `eat-term-redisplay' after the resync, so a pane that is
+;;    already stale-blank repaints right away instead of waiting for
+;;    Claude's next output chunk or another manual resize.  The resync timer
+;;    is a plain timer, not an idle timer, so it fires on a fixed delay
+;;    regardless of Emacs's idle bookkeeping.  Emacs also runs that
+;;    machinery once per mouse-motion event during a divider drag, and each
+;;    reflow rewrites eat's whole display region and makes Claude repaint --
+;;    the visible flicker -- so reflows are rate-limited to
+;;    `ps/claude-resize-throttle-interval' while a drag is in flight.  Set
+;;    `ps/claude-debug-resize' to log each resize/resync event if this ever
+;;    needs diagnosing again.
 ;;
 ;; 3. `claude-code-ide--get-working-directory' defaults to the current
 ;;    project root, which for any buffer in this repo is this config's own
@@ -58,6 +74,26 @@
 ;;    predictable spot while you work elsewhere, the same way the file tree
 ;;    does.
 ;;
+;; 8. eat never calls `set-window-start' anywhere -- it positions windows
+;;    only via `set-window-point' plus an unclamped `recenter'.  Two
+;;    consequences after a resize: `eat--t-resize' refuses to move the
+;;    display region's start backwards when the window grows, so `recenter'
+;;    is handed a more negative argument than there are lines and drags the
+;;    window up into stale scrollback (content missing at the top, dead
+;;    space at the bottom); and `eat--synchronize-scroll-windows' only
+;;    re-anchors windows whose point sits exactly on the terminal cursor, so
+;;    a window the user scrolled up in is abandoned while the reflow
+;;    rewrites and trims the text under it (a blank window).  We supply the
+;;    missing explicit anchoring: windows at the bottom are pinned to the
+;;    display beginning, scrolled-up windows keep their position and are
+;;    only corrected when it is no longer valid.
+;;
+;; 9. Claude's "thinking" spinner cycles star/circle glyphs Monaco does not
+;;    cover; the fallback font is one pixel taller, so every animation frame
+;;    changed the line height and all lines below it visibly danced.  A
+;;    buffer-local display table substitutes characters the main font
+;;    already covers (see `ps/claude-spinner-glyph-replacements').
+;;
 ;; If upstream #1422 is fixed and the reflow workaround is no longer needed,
 ;; the reflow-glitch suppression itself can be disabled with:
 ;;   (setq claude-code-ide-prevent-reflow-glitch nil)
@@ -73,10 +109,18 @@
 (declare-function claude-code-ide-mcp--create-diff-buffers "claude-code-ide-mcp-handlers")
 (declare-function claude-code-ide-mcp-handle-open-file "claude-code-ide-mcp-handlers")
 (declare-function eat--process-output-queue "eat")
+(declare-function eat-term-size "eat")
+(declare-function eat-term-redisplay "eat")
+(declare-function eat-term-display-beginning "eat")
+(declare-function eat-term-display-cursor "eat")
+(declare-function eat--adjust-process-window-size "eat")
+(declare-function ps/freeze-log--timestamp "ps-freeze-log")
+(declare-function ps/freeze-log--format-line "ps-freeze-log")
 (declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
 (defvar claude-code-ide-window-width)
 (defvar claude-code-ide-window-side)
 (defvar my-org-base-directory)
+(defvar eat-terminal)
 
 (defcustom ps/claude-window-width 90
   "Width (in columns) of the Claude Code IDE side window.
@@ -85,13 +129,78 @@ Applied to `claude-code-ide-window-width' by `ps/claude-setup'."
   :group 'claude-code-ide)
 
 (defcustom ps/claude-resize-debounce-delay 0.3
-  "Idle delay, in seconds, before re-syncing Claude Code terminal dimensions
-after a window resize settles."
+  "Delay, in seconds, before re-syncing Claude Code terminal dimensions
+after a window resize settles.  A plain timer, not an idle timer: the
+resync must fire on this fixed delay regardless of Emacs's idle state."
   :type 'number
   :group 'claude-code-ide)
 
+(defcustom ps/claude-reanchor-delay 0.2
+  "Seconds after a resize before the follow-up window re-anchor pass.
+SIGWINCH is asynchronous: Claude's Ink renderer repaints tens to hundreds
+of milliseconds after the terminal is resized, so a single re-anchor at
+resize time can land before the new content exists.  This second pass
+corrects the window once it does."
+  :type 'number
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-resize-throttle-interval 0.1
+  "Minimum seconds between terminal reflows while a window drag is in flight.
+Emacs runs the process-window-size machinery once per mouse-motion event
+during a divider drag, and each reflow rewrites eat's whole display region
+and makes Claude repaint -- which is what the flicker is.  Throttling to
+this interval keeps the terminal tracking the new width without paying for
+every pixel.  Only applies while dragging; a settled resize always reflows."
+  :type 'number
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-debug-resize nil
+  "When non-nil, append Claude Code resize/resync diagnostics to a log file.
+The file is `ps/claude-debug-resize-file'.  Records each size-change event,
+throttled reflows, the dimensions sent to the `claude' process, and the
+window re-anchor decisions.  Off by default (no cost when disabled); turn
+on only to diagnose a stuck or partially-rendered Claude Code pane."
+  :type 'boolean
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-debug-resize-file
+  (expand-file-name "tmp/ps-claude-resize.log" user-emacs-directory)
+  "File `ps/claude-debug-resize' diagnostics are appended to.
+Deliberately separate from `ps/freeze-log-file' so the freeze
+investigation's log stays uncluttered, and kept on local disk (never the
+Dropbox-backed org tree) so logging cannot block on that mount."
+  :type 'file
+  :group 'claude-code-ide)
+
 (defvar ps/claude--resize-timer nil
-  "Pending idle timer for the next terminal-size resync, or nil.")
+  "Pending timer for the next terminal-size resync, or nil.")
+
+(defvar ps/claude--reanchor-timer nil
+  "Pending timer for the follow-up re-anchor pass, or nil.")
+
+(defvar ps/claude--last-reflow-time nil
+  "Time of the last non-throttled terminal reflow, or nil.")
+
+(defun ps/claude--debug-log (format-string &rest args)
+  "Append FORMAT-STRING/ARGS to the resize log when debugging is enabled.
+Reuses `ps-freeze-log's pure formatting helpers when that module is loaded
+so timestamps match across logs, and falls back to a plain stamp otherwise.
+Never signals -- diagnostics must not become their own source of failures."
+  (when ps/claude-debug-resize
+    (ignore-errors
+      (let* ((message (apply #'format format-string args))
+             (line (if (and (fboundp 'ps/freeze-log--timestamp)
+                            (fboundp 'ps/freeze-log--format-line))
+                       (ps/freeze-log--format-line
+                        (ps/freeze-log--timestamp) 'claude-resize message)
+                     (format "%s [claude-resize] %s\n"
+                             (format-time-string "%Y-%m-%d %H:%M:%S") message)))
+             (write-region-inhibit-fsync nil)
+             (coding-system-for-write 'utf-8-unix)
+             (inhibit-message t)
+             (message-log-max nil))
+        (make-directory (file-name-directory ps/claude-debug-resize-file) t)
+        (write-region line nil ps/claude-debug-resize-file 'append 'silent)))))
 
 (defun ps/claude--session-buffer-p (buffer-or-name)
   "Return non-nil if BUFFER-OR-NAME is a Claude Code session buffer.
@@ -102,29 +211,171 @@ Pure string match on the `*claude-code[...]*' naming convention used by
                  buffer-or-name)))
     (and (stringp name) (string-prefix-p "*claude-code[" name))))
 
+(defun ps/claude--terminal-live-p ()
+  "Non-nil if the current buffer has a usable eat terminal."
+  (and (boundp 'eat-terminal) eat-terminal (fboundp 'eat-term-size)))
+
+(defun ps/claude--clamp-window-start (start display-begin)
+  "Return a valid window-start given the current START and DISPLAY-BEGIN.
+Pure/testable.  eat rewrites and trims buffer text on every resize but only
+re-anchors windows whose point sits exactly on the terminal cursor, so a
+window the user scrolled up in can be left anchored outside the text that
+still exists -- which is what renders it blank.  Clamp into the valid range
+instead of jumping to the bottom, preserving roughly where the user was
+reading.  Returns nil when START is already valid and needs no correction."
+  (cond
+   ((not (integerp start)) display-begin)
+   ((< start (point-min)) (point-min))
+   ((> start display-begin) display-begin)
+   (t nil)))
+
+(defun ps/claude--reanchor-window (window)
+  "Re-anchor WINDOW to eat's live display region.
+
+eat never calls `set-window-start' anywhere -- it positions windows only
+via `set-window-point' plus an unclamped `recenter' -- so after a resize a
+window can end up anchored above the display region (stale content at the
+top, dead space at the bottom) or, if the user had scrolled up, anchored
+into text that the reflow deleted (a blank window).  This supplies the
+missing explicit anchoring.
+
+A window sitting on the terminal cursor (eat's own \"at the bottom\" test)
+is pinned deterministically to the display beginning.  A window the user
+scrolled up in keeps its position and is only corrected when that position
+is no longer valid."
+  (when (window-live-p window)
+    (let ((buffer (window-buffer window)))
+      (when (ps/claude--session-buffer-p buffer)
+        (with-current-buffer buffer
+          (when (ps/claude--terminal-live-p)
+            (let* ((display-begin (eat-term-display-beginning eat-terminal))
+                   (cursor (eat-term-display-cursor eat-terminal))
+                   (start (window-start window))
+                   (at-bottom (= (window-point window) cursor)))
+              (if at-bottom
+                  (progn
+                    (ps/claude--debug-log
+                     "%s: anchor at-bottom start=%s -> %s cursor=%s"
+                     (buffer-name buffer) start display-begin cursor)
+                    (set-window-start window display-begin)
+                    (set-window-point window cursor))
+                (let ((clamped (ps/claude--clamp-window-start
+                                start display-begin)))
+                  (ps/claude--debug-log
+                   "%s: anchor scrolled-up start=%s display-begin=%s clamped=%s"
+                   (buffer-name buffer) start display-begin clamped)
+                  (when clamped
+                    (set-window-start window clamped)))))))))))
+
+(defun ps/claude--resync-window (window)
+  "Re-sync terminal dimensions for WINDOW's Claude Code session buffer.
+Prefers eat's own `eat-term-size' -- the terminal's already-resized
+internal model -- over recomputing independently via `window-body-height'/
+`window-body-width', so the process is told exactly the size eat is
+actually using rather than a value that could drift from it by a
+row/column and never converge.  Falls back to
+`claude-code-ide--sync-terminal-dimensions' for backends other than eat,
+or before the terminal is initialized.  Re-anchoring is done separately by
+`ps/claude--reanchor-window'."
+  (when (window-live-p window)
+    (let ((buffer (window-buffer window)))
+      (when (ps/claude--session-buffer-p buffer)
+        (with-current-buffer buffer
+          (if (ps/claude--terminal-live-p)
+              (let* ((size (eat-term-size eat-terminal))
+                     (width (car size))
+                     (height (cdr size))
+                     (proc (get-buffer-process buffer)))
+                (ps/claude--debug-log "%s: eat-term-size=%dx%d proc=%s"
+                                       (buffer-name buffer) width height
+                                       (and proc t))
+                (when proc
+                  (set-process-window-size proc height width)
+                  (eat-term-redisplay eat-terminal)))
+            (ps/claude--debug-log "%s: eat-terminal unset, falling back to window-body-height/width"
+                                   (buffer-name buffer))
+            (claude-code-ide--sync-terminal-dimensions buffer window)))))))
+
+(defun ps/claude--claude-windows ()
+  "Return every live window currently showing a Claude Code session buffer."
+  (seq-filter (lambda (w) (ps/claude--session-buffer-p (window-buffer w)))
+              (window-list)))
+
+(defun ps/claude--reanchor-windows ()
+  "Re-anchor every Claude Code window, then mark them for repaint.
+Uses `force-window-update' rather than a forced `redisplay': on the macOS
+NS build a redisplay forced from inside a timer can re-enter AppKit's event
+loop and wedge the whole UI (see the freeze notes in config.org)."
+  (setq ps/claude--reanchor-timer nil)
+  (dolist (window (ps/claude--claude-windows))
+    (ps/claude--reanchor-window window)
+    (force-window-update (window-buffer window))))
+
 (defun ps/claude--resync-windows ()
-  "Re-sync terminal dimensions for all live Claude Code session windows."
+  "Re-sync dimensions and re-anchor all live Claude Code session windows.
+Schedules a second re-anchor pass: SIGWINCH is asynchronous, so Claude's
+own repaint lands tens to hundreds of milliseconds after the resize, and
+the window must be re-anchored again once that content exists."
   (setq ps/claude--resize-timer nil)
-  (dolist (window (window-list))
-    (when (and (window-live-p window)
-               (ps/claude--session-buffer-p (window-buffer window)))
-      (claude-code-ide--sync-terminal-dimensions (window-buffer window) window))))
+  (dolist (window (ps/claude--claude-windows))
+    (ps/claude--resync-window window))
+  (ps/claude--reanchor-windows)
+  (when (timerp ps/claude--reanchor-timer)
+    (cancel-timer ps/claude--reanchor-timer))
+  (setq ps/claude--reanchor-timer
+        (run-with-timer ps/claude-reanchor-delay nil
+                         #'ps/claude--reanchor-windows)))
 
 (defun ps/claude--schedule-resync ()
   "(Re)arm the debounced timer that re-syncs Claude Code window dimensions."
   (when (timerp ps/claude--resize-timer)
     (cancel-timer ps/claude--resize-timer))
   (setq ps/claude--resize-timer
-        (run-with-idle-timer ps/claude-resize-debounce-delay nil
-                              #'ps/claude--resync-windows)))
+        (run-with-timer ps/claude-resize-debounce-delay nil
+                         #'ps/claude--resync-windows)))
 
 (defun ps/claude--on-window-size-change (_frame)
   "Schedule a debounced terminal resync after a window-size change.
 Added to `window-size-change-functions'; only schedules work when a Claude
 Code session buffer is currently displayed."
-  (when (seq-some (lambda (w) (ps/claude--session-buffer-p (window-buffer w)))
-                   (window-list))
+  (when (ps/claude--claude-windows)
+    (ps/claude--debug-log "window-size-change detected, scheduling resync in %ss"
+                           ps/claude-resize-debounce-delay)
     (ps/claude--schedule-resync)))
+
+;;; Reflow throttling while dragging (fix #2b)
+
+(defun ps/claude--dragging-p ()
+  "Non-nil while a window-divider or frame drag is in flight.
+`mouse-drag-line' sets `track-mouse' to the symbol `dragging' for the whole
+drag and restores it on release, so this is a zero-cost probe that needs no
+advice on any mouse command -- and therefore cannot collide with the
+scrollbar module's own drag handling."
+  (eq track-mouse 'dragging))
+
+(defun ps/claude--throttle-reflow-p (now)
+  "Non-nil if a reflow at time NOW should be skipped.
+Pure/testable given `ps/claude--last-reflow-time'.  Only throttles while a
+drag is in flight; a settled resize always reflows."
+  (and (ps/claude--dragging-p)
+       ps/claude--last-reflow-time
+       (< (float-time (time-subtract now ps/claude--last-reflow-time))
+          ps/claude-resize-throttle-interval)))
+
+(defun ps/claude--reflow-throttle-advice (orig-fn &rest args)
+  "Rate-limit eat's terminal reflow while a divider drag is in flight.
+Emacs's process-window-size machinery runs once per mouse-motion event, and
+each reflow rewrites eat's entire display region and makes Claude repaint --
+which is the visible flicker.  Returning nil skips both the reflow and the
+SIGWINCH for that event; the debounced resync then delivers one
+authoritative resize once the drag settles."
+  (let ((now (current-time)))
+    (if (ps/claude--throttle-reflow-p now)
+        (progn
+          (ps/claude--debug-log "reflow throttled (drag in flight)")
+          nil)
+      (setq ps/claude--last-reflow-time now)
+      (apply orig-fn args))))
 
 (defun ps/claude--working-directory ()
   "Always use `my-org-base-directory' as the Claude Code IDE working directory.
@@ -223,20 +474,69 @@ frame's current shape rather than whatever it was when Emacs started."
          (if (> (frame-pixel-width) (frame-pixel-height)) 'right 'bottom)))
     (apply orig-fn args)))
 
+;;; Stable line height for the thinking spinner (fix #8)
+
+(defcustom ps/claude-spinner-glyph-replacements
+  '((?\N{U+273B} . ?*)     ; ✻
+    (?\N{U+273D} . ?+)     ; ✽
+    (?\N{U+2733} . ?*)     ; ✳
+    (?\N{U+2736} . ?+)     ; ✶
+    (?\N{U+2722} . ?*)     ; ✢
+    (?\N{U+2734} . ?+)     ; ✴
+    (?\N{U+25D0} . ?*)     ; ◐
+    (?\N{U+25D1} . ?+)     ; ◑
+    (?\N{U+25D2} . ?*)     ; ◒
+    (?\N{U+25D3} . ?+))    ; ◓
+  "Characters to display as simpler substitutes in Claude Code buffers.
+Claude's \"thinking\" spinner cycles through star/circle glyphs that Monaco
+does not cover.  Emacs falls back to a font one pixel taller, so each frame
+of the animation changes the line's height and every line below it visibly
+jumps.  Substituting characters the main font already covers keeps the line
+box constant; alternating between two of them preserves the animation.
+
+An alist of (CHARACTER . REPLACEMENT-CHARACTER).  Display only -- the
+buffer text and anything Claude reads back are untouched.  Set to nil to
+disable the substitution entirely."
+  :type '(alist :key-type character :value-type character)
+  :group 'claude-code-ide)
+
+(defun ps/claude--make-spinner-display-table ()
+  "Build a display table applying `ps/claude-spinner-glyph-replacements'.
+Returns nil when the replacement list is empty, so callers can skip
+installing a table at all."
+  (when ps/claude-spinner-glyph-replacements
+    (let ((table (make-display-table)))
+      (dolist (pair ps/claude-spinner-glyph-replacements table)
+        (aset table (car pair) (vector (make-glyph-code (cdr pair))))))))
+
+(defun ps/claude--install-spinner-display-table ()
+  "Install the spinner display table in the current Claude Code buffer."
+  (when-let ((table (ps/claude--make-spinner-display-table)))
+    (setq-local buffer-display-table table)))
+
 (defun ps/claude--install-mode-line ()
   "Replace the default eat mode line with a plain \"Claude Code\" label."
   (when (ps/claude--session-buffer-p (current-buffer))
     (setq-local mode-line-format
                 '(" " (:propertize "Claude Code" face mode-line-emphasis)))))
 
+(defun ps/claude--setup-buffer ()
+  "Apply the per-buffer Claude Code display tweaks.
+Runs from `eat-mode-hook', which fires for every eat buffer, so each tweak
+is guarded by `ps/claude--session-buffer-p'."
+  (when (ps/claude--session-buffer-p (current-buffer))
+    (ps/claude--install-mode-line)
+    (ps/claude--install-spinner-display-table)))
+
 (defun ps/claude-setup ()
   "Apply Claude Code IDE window-size, working-directory and reliability tweaks.
 Sets `claude-code-ide-window-width' from `ps/claude-window-width', installs
-the debounced resize-resync hook, pins the working directory and project key
-to `my-org-base-directory', silences the post-write \"Reread from disk?\"
-race for unmodified buffers, guards eat's output timer against transient
-`args-out-of-range' glitches, and docks the panel `right'/`bottom' to match
-the frame's current shape.  Idempotent."
+the debounced resize-resync/re-anchor hook and the drag reflow throttle,
+pins the working directory and project key to `my-org-base-directory',
+silences the post-write \"Reread from disk?\" race for unmodified buffers,
+guards eat's output timer against transient `args-out-of-range' glitches,
+docks the panel `right'/`bottom' to match the frame's current shape, and
+installs the per-buffer mode line and spinner display table.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
   (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
   (advice-add 'claude-code-ide--get-working-directory
@@ -249,9 +549,11 @@ the frame's current shape.  Idempotent."
               :before #'ps/claude--open-revert-advice)
   (advice-add 'eat--process-output-queue
               :around #'ps/claude--eat-output-guard)
+  (advice-add 'eat--adjust-process-window-size
+              :around #'ps/claude--reflow-throttle-advice)
   (advice-add 'claude-code-ide--display-buffer-in-side-window
               :around #'ps/claude--adaptive-side-advice)
-  (add-hook 'eat-mode-hook #'ps/claude--install-mode-line))
+  (add-hook 'eat-mode-hook #'ps/claude--setup-buffer))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here

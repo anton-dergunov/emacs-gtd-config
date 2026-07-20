@@ -519,11 +519,24 @@ loads it, then deletes it. Silently does nothing when the file is absent."
 =ps/claude-window-width= is the side-window width in columns (the upstream
 default of 100 is quite wide). =ps/claude-resize-debounce-delay= controls how
 long Emacs waits, after a window resize settles, before re-syncing the
-terminal's dimensions with the =claude= process — this fixes garbled output
-that otherwise persists until a second resize.
+terminal's dimensions with the =claude= process — this fixes output that
+otherwise renders into only part of the window (or looks garbled) until
+another resize forces a redraw. =ps/claude-reanchor-delay= is how long to wait
+before a second pass that re-positions the window once Claude has actually
+repainted. =ps/claude-resize-throttle-interval= limits how often the terminal
+reflows while you drag the divider — the reflow is what makes the panel blink,
+so a larger value means less flicker but coarser tracking during the drag.
+=ps/claude-spinner-glyph-replacements= substitutes the “thinking” spinner's
+star glyphs with plain characters so lines stop shifting as it animates (set
+to =nil= to keep the original glyphs). =ps/claude-debug-resize= appends
+troubleshooting detail to =ps/claude-debug-resize-file=; leave it off
+otherwise.
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
-        ps/claude-resize-debounce-delay 0.3)
+        ps/claude-resize-debounce-delay 0.3
+        ps/claude-reanchor-delay 0.2
+        ps/claude-resize-throttle-interval 0.1
+        ps/claude-debug-resize nil)
 #+end_src
 
 ** AI context sync (ps-ai-context.el)
@@ -1637,6 +1650,8 @@ natively — no API key or token handling needed.
         (setq claude-code-ide-cli-path cli)))
     :config
     (setq claude-code-ide-terminal-backend 'eat)
+    ;; Ask Claude for its flicker-free renderer (CLAUDE_CODE_NO_FLICKER=1).
+    (setq claude-code-ide-no-flicker t)
     ;; Let Claude use Emacs (selection, diagnostics) and show edits as diffs.
     (claude-code-ide-emacs-tools-setup)
     ;; Window width + resize/garbled-output fixes; see lisp/ps-claude.el.
