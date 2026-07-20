@@ -65,7 +65,9 @@ redraws it correctly.
 Dragging the divider repaints the panel continuously, so it may flicker while
 you drag. =ps/claude-resize-throttle-interval= (in =config.org= → /Package
 Management → Claude Code/) controls how often it repaints mid-drag — raise it
-for less flicker, lower it for closer tracking as you drag.
+for less flicker, lower it for closer tracking as you drag. While you drag,
+long lines are clipped at the right edge instead of wrapping; normal wrapping
+returns as soon as you release.
 
 If the panel still misbehaves, set =ps/claude-debug-resize= to =t=, reproduce
 the problem once, and inspect the log named by =ps/claude-debug-resize-file=.
@@ -74,5 +76,10 @@ the problem once, and inspect the log named by =ps/claude-debug-resize-file=.
 Module: =lisp/ps-claude.el=. Settings block: =config.org= → /Package Management
 → Claude Code (ps-claude.el)/ — =ps/claude-window-width=,
 =ps/claude-resize-debounce-delay=, =ps/claude-reanchor-delay=,
-=ps/claude-resize-throttle-interval=, =ps/claude-spinner-glyph-replacements=,
+=ps/claude-resize-throttle-interval=, =ps/claude-no-exit-prompt=,
 =ps/claude-debug-resize=.
+
+* Quitting Emacs with a session running
+Emacs normally asks to confirm before killing running processes, which a live
+assistant session would trigger. It quits without asking instead; set
+=ps/claude-no-exit-prompt= to =nil= to get the confirmation back.

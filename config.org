@@ -176,6 +176,23 @@ this is non-nil, and fall back to theme-relative faces otherwise.")
      ((eq system-type 'gnu/linux)  "monospace-10")
      (t                            "default-font"))
     "Default font, applied by `Editor & UI / Font'.")
+
+  (defvar ps/font-rescale-alist
+    '(("Apple Color Emoji" . 0.8)
+      ("Arial Unicode MS"  . 0.9)
+      ("STIX Two Math"     . 0.85)
+      ("Apple Symbols"     . 0.9)
+      ("Zapf Dingbats"     . 0.9)
+      ("Apple Braille"     . 0.9))
+    "Scale factors for fallback fonts, applied by `Editor & UI / Font'.
+Emoji and symbol glyphs the main font lacks are drawn from fallback fonts
+whose line boxes are taller, so a line containing one is a few pixels
+taller than its neighbours -- text visibly shifts as such glyphs scroll
+past or animate.  Emacs has no way to cap a line's height (`line-height'
+raises its floor, it does not lower its ceiling), so instead the fallback
+fonts are scaled to fit.  These factors bring every tested glyph to the
+same height as the main font on macOS; adjust per font if a glyph still
+sits taller.")
 #+end_src
 
 ** Availability (ps-availability.el)
@@ -371,7 +388,9 @@ columns from the right window edge the emoji column starts.
                           (expand-file-name ".cache" "~"))
         ps/agenda-emoji-cache-tag    "bge-small-en-v1.5@0.50"
         ps/agenda-emoji-right-margin 3
-        ps/agenda-emoji-face         '(:height 0.8))
+        ;; Emoji fonts are already scaled to the text line box by
+        ;; `ps/font-rescale-alist', so no extra shrink is needed here.
+        ps/agenda-emoji-face         '(:height 1.0))
 #+end_src
 
 ** Agenda layout (ps-agenda-layout.el)
@@ -526,16 +545,15 @@ before a second pass that re-positions the window once Claude has actually
 repainted. =ps/claude-resize-throttle-interval= limits how often the terminal
 reflows while you drag the divider — the reflow is what makes the panel blink,
 so a larger value means less flicker but coarser tracking during the drag.
-=ps/claude-spinner-glyph-replacements= substitutes the “thinking” spinner's
-star glyphs with plain characters so lines stop shifting as it animates (set
-to =nil= to keep the original glyphs). =ps/claude-debug-resize= appends
-troubleshooting detail to =ps/claude-debug-resize-file=; leave it off
-otherwise.
+=ps/claude-no-exit-prompt= lets Emacs quit without asking to confirm killing a
+running session. =ps/claude-debug-resize= appends troubleshooting detail to
+=ps/claude-debug-resize-file=; leave it off otherwise.
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
         ps/claude-resize-debounce-delay 0.3
         ps/claude-reanchor-delay 0.2
-        ps/claude-resize-throttle-interval 0.1
+        ps/claude-resize-throttle-interval 0.25
+        ps/claude-no-exit-prompt t
         ps/claude-debug-resize nil)
 #+end_src
 
@@ -724,8 +742,13 @@ underneath to act on.
 #+end_src
 
 ** Font
-Applies =ps/main-font= from the Settings block above.
+Applies =ps/main-font= from the Settings block above, and =ps/font-rescale-alist=
+so emoji and symbol glyphs don't make their line taller than the rest — without
+it, text shifts vertically as such glyphs scroll past or animate. The rescale
+list must be set before fonts are opened, so it stays here rather than in a
+later section.
 #+begin_src emacs-lisp
+  (setq face-font-rescale-alist ps/font-rescale-alist)
   (set-face-attribute 'default nil :font ps/main-font)
 #+end_src
 

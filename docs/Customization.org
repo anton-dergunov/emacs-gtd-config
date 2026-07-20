@@ -116,6 +116,13 @@ The editing font is set in =config.org= → /Editor & UI → Font/. Change the
 family and height there to taste; the icon sizes follow your font height
 automatically.
 
+Emoji and symbol characters your editing font doesn't cover are drawn from
+other fonts, which can be slightly taller and make their line taller than the
+rest — so text appears to shift as those characters scroll past or animate.
+=ps/font-rescale-alist= (in the Settings block) scales those fallback fonts
+down so every line keeps the same height. If some character still sits taller,
+add its font to that list with a smaller factor.
+
 * Category icons
 Icons in the agenda and file tree come from the *Material Symbols Outlined* font
 (install it per [[file:Installation.org][Installation]]). They're assigned *declaratively*, mapping a

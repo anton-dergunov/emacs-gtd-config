@@ -267,28 +267,147 @@ forces an immediate `eat-term-redisplay'."
     (should-not (ps/claude--reflow-throttle-advice
                  (lambda (&rest _) (error "ORIG-FN should not be called"))))))
 
-;;; Spinner display table
+;;; Drag detection across a buffer-local `track-mouse'
 
-(ert-deftest ps/claude-test-spinner-display-table-maps-glyphs ()
-  "Each configured character maps to its replacement's glyph code."
-  (let ((ps/claude-spinner-glyph-replacements '((?\N{U+273B} . ?*))))
-    (let ((table (ps/claude--make-spinner-display-table)))
-      (should table)
-      (should (equal (aref table ?\N{U+273B})
-                     (vector (make-glyph-code ?*)))))))
+(ert-deftest ps/claude-test-dragging-p-sees-global-while-buffer-local-shadows ()
+  "A drag is detected even when the buffer shadows `track-mouse' locally.
+`eat-mode' makes `track-mouse' buffer-local while `mouse-drag-line' sets the
+global value, so reading only the local one missed every drag."
+  (with-temp-buffer
+    (setq-local track-mouse nil)
+    (let ((default-track (default-value 'track-mouse)))
+      (unwind-protect
+          (progn
+            (setq-default track-mouse 'dragging)
+            (should (ps/claude--dragging-p)))
+        (setq-default track-mouse default-track)))))
 
-(ert-deftest ps/claude-test-spinner-display-table-nil-when-disabled ()
-  "No table is built when the replacement list is empty."
-  (let ((ps/claude-spinner-glyph-replacements nil))
-    (should-not (ps/claude--make-spinner-display-table))))
+(ert-deftest ps/claude-test-dragging-p-sees-buffer-local-drag ()
+  "A drag begun with the terminal buffer selected still counts."
+  (with-temp-buffer
+    (setq-local track-mouse 'dragging)
+    (should (ps/claude--dragging-p))))
 
-(ert-deftest ps/claude-test-spinner-display-table-installed-buffer-locally ()
-  "Installing sets `buffer-display-table' in the current buffer only."
-  (let ((ps/claude-spinner-glyph-replacements '((?\N{U+273B} . ?*))))
+(ert-deftest ps/claude-test-dragging-p-nil-when-idle ()
+  "No drag is reported when neither binding says `dragging'."
+  (with-temp-buffer
+    (setq-local track-mouse nil)
+    (let ((default-track (default-value 'track-mouse)))
+      (unwind-protect
+          (progn
+            (setq-default track-mouse nil)
+            (should-not (ps/claude--dragging-p)))
+        (setq-default track-mouse default-track)))))
+
+;;; Line clipping during a drag
+
+(ert-deftest ps/claude-test-drag-clipping-saves-and-restores ()
+  "Clipping turns on `truncate-lines' and restores the original value."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (setq-local truncate-lines nil)
+          (ps/claude--begin-drag-clipping)
+          (should truncate-lines)
+          (ps/claude--end-drag-clipping)
+          (should-not truncate-lines))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-drag-clipping-is-idempotent ()
+  "Repeated motion events must not overwrite the saved value."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (setq-local truncate-lines nil)
+          (ps/claude--begin-drag-clipping)
+          (ps/claude--begin-drag-clipping)
+          (ps/claude--begin-drag-clipping)
+          (ps/claude--end-drag-clipping)
+          (should-not truncate-lines))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-drag-clipping-restore-without-begin ()
+  "Restoring without a preceding begin is a harmless no-op."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (setq-local truncate-lines t)
+          (ps/claude--end-drag-clipping)
+          (should truncate-lines))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-drag-clipping-skips-non-claude-buffer ()
+  "Non-Claude buffers are left alone."
+  (with-temp-buffer
+    (setq-local truncate-lines nil)
+    (ps/claude--begin-drag-clipping)
+    (should-not truncate-lines)))
+
+;;; Blank-window detection
+
+(ert-deftest ps/claude-test-window-blank-p-detects-whitespace-only ()
+  "A window showing only whitespace counts as blank."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "\n\n   \n\t\n"))
+          (cl-letf (((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf))
+                    ((symbol-function 'window-start) (lambda (_w) 1))
+                    ((symbol-function 'window-end)
+                     (lambda (_w &optional _u)
+                       (with-current-buffer buf (point-max)))))
+            (should (ps/claude--window-blank-p 'w))))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-window-blank-p-false-with-content ()
+  "A window showing real text is not blank."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "\n\n  hello  \n\n"))
+          (cl-letf (((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf))
+                    ((symbol-function 'window-start) (lambda (_w) 1))
+                    ((symbol-function 'window-end)
+                     (lambda (_w &optional _u)
+                       (with-current-buffer buf (point-max)))))
+            (should-not (ps/claude--window-blank-p 'w))))
+      (kill-buffer buf))))
+
+;;; Quiet exit
+
+(ert-deftest ps/claude-test-suppress-terminal-exit-query ()
+  "The eat kill-confirmation variable is cleared buffer-locally."
+  (let ((ps/claude-no-exit-prompt t))
     (with-temp-buffer
-      (ps/claude--install-spinner-display-table)
-      (should (local-variable-p 'buffer-display-table))
-      (should buffer-display-table))))
+      (ps/claude--suppress-terminal-exit-query)
+      (should (local-variable-p 'eat-query-before-killing-running-terminal))
+      (should-not eat-query-before-killing-running-terminal))))
+
+(ert-deftest ps/claude-test-suppress-terminal-exit-query-respects-toggle ()
+  "Nothing is changed when `ps/claude-no-exit-prompt' is nil."
+  (let ((ps/claude-no-exit-prompt nil))
+    (with-temp-buffer
+      (ps/claude--suppress-terminal-exit-query)
+      (should-not (local-variable-p 'eat-query-before-killing-running-terminal)))))
+
+(ert-deftest ps/claude-test-suppress-mcp-exit-query-passes-result-through ()
+  "The MCP advice returns its argument unchanged and clears the flag."
+  (let ((ps/claude-no-exit-prompt t)
+        cleared)
+    (cl-letf (((symbol-function 'ws-process) (lambda (_s) 'proc))
+              ((symbol-function 'processp) (lambda (p) (eq p 'proc)))
+              ((symbol-function 'set-process-query-on-exit-flag)
+               (lambda (_p flag) (setq cleared (list t flag)))))
+      (should (equal (ps/claude--suppress-mcp-exit-query '(server . port))
+                     '(server . port)))
+      (should (equal cleared '(t nil))))))
+
+(ert-deftest ps/claude-test-suppress-mcp-exit-query-survives-missing-server ()
+  "A nil/odd result never signals -- quitting must not break."
+  (let ((ps/claude-no-exit-prompt t))
+    (should-not (ps/claude--suppress-mcp-exit-query nil))))
 
 ;;; Debug logging toggle
 
