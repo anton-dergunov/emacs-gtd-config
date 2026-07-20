@@ -30,7 +30,12 @@
 ;;    machinery once per mouse-motion event during a divider drag, and each
 ;;    reflow rewrites eat's whole display region and makes Claude repaint --
 ;;    the visible flicker -- so reflows are rate-limited to
-;;    `ps/claude-resize-throttle-interval' while a drag is in flight.  Set
+;;    `ps/claude-resize-throttle-interval' during a burst of closely-spaced
+;;    resize attempts (`ps/claude-resize-burst-gap' apart or less).  This is
+;;    deliberately not gated on `track-mouse': a live diagnostic found
+;;    Emacs's own drag bookkeeping can leave it stuck reporting an active
+;;    drag forever (see `ps/claude--in-resize-burst-p'), which would have
+;;    made every future resize misbehave the same way.  Set
 ;;    `ps/claude-debug-resize' to log each resize/resync event if this ever
 ;;    needs diagnosing again.
 ;;
@@ -88,10 +93,13 @@
 ;;    display beginning, scrolled-up windows keep their position and are
 ;;    only corrected when it is no longer valid.
 ;;
-;; 9. A running session keeps two processes alive whose query-on-exit flags
-;;    would make `save-buffers-kill-emacs' prompt: eat's terminal and the
-;;    MCP HTTP listener (`ws-start' omits `:noquery').  Both are cleared, so
-;;    Emacs quits without asking (see `ps/claude-no-exit-prompt').
+;; 9. A running session keeps several processes alive whose query-on-exit
+;;    flags would make `save-buffers-kill-emacs' prompt: eat's terminal, the
+;;    MCP HTTP listener (`ws-start' omits `:noquery'), and each accepted MCP
+;;    websocket connection (`websocket-server' sets `:noquery' on the
+;;    listener, but accepted connections do not inherit it).  All are
+;;    cleared in one sweep just before exit, so Emacs quits without asking
+;;    (see `ps/claude-no-exit-prompt').
 ;;
 ;; Not handled here: glyphs taller than the default font (Claude's spinner,
 ;; bullets, emoji) used to change the line height and make text below them
@@ -116,13 +124,12 @@
 (declare-function eat--process-output-queue "eat")
 (declare-function eat-term-size "eat")
 (declare-function eat-term-redisplay "eat")
+(declare-function eat-term-resize "eat")
 (declare-function eat-term-display-beginning "eat")
 (declare-function eat-term-display-cursor "eat")
 (declare-function eat--adjust-process-window-size "eat")
 (declare-function ps/freeze-log--timestamp "ps-freeze-log")
 (declare-function ps/freeze-log--format-line "ps-freeze-log")
-(declare-function claude-code-ide-mcp-http-server-start "claude-code-ide-mcp-http-server")
-(declare-function ws-process "web-server")
 (defvar eat-query-before-killing-running-terminal)
 (declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
 (defvar claude-code-ide-window-width)
@@ -153,12 +160,21 @@ corrects the window once it does."
   :group 'claude-code-ide)
 
 (defcustom ps/claude-resize-throttle-interval 0.25
-  "Minimum seconds between terminal reflows while a window drag is in flight.
+  "Minimum seconds between terminal reflows during a burst of resize events.
 Emacs runs the process-window-size machinery once per mouse-motion event
 during a divider drag, and each reflow rewrites eat's whole display region
 and makes Claude repaint -- which is what the flicker is.  Throttling to
 this interval keeps the terminal tracking the new width without paying for
-every pixel.  Only applies while dragging; a settled resize always reflows."
+every pixel.  Only applies during an active burst (see
+`ps/claude-resize-burst-gap'); an isolated resize always reflows."
+  :type 'number
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-resize-burst-gap 0.15
+  "Maximum seconds between resize attempts still counted as the same burst.
+A burst (many closely-spaced attempts, e.g. a divider drag) is what gets
+throttled and line-clipped; an isolated resize -- one arriving more than
+this long after the previous attempt -- never is."
   :type 'number
   :group 'claude-code-ide)
 
@@ -307,30 +323,37 @@ position was, showing an empty pane is never what they wanted."
                               (buffer-substring-no-properties from to))))))))))))
 
 (defun ps/claude--resync-window (window)
-  "Re-sync terminal dimensions for WINDOW's Claude Code session buffer.
-Prefers eat's own `eat-term-size' -- the terminal's already-resized
-internal model -- over recomputing independently via `window-body-height'/
-`window-body-width', so the process is told exactly the size eat is
-actually using rather than a value that could drift from it by a
-row/column and never converge.  Falls back to
-`claude-code-ide--sync-terminal-dimensions' for backends other than eat,
-or before the terminal is initialized.  Re-anchoring is done separately by
-`ps/claude--reanchor-window'."
+  "Bring WINDOW's eat terminal and the `claude' process to WINDOW's size.
+
+The window is the authority here, not `eat-term-size'.  Throttling means
+eat's own reflow is skipped for most events of a resize burst, so eat's
+internal size can still be the pre-drag one when this runs -- reading it
+back and sending it to the process would just re-assert the stale size, and
+the terminal would stay hard-wrapped at the old width no matter how many
+times the resize settled.  So resize eat explicitly, then tell the process
+that same size, leaving the two in agreement.
+
+Falls back to `claude-code-ide--sync-terminal-dimensions' for backends
+other than eat, or before the terminal is initialized.  Re-anchoring is
+done separately by `ps/claude--reanchor-window'."
   (when (window-live-p window)
     (let ((buffer (window-buffer window)))
       (when (ps/claude--session-buffer-p buffer)
         (with-current-buffer buffer
           (if (ps/claude--terminal-live-p)
-              (let* ((size (eat-term-size eat-terminal))
-                     (width (car size))
-                     (height (cdr size))
-                     (proc (get-buffer-process buffer)))
-                (ps/claude--debug-log "%s: eat-term-size=%dx%d proc=%s"
-                                       (buffer-name buffer) width height
+              (let* ((width (max (window-body-width window) 1))
+                     (height (max (window-body-height window) 1))
+                     (current (eat-term-size eat-terminal))
+                     (proc (get-buffer-process buffer))
+                     (inhibit-read-only t))
+                (ps/claude--debug-log "%s: resync eat=%s -> window=(%d . %d) proc=%s"
+                                       (buffer-name buffer) current width height
                                        (and proc t))
+                (unless (equal current (cons width height))
+                  (eat-term-resize eat-terminal width height))
+                (eat-term-redisplay eat-terminal)
                 (when proc
-                  (set-process-window-size proc height width)
-                  (eat-term-redisplay eat-terminal)))
+                  (set-process-window-size proc height width)))
             (ps/claude--debug-log "%s: eat-terminal unset, falling back to window-body-height/width"
                                    (buffer-name buffer))
             (claude-code-ide--sync-terminal-dimensions buffer window)))))))
@@ -387,76 +410,108 @@ Code session buffer is currently displayed."
                            ps/claude-resize-debounce-delay)
     (ps/claude--schedule-resync)))
 
-;;; Reflow throttling while dragging (fix #2b)
+;;; Reflow throttling during a resize burst (fix #2b)
 
-(defun ps/claude--dragging-p ()
-  "Non-nil while a window-divider or frame drag is in flight.
-`mouse-drag-line' sets `track-mouse' to the symbol `dragging' for the whole
-drag and restores it on release, so this is a zero-cost probe that needs no
-advice on any mouse command -- and therefore cannot collide with the
-scrollbar module's own drag handling.
+(defvar ps/claude--last-attempt-time nil
+  "Time of the last terminal-resize attempt, throttled or not, or nil.")
 
-The `default-value' check is the load-bearing one: `eat-mode' makes
-`track-mouse' buffer-local, and `mouse-drag-line' assigns it with a plain
-`setq' in whichever buffer was selected when the drag started -- normally
-the file buffer, i.e. the global binding.  Since this runs inside the eat
-buffer (`window--adjust-process-windows' wraps the call in
-`with-current-buffer'), eat's buffer-local value would otherwise shadow the
-global `dragging' and the throttle would never engage.  The buffer-local
-arm still catches a drag begun with the Claude window selected."
-  (or (eq (default-value 'track-mouse) 'dragging)
-      (eq track-mouse 'dragging)))
+(defun ps/claude--in-resize-burst-p (now)
+  "Non-nil if NOW arrives within `ps/claude-resize-burst-gap' of the
+previous resize attempt -- i.e. events are arriving in rapid succession,
+the signature of an active divider drag.
 
-(defun ps/claude--throttle-reflow-p (now)
+Deliberately not based on `track-mouse': `eat-mode' makes it buffer-local,
+and `mouse-drag-line' restores it with a plain `setq' (not a `let') in
+whichever buffer happens to be current when the drag ends.  Live diagnostic
+on this machine confirmed that when the selected window changes mid-drag
+-- e.g. the scrollbar module's own vertical-line click handler calls
+`other-window' -- the restore lands in the wrong (buffer-local) slot and
+the *global* value is left stuck at `dragging' forever, which would make
+every future resize look like an active drag.  A frequency-based signal is
+self-contained and self-clearing: it cannot get stuck, because it depends
+on nothing but the timing of our own events."
+  (and ps/claude--last-attempt-time
+       (< (float-time (time-subtract now ps/claude--last-attempt-time))
+          ps/claude-resize-burst-gap)))
+
+(defun ps/claude--throttle-reflow-p (now burst)
   "Non-nil if a reflow at time NOW should be skipped.
-Pure/testable given `ps/claude--last-reflow-time'.  Only throttles while a
-drag is in flight; a settled resize always reflows."
-  (and (ps/claude--dragging-p)
+Pure/testable given `ps/claude--last-reflow-time'.  Only throttles within
+an active BURST (see `ps/claude--in-resize-burst-p'); an isolated resize --
+including one right after a burst that has already gone stale -- always
+reflows."
+  (and burst
        ps/claude--last-reflow-time
        (< (float-time (time-subtract now ps/claude--last-reflow-time))
           ps/claude-resize-throttle-interval)))
 
 (defun ps/claude--reflow-throttle-advice (orig-fn &rest args)
-  "Rate-limit eat's terminal reflow while a divider drag is in flight.
+  "Rate-limit eat's terminal reflow during a burst of resize events.
 Emacs's process-window-size machinery runs once per mouse-motion event, and
 each reflow rewrites eat's entire display region and makes Claude repaint --
 which is the visible flicker.  Returning nil skips both the reflow and the
 SIGWINCH for that event; the debounced resync then delivers one
-authoritative resize once the drag settles.
+authoritative resize once the burst settles.
 
-Also clips lines for the duration of the drag (see
+Also clips lines for the duration of the burst (see
 `ps/claude--begin-drag-clipping'): with the reflow suppressed, eat's rows
 are still padded to the old terminal width, so a narrower window would wrap
 every single row into a two-screen-line continuation -- a full-height
 re-wrap on every drag pixel that throttling alone cannot prevent."
-  (let ((now (current-time)))
-    (if (ps/claude--throttle-reflow-p now)
+  (let* ((now (current-time))
+         (burst (ps/claude--in-resize-burst-p now)))
+    (setq ps/claude--last-attempt-time now)
+    (if (ps/claude--throttle-reflow-p now burst)
         (progn
           (ps/claude--begin-drag-clipping)
-          (ps/claude--debug-log "reflow throttled (drag in flight)")
+          (ps/claude--debug-log "reflow throttled (burst in flight)")
           nil)
       (setq ps/claude--last-reflow-time now)
-      (when (ps/claude--dragging-p) (ps/claude--begin-drag-clipping))
+      (when burst (ps/claude--begin-drag-clipping))
       (apply orig-fn args))))
 
-;;; Line clipping while dragging
+;;; Line clipping during a resize burst
+
+(defcustom ps/claude-drag-clip-max-duration 2.0
+  "Hard ceiling, in seconds, on how long drag clipping can stay on.
+The debounced resync already ends clipping on every settle, so this
+watchdog should never fire in practice; it exists only so a bug in that
+path cannot leave a Claude buffer permanently clipped."
+  :type 'number
+  :group 'claude-code-ide)
 
 (defvar-local ps/claude--saved-truncate-lines 'unset
   "Buffer's `truncate-lines' before drag clipping, or the symbol `unset'.")
 
+(defvar-local ps/claude--drag-clip-watchdog nil
+  "Pending failsafe timer that force-ends drag clipping, or nil.")
+
 (defun ps/claude--begin-drag-clipping ()
-  "Clip lines in the current Claude buffer for the duration of a drag.
+  "Clip lines in the current Claude buffer for the duration of a burst.
 Idempotent: the original `truncate-lines' is saved only on the first call,
-so repeated motion events cannot lose it."
+so repeated motion events cannot lose it.  Arms a bounded watchdog (see
+`ps/claude-drag-clip-max-duration') as a last-resort safety net."
   (when (and (ps/claude--session-buffer-p (current-buffer))
              (eq ps/claude--saved-truncate-lines 'unset))
     (setq ps/claude--saved-truncate-lines truncate-lines)
     (setq-local truncate-lines t)
     (ps/claude--debug-log "drag clipping on (was truncate-lines=%s)"
-                           ps/claude--saved-truncate-lines)))
+                           ps/claude--saved-truncate-lines)
+    (let ((buf (current-buffer)))
+      (setq ps/claude--drag-clip-watchdog
+            (run-with-timer
+             ps/claude-drag-clip-max-duration nil
+             (lambda ()
+               (when (buffer-live-p buf)
+                 (with-current-buffer buf
+                   (ps/claude--debug-log "drag clip watchdog fired")
+                   (ps/claude--end-drag-clipping)))))))))
 
 (defun ps/claude--end-drag-clipping ()
-  "Restore `truncate-lines' in the current Claude buffer after a drag."
+  "Restore `truncate-lines' in the current Claude buffer after a burst."
+  (when (timerp ps/claude--drag-clip-watchdog)
+    (cancel-timer ps/claude--drag-clip-watchdog))
+  (setq ps/claude--drag-clip-watchdog nil)
   (unless (eq ps/claude--saved-truncate-lines 'unset)
     (setq-local truncate-lines ps/claude--saved-truncate-lines)
     (ps/claude--debug-log "drag clipping off (restored truncate-lines=%s)"
@@ -565,11 +620,11 @@ frame's current shape rather than whatever it was when Emacs started."
 (defcustom ps/claude-no-exit-prompt t
   "When non-nil, quitting Emacs does not prompt about Claude Code processes.
 `save-buffers-kill-emacs' asks to confirm killing any live process whose
-query-on-exit flag is set.  A running session contributes two such
-processes -- the `eat' terminal and the MCP HTTP listener -- so both are
-cleared.  Deliberately scoped to Claude Code rather than setting
-`confirm-kill-processes' globally, which would also silently kill shells,
-compilations and language servers."
+query-on-exit flag is set.  A running session contributes several: the
+`eat' terminal, the MCP HTTP listener, the MCP websocket listener, and one
+accepted websocket connection per client.  Deliberately scoped to Claude
+Code rather than setting `confirm-kill-processes' globally, which would
+also silently kill shells, compilations and language servers."
   :type 'boolean
   :group 'claude-code-ide)
 
@@ -583,20 +638,37 @@ no longer `auto'."
   (when ps/claude-no-exit-prompt
     (setq-local eat-query-before-killing-running-terminal nil)))
 
-(defun ps/claude--suppress-mcp-exit-query (result)
-  "Clear the query-on-exit flag on the MCP HTTP listener in RESULT.
-`ws-start' creates its `make-network-process' without `:noquery', so the
-listening socket prompts on exit by itself -- silencing only the terminal
-is not enough.  Used as `:filter-return' advice, so RESULT is passed
-through unchanged."
+(defun ps/claude--exit-query-process-p (proc)
+  "Non-nil if PROC belongs to Claude Code and may block exit.
+Recognises three shapes, all created by `claude-code-ide':
+- the `eat' terminal, by its session buffer;
+- websocket processes, by the `:websocket' property `websocket-server-accept'
+  puts on every accepted connection (the listener sets `:noquery' itself,
+  but the accepted connections do not inherit it), or by the listener's own
+  \"websocket server on port N\" name;
+- the MCP HTTP listener, whose `web-server' process is named \"ws-server\".
+
+Matching on these rather than on a name pattern alone keeps unrelated
+network processes -- and any other package's shells or servers -- untouched."
+  (and (processp proc)
+       (let ((name (or (process-name proc) "")))
+         (or (ps/claude--session-buffer-p (process-buffer proc))
+             (process-get proc :websocket)
+             (string-prefix-p "websocket server on port" name)
+             (string-prefix-p "ws-server" name)))))
+
+(defun ps/claude--clear-exit-queries (&rest _)
+  "Clear the query-on-exit flag on every live Claude Code process.
+Run as `:before' advice on `save-buffers-kill-emacs', i.e. immediately
+before it scans the process list, so it also covers connections accepted
+after startup -- which is why this is a sweep rather than advice on each
+server's constructor.  Never signals: quitting must not be blocked by a
+failure in here."
   (when ps/claude-no-exit-prompt
     (ignore-errors
-      (let ((server (if (consp result) (car result) result)))
-        (when (and server (fboundp 'ws-process))
-          (when-let ((proc (ws-process server)))
-            (when (processp proc)
-              (set-process-query-on-exit-flag proc nil)))))))
-  result)
+      (dolist (proc (process-list))
+        (when (ps/claude--exit-query-process-p proc)
+          (set-process-query-on-exit-flag proc nil))))))
 
 (defun ps/claude--install-mode-line ()
   "Replace the default eat mode line with a plain \"Claude Code\" label."
@@ -638,8 +710,8 @@ prompting when Emacs quits.  Idempotent."
               :around #'ps/claude--reflow-throttle-advice)
   (advice-add 'claude-code-ide--display-buffer-in-side-window
               :around #'ps/claude--adaptive-side-advice)
-  (advice-add 'claude-code-ide-mcp-http-server-start
-              :filter-return #'ps/claude--suppress-mcp-exit-query)
+  (advice-add 'save-buffers-kill-emacs
+              :before #'ps/claude--clear-exit-queries)
   (add-hook 'eat-mode-hook #'ps/claude--setup-buffer))
 
 (provide 'ps-claude)

@@ -146,19 +146,23 @@
     (when (timerp ps/claude--resize-timer)
       (cancel-timer ps/claude--resize-timer))))
 
-;;; Resync dimensions: eat-term-size over window-body-height/width
+;;; Resync dimensions: the window is the authority, not eat's stale size
 
-(ert-deftest ps/claude-test-resync-window-uses-eat-term-size ()
-  "Resync sends eat's own `eat-term-size', not a recomputed value, and
-forces an immediate `eat-term-redisplay'."
+(ert-deftest ps/claude-test-resync-window-resizes-eat-to-window ()
+  "A stale eat terminal is resized to the window, and the process is told
+the window's size -- not eat's.  Regression test for the state seen live:
+eat stuck at 123 columns inside an 82-column window, hard-wrapping every
+line, because the resync read eat's own size back and re-sent it."
   (let ((buf (generate-new-buffer "*claude-code[demo]*"))
-        sent-height sent-width redisplayed)
+        sent-height sent-width resized redisplayed)
     (unwind-protect
         (progn
           (with-current-buffer buf
             (setq-local eat-terminal 'fake-terminal))
           (cl-letf (((symbol-function 'eat-term-size)
-                     (lambda (_term) (cons 77 22)))
+                     (lambda (_term) (cons 123 53)))   ; stale, pre-drag
+                    ((symbol-function 'eat-term-resize)
+                     (lambda (_term w h) (setq resized (cons w h))))
                     ((symbol-function 'eat-term-redisplay)
                      (lambda (_term) (setq redisplayed t)))
                     ((symbol-function 'get-buffer-process)
@@ -167,11 +171,36 @@ forces an immediate `eat-term-redisplay'."
                      (lambda (_proc height width)
                        (setq sent-height height sent-width width)))
                     ((symbol-function 'window-live-p) (lambda (_w) t))
-                    ((symbol-function 'window-buffer) (lambda (_w) buf)))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf))
+                    ((symbol-function 'window-body-width) (lambda (_w) 82))
+                    ((symbol-function 'window-body-height) (lambda (_w) 53)))
             (ps/claude--resync-window 'fake-window))
-          (should (= sent-height 22))
-          (should (= sent-width 77))
+          (should (equal resized '(82 . 53)))
+          (should (= sent-width 82))
+          (should (= sent-height 53))
           (should redisplayed))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-resync-window-skips-resize-when-already-correct ()
+  "No needless reflow when eat already matches the window."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
+        resized)
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (setq-local eat-terminal 'fake-terminal))
+          (cl-letf (((symbol-function 'eat-term-size)
+                     (lambda (_term) (cons 82 53)))
+                    ((symbol-function 'eat-term-resize)
+                     (lambda (_term w h) (setq resized (cons w h))))
+                    ((symbol-function 'eat-term-redisplay) (lambda (_term) nil))
+                    ((symbol-function 'get-buffer-process) (lambda (_buf) nil))
+                    ((symbol-function 'window-live-p) (lambda (_w) t))
+                    ((symbol-function 'window-buffer) (lambda (_w) buf))
+                    ((symbol-function 'window-body-width) (lambda (_w) 82))
+                    ((symbol-function 'window-body-height) (lambda (_w) 53)))
+            (ps/claude--resync-window 'fake-window))
+          (should-not resized))
       (kill-buffer buf))))
 
 (ert-deftest ps/claude-test-resync-window-falls-back-without-eat-terminal ()
@@ -220,84 +249,84 @@ forces an immediate `eat-term-redisplay'."
   "A missing/invalid start falls back to the display beginning."
   (should (= (ps/claude--clamp-window-start nil 42) 42)))
 
+;;; Resize burst detection
+
+(ert-deftest ps/claude-test-burst-p-false-with-no-history ()
+  "With no prior attempt recorded, nothing is in a burst."
+  (let ((ps/claude--last-attempt-time nil))
+    (should-not (ps/claude--in-resize-burst-p (current-time)))))
+
+(ert-deftest ps/claude-test-burst-p-true-within-gap ()
+  "Two attempts closer together than the burst gap count as a burst."
+  (let ((ps/claude--last-attempt-time (current-time))
+        (ps/claude-resize-burst-gap 10))
+    (should (ps/claude--in-resize-burst-p (current-time)))))
+
+(ert-deftest ps/claude-test-burst-p-false-past-gap ()
+  "Two attempts farther apart than the burst gap are not a burst."
+  (let ((ps/claude--last-attempt-time (time-subtract (current-time) 5))
+        (ps/claude-resize-burst-gap 0.1))
+    (should-not (ps/claude--in-resize-burst-p (current-time)))))
+
 ;;; Reflow throttling
 
-(ert-deftest ps/claude-test-no-throttle-when-not-dragging ()
-  "A settled resize always reflows, however recent the last one was."
-  (let ((ps/claude--last-reflow-time (current-time))
-        (track-mouse nil))
-    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+(ert-deftest ps/claude-test-no-throttle-outside-burst ()
+  "An isolated (non-burst) resize always reflows, however recent the last
+reflow was."
+  (let ((ps/claude--last-reflow-time (current-time)))
+    (should-not (ps/claude--throttle-reflow-p (current-time) nil))))
 
-(ert-deftest ps/claude-test-throttle-during-drag-within-interval ()
-  "During a drag, a reflow inside the interval is skipped."
+(ert-deftest ps/claude-test-throttle-during-burst-within-interval ()
+  "Inside a burst, a reflow inside the interval is skipped."
   (let ((ps/claude--last-reflow-time (current-time))
-        (ps/claude-resize-throttle-interval 10)
-        (track-mouse 'dragging))
-    (should (ps/claude--throttle-reflow-p (current-time)))))
+        (ps/claude-resize-throttle-interval 10))
+    (should (ps/claude--throttle-reflow-p (current-time) t))))
 
-(ert-deftest ps/claude-test-no-throttle-during-drag-past-interval ()
-  "During a drag, a reflow past the interval is allowed through."
+(ert-deftest ps/claude-test-no-throttle-during-burst-past-interval ()
+  "Inside a burst, a reflow past the interval is allowed through."
   (let ((ps/claude--last-reflow-time (time-subtract (current-time) 5))
-        (ps/claude-resize-throttle-interval 0.1)
-        (track-mouse 'dragging))
-    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+        (ps/claude-resize-throttle-interval 0.1))
+    (should-not (ps/claude--throttle-reflow-p (current-time) t))))
 
 (ert-deftest ps/claude-test-no-throttle-on-first-reflow ()
-  "With no recorded reflow yet, nothing is throttled."
-  (let ((ps/claude--last-reflow-time nil)
-        (track-mouse 'dragging))
-    (should-not (ps/claude--throttle-reflow-p (current-time)))))
+  "With no recorded reflow yet, nothing is throttled even inside a burst."
+  (let ((ps/claude--last-reflow-time nil))
+    (should-not (ps/claude--throttle-reflow-p (current-time) t))))
 
 (ert-deftest ps/claude-test-throttle-advice-passes-through ()
-  "The advice runs ORIG-FN and records the time when not throttled."
+  "The advice runs ORIG-FN and records both times when not throttled."
   (let ((ps/claude--last-reflow-time nil)
-        (track-mouse nil)
+        (ps/claude--last-attempt-time nil)
         called)
     (should (eq (ps/claude--reflow-throttle-advice
                  (lambda (&rest _) (setq called t) 'size))
                 'size))
     (should called)
-    (should ps/claude--last-reflow-time)))
+    (should ps/claude--last-reflow-time)
+    (should ps/claude--last-attempt-time)))
 
-(ert-deftest ps/claude-test-throttle-advice-skips-during-drag ()
+(ert-deftest ps/claude-test-throttle-advice-skips-during-burst ()
   "The advice returns nil without calling ORIG-FN while throttled."
   (let ((ps/claude--last-reflow-time (current-time))
+        (ps/claude--last-attempt-time (current-time))
         (ps/claude-resize-throttle-interval 10)
-        (track-mouse 'dragging))
+        (ps/claude-resize-burst-gap 10))
     (should-not (ps/claude--reflow-throttle-advice
                  (lambda (&rest _) (error "ORIG-FN should not be called"))))))
 
-;;; Drag detection across a buffer-local `track-mouse'
-
-(ert-deftest ps/claude-test-dragging-p-sees-global-while-buffer-local-shadows ()
-  "A drag is detected even when the buffer shadows `track-mouse' locally.
-`eat-mode' makes `track-mouse' buffer-local while `mouse-drag-line' sets the
-global value, so reading only the local one missed every drag."
-  (with-temp-buffer
-    (setq-local track-mouse nil)
-    (let ((default-track (default-value 'track-mouse)))
-      (unwind-protect
-          (progn
-            (setq-default track-mouse 'dragging)
-            (should (ps/claude--dragging-p)))
-        (setq-default track-mouse default-track)))))
-
-(ert-deftest ps/claude-test-dragging-p-sees-buffer-local-drag ()
-  "A drag begun with the terminal buffer selected still counts."
-  (with-temp-buffer
-    (setq-local track-mouse 'dragging)
-    (should (ps/claude--dragging-p))))
-
-(ert-deftest ps/claude-test-dragging-p-nil-when-idle ()
-  "No drag is reported when neither binding says `dragging'."
-  (with-temp-buffer
-    (setq-local track-mouse nil)
-    (let ((default-track (default-value 'track-mouse)))
-      (unwind-protect
-          (progn
-            (setq-default track-mouse nil)
-            (should-not (ps/claude--dragging-p)))
-        (setq-default track-mouse default-track)))))
+(ert-deftest ps/claude-test-throttle-advice-never-stuck-after-burst-goes-stale ()
+  "Once a burst goes stale (no recent attempts), reflow resumes even if a
+much older reflow looked like it was mid-drag -- the scenario that a stuck
+global `track-mouse' used to cause permanently."
+  (let ((ps/claude--last-reflow-time (time-subtract (current-time) 5))
+        (ps/claude--last-attempt-time (time-subtract (current-time) 5))
+        (ps/claude-resize-throttle-interval 0.25)
+        (ps/claude-resize-burst-gap 0.15)
+        called)
+    (should (eq (ps/claude--reflow-throttle-advice
+                 (lambda (&rest _) (setq called t) 'size))
+                'size))
+    (should called)))
 
 ;;; Line clipping during a drag
 
@@ -342,6 +371,35 @@ global value, so reading only the local one missed every drag."
     (setq-local truncate-lines nil)
     (ps/claude--begin-drag-clipping)
     (should-not truncate-lines)))
+
+(ert-deftest ps/claude-test-drag-clip-watchdog-force-ends-clipping ()
+  "The watchdog restores `truncate-lines' even if end is never called.
+Guards against exactly the failure mode found live: a signal this code
+depends on getting stuck and the normal settle path never running."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
+        (ps/claude-drag-clip-max-duration 0.05))
+    (unwind-protect
+        (with-current-buffer buf
+          (setq-local truncate-lines nil)
+          (ps/claude--begin-drag-clipping)
+          (should truncate-lines)
+          (sit-for 0.2)
+          (should-not truncate-lines)
+          (should-not ps/claude--drag-clip-watchdog))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-drag-clipping-end-cancels-watchdog ()
+  "A normal end before the watchdog fires cancels it cleanly."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
+        (ps/claude-drag-clip-max-duration 30))
+    (unwind-protect
+        (with-current-buffer buf
+          (setq-local truncate-lines nil)
+          (ps/claude--begin-drag-clipping)
+          (should (timerp ps/claude--drag-clip-watchdog))
+          (ps/claude--end-drag-clipping)
+          (should-not ps/claude--drag-clip-watchdog))
+      (kill-buffer buf))))
 
 ;;; Blank-window detection
 
@@ -392,22 +450,69 @@ global value, so reading only the local one missed every drag."
       (ps/claude--suppress-terminal-exit-query)
       (should-not (local-variable-p 'eat-query-before-killing-running-terminal)))))
 
-(ert-deftest ps/claude-test-suppress-mcp-exit-query-passes-result-through ()
-  "The MCP advice returns its argument unchanged and clears the flag."
+(ert-deftest ps/claude-test-exit-query-recognises-accepted-websocket ()
+  "An accepted websocket connection is recognised by its `:websocket' property.
+The listener sets `:noquery' itself but accepted connections do not inherit
+it -- this was the one process still blocking exit."
+  (cl-letf (((symbol-function 'processp) (lambda (_p) t))
+            ((symbol-function 'process-name) (lambda (_p) "websocket server on port 61672<1>"))
+            ((symbol-function 'process-buffer) (lambda (_p) nil))
+            ((symbol-function 'process-get)
+             (lambda (_p prop) (eq prop :websocket))))
+    (should (ps/claude--exit-query-process-p 'proc))))
+
+(ert-deftest ps/claude-test-exit-query-recognises-http-listener ()
+  "The web-server MCP listener is recognised by name."
+  (cl-letf (((symbol-function 'processp) (lambda (_p) t))
+            ((symbol-function 'process-name) (lambda (_p) "ws-server"))
+            ((symbol-function 'process-buffer) (lambda (_p) nil))
+            ((symbol-function 'process-get) (lambda (_p _prop) nil)))
+    (should (ps/claude--exit-query-process-p 'proc))))
+
+(ert-deftest ps/claude-test-exit-query-recognises-session-terminal ()
+  "The eat terminal is recognised by its session buffer."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'processp) (lambda (_p) t))
+                  ((symbol-function 'process-name) (lambda (_p) "claude"))
+                  ((symbol-function 'process-buffer) (lambda (_p) buf))
+                  ((symbol-function 'process-get) (lambda (_p _prop) nil)))
+          (should (ps/claude--exit-query-process-p 'proc)))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-exit-query-ignores-unrelated-process ()
+  "Unrelated processes are left alone, so shells still prompt on exit."
+  (let ((buf (generate-new-buffer "*shell*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'processp) (lambda (_p) t))
+                  ((symbol-function 'process-name) (lambda (_p) "bash"))
+                  ((symbol-function 'process-buffer) (lambda (_p) buf))
+                  ((symbol-function 'process-get) (lambda (_p _prop) nil)))
+          (should-not (ps/claude--exit-query-process-p 'proc)))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-clear-exit-queries-only-touches-claude ()
+  "The sweep clears Claude processes and leaves everything else alone."
   (let ((ps/claude-no-exit-prompt t)
         cleared)
-    (cl-letf (((symbol-function 'ws-process) (lambda (_s) 'proc))
-              ((symbol-function 'processp) (lambda (p) (eq p 'proc)))
+    (cl-letf (((symbol-function 'process-list) (lambda () '(claude other)))
+              ((symbol-function 'ps/claude--exit-query-process-p)
+               (lambda (p) (eq p 'claude)))
               ((symbol-function 'set-process-query-on-exit-flag)
-               (lambda (_p flag) (setq cleared (list t flag)))))
-      (should (equal (ps/claude--suppress-mcp-exit-query '(server . port))
-                     '(server . port)))
-      (should (equal cleared '(t nil))))))
+               (lambda (p flag) (push (cons p flag) cleared))))
+      (ps/claude--clear-exit-queries)
+      (should (equal cleared '((claude . nil)))))))
 
-(ert-deftest ps/claude-test-suppress-mcp-exit-query-survives-missing-server ()
-  "A nil/odd result never signals -- quitting must not break."
-  (let ((ps/claude-no-exit-prompt t))
-    (should-not (ps/claude--suppress-mcp-exit-query nil))))
+(ert-deftest ps/claude-test-clear-exit-queries-respects-toggle ()
+  "Nothing is cleared when `ps/claude-no-exit-prompt' is nil."
+  (let ((ps/claude-no-exit-prompt nil)
+        cleared)
+    (cl-letf (((symbol-function 'process-list) (lambda () '(claude)))
+              ((symbol-function 'ps/claude--exit-query-process-p) (lambda (_p) t))
+              ((symbol-function 'set-process-query-on-exit-flag)
+               (lambda (p flag) (push (cons p flag) cleared))))
+      (ps/claude--clear-exit-queries)
+      (should-not cleared))))
 
 ;;; Debug logging toggle
 
