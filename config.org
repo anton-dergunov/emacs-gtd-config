@@ -1482,7 +1482,9 @@ Logic lives in =lisp/ps-links.el=. Links may be written in full or short form:
 =[[obsidian://open?vault=obsidian&file=Maps]]= or =[[obsidian:Maps]]=.
 #+begin_src emacs-lisp
   ;; Register the obsidian: link type and per-buffer font-lock composition.
-  (org-add-link-type "obsidian" #'ps/obsidian--open-note)
+  ;; :keymap opens on mouse-down directly (see `ps/obsidian-link-map') so a
+  ;; single click opens the note without org-appear revealing raw syntax first.
+  (org-link-set-parameters "obsidian" :follow #'ps/obsidian--open-note :keymap ps/obsidian-link-map)
   (add-hook 'org-mode-hook #'ps/org-enable-obsidian-links)
 
   (global-set-key (kbd "<f4>") #'ps/insert-obsidian-link-from-clipboard)

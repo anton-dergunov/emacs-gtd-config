@@ -29,6 +29,9 @@ in Obsidian, and display nicely inside Emacs:
 - =F5= / =C-c p O= — insert an Obsidian link by *typing/prompting* for the
   note.
 
+Click the rendered link (the pencil icon + title) to open the note directly
+in Obsidian — a single click, with no effect on the surrounding text.
+
 * Plain Org links
 For everything else, Org's own linking still applies:
 

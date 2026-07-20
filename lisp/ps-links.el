@@ -20,6 +20,32 @@
              vault
              (url-hexify-string path)))))
 
+(defun ps/obsidian-mouse-open (event)
+  "Open the obsidian: link clicked at EVENT without disturbing point."
+  (interactive "e")
+  (let ((pos (posn-point (event-start event))))
+    (when pos
+      (with-selected-window (posn-window (event-start event))
+        (save-excursion
+          (goto-char pos)
+          (org-open-at-point))))))
+
+(defvar ps/obsidian-link-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [down-mouse-1] #'ps/obsidian-mouse-open)
+    (define-key map [mouse-1] #'ignore)
+    map)
+  "Keymap for obsidian: links.
+Opens immediately on mouse-down, bypassing Org's default click-follows-link
+translation (which moves point on the down-click and only follows on a later
+event — the source of the \"first click reveals raw syntax, second click
+opens\" bug). Point is never moved into the link, so org-appear's on-point
+reveal is never triggered and the pencil+title rendering survives the click.
+Standalone map (not layered on `org-mouse-map'): follow-link/mouse-2 are
+intentionally absent to avoid double-opening, which also means mouse-3
+(`org-find-file-at-mouse') is not available on these links — not meaningful
+for an obsidian: target anyway.")
+
 (defun ps/org-compose-obsidian-prefix (limit)
   "Replace all visible `obsidian:` prefixes with icon composition."
   (while (re-search-forward "\\(\\bobsidian:\\)" limit t)

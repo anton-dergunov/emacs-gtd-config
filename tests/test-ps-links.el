@@ -6,6 +6,11 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-links)
 
+;; Mirrors the registration in config.org, needed here so `org-open-at-point'
+;; recognizes obsidian: links (otherwise it treats them as fuzzy heading
+;; searches).
+(org-link-set-parameters "obsidian" :follow #'ps/obsidian--open-note :keymap ps/obsidian-link-map)
+
 ;; org-appear is not loaded in the batch test env; declare the internals the
 ;; stale-cache regression test fakes so they are special (dynamically bound).
 (defvar org-appear-mode)
@@ -157,6 +162,37 @@ reveal-reassert advice cannot un-fold the freshly inserted link."
                (lambda (url &rest _) (setq captured url))))
       (ps/obsidian--open-note "My Note")
       (should (equal captured "obsidian://open?vault=obsidian&file=My%20Note")))))
+
+;;; -------------------------------------------------------
+;;; obsidian: link mouse handling
+;;; -------------------------------------------------------
+
+(ert-deftest ps/links--mouse-open-invokes-follow-without-moving-point ()
+  "Clicking an obsidian link opens it without moving point or a live window."
+  (let (captured-path)
+    (cl-letf (((symbol-function 'ps/obsidian--open-note)
+               (lambda (path) (setq captured-path path))))
+      (with-temp-buffer
+        (org-mode)
+        (insert "before [[obsidian:Note]] after")
+        (goto-char (point-min))
+        (let ((link-pos (progn (goto-char (point-min))
+                                (search-forward "obsidian:Note")
+                                (match-beginning 0)))
+              (start-point (point-min)))
+          (goto-char start-point)
+          (save-window-excursion
+            (set-window-buffer (selected-window) (current-buffer))
+            (let ((event (list 'down-mouse-1
+                                (list (selected-window) link-pos '(0 . 0) 0))))
+              (ps/obsidian-mouse-open event))
+            (should (equal captured-path "Note"))
+            (should (= (point) start-point))))))))
+
+(ert-deftest ps/links--obsidian-map-binds-down-mouse-1 ()
+  "The link-local keymap opens on mouse-down rather than the default up-click."
+  (should (eq (lookup-key ps/obsidian-link-map [down-mouse-1])
+              #'ps/obsidian-mouse-open)))
 
 ;;; -------------------------------------------------------
 ;;; obsidian link insertion commands
