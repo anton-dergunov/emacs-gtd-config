@@ -727,7 +727,7 @@ underneath to act on.
   ;; Show column number in mode line
   (column-number-mode)
 
-  ;; Reserve a fixed 4-column gutter.
+  ;; Reserve a fixed 2-column gutter.
   ;;
   ;; Left nil, Emacs recomputes the width on every redisplay as
   ;; log10(MAX-LNUM)+1, where MAX-LNUM is the line at window start plus the
@@ -744,7 +744,7 @@ underneath to act on.
   ;; boundary, so pinning it removes the flicker without preventing genuine
   ;; growth (files past ~9000 lines still get a 5th column). `setq-default' is
   ;; required: the variable is permanently buffer-local.
-  (setq-default display-line-numbers-width 4)
+  (setq-default display-line-numbers-width 2)
 
   ;; Display line numbers globally
   (global-display-line-numbers-mode t)

@@ -564,5 +564,33 @@ it -- this was the one process still blocking exit."
        (lambda (&rest _) (setq seen claude-code-ide-window-side)))
       (should (eq seen 'bottom)))))
 
+;;; eat geometry freeze diagnostics
+
+(ert-deftest ps/claude-test-eat-desync-p-detects-mismatch ()
+  "Desync is reported only when both eat and window sizes are known and differ."
+  ;; cols differ
+  (should (ps/claude--eat-desync-p '(80 24 100 24 500 1)))
+  ;; rows differ
+  (should (ps/claude--eat-desync-p '(80 24 80 40 500 1)))
+  ;; agree -> no desync
+  (should-not (ps/claude--eat-desync-p '(80 24 80 24 500 1)))
+  ;; window size unknown (windowless buffer) -> never a false positive
+  (should-not (ps/claude--eat-desync-p '(80 24 nil nil 500 1)))
+  ;; eat size unknown -> not reported
+  (should-not (ps/claude--eat-desync-p '(nil nil 80 24 500 1)))
+  ;; nil geometry -> nil
+  (should-not (ps/claude--eat-desync-p nil)))
+
+(ert-deftest ps/claude-test-eat-geometry-string ()
+  "The marker string is compact and flags a desync."
+  (should (equal (ps/claude--eat-geometry-string nil) "eat=none"))
+  (should (equal (ps/claude--eat-geometry-string '(80 24 80 24 500 1))
+                 "eat=80x24 win=80x24 pmax=500 db=1"))
+  (should (equal (ps/claude--eat-geometry-string '(80 24 100 24 500 1))
+                 "eat=80x24 win=100x24 DESYNC pmax=500 db=1"))
+  ;; nil fields render without erroring
+  (should (equal (ps/claude--eat-geometry-string '(80 24 nil nil 500 nil))
+                 "eat=80x24 win=nilxnil pmax=500 db=nil")))
+
 (provide 'test-ps-claude)
 ;;; test-ps-claude.el ends here

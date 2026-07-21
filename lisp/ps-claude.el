@@ -579,6 +579,46 @@ left alone so genuine edit conflicts still prompt (\"Discard your edits?\")."
 
 ;;; eat output-queue crash guard (fix #6)
 
+(defun ps/claude--eat-geometry ()
+  "Return (EAT-COLS EAT-ROWS WIN-W WIN-H PMAX DISP-BEGIN) for the current eat
+buffer, or nil if there is no live terminal.  Each element may be nil if
+unavailable.  Pure-ish snapshot used only for freeze diagnostics; never signals."
+  (ignore-errors
+    (when (ps/claude--terminal-live-p)
+      (let* ((size (ignore-errors (eat-term-size eat-terminal)))
+             (win  (get-buffer-window (current-buffer)))
+             (db   (ignore-errors (eat-term-display-beginning eat-terminal))))
+        (list (and (consp size) (car size))
+              (and (consp size) (cdr size))
+              (and win (window-body-width win))
+              (and win (window-body-height win))
+              (point-max)
+              (cond ((markerp db) (marker-position db))
+                    ((integerp db) db)
+                    (t nil)))))))
+
+(defun ps/claude--eat-desync-p (geom)
+  "Non-nil if GEOM (from `ps/claude--eat-geometry') shows eat's terminal size
+disagreeing with the window body size -- the corrupted state that precedes an
+`eat--process-output-queue' runaway.  Pure/testable.  Only reports when BOTH
+sides are known, so a windowless buffer is never a false positive."
+  (pcase geom
+    (`(,ec ,er ,ww ,wh ,_pmax ,_db)
+     (and (integerp ec) (integerp er) (integerp ww) (integerp wh)
+          (or (/= ec ww) (/= er wh))))))
+
+(defun ps/claude--eat-geometry-string (geom)
+  "Format GEOM compactly for the freeze-log op marker.  Pure/testable."
+  (pcase geom
+    ('nil "eat=none")
+    (`(,ec ,er ,ww ,wh ,pmax ,db)
+     (format "eat=%sx%s win=%sx%s%s pmax=%s db=%s"
+             ec er ww wh (if (ps/claude--eat-desync-p geom) " DESYNC" "")
+             pmax db))))
+
+(defvar ps/claude--eat-desync-log-time nil
+  "Time of the last appended eat-desync line, to throttle the append log.")
+
 (defun ps/claude--eat-output-guard (orig-fn &rest args)
   "Swallow transient `args-out-of-range' errors from eat's output timer.
 When the Claude diff window first opens, eat's terminal width state can
@@ -587,23 +627,39 @@ momentarily desync, making `eat--process-output-queue' signal
 resync so the terminal re-renders cleanly, and continue.
 
 Also brackets the call with the freeze-log op marker (see
-`lisp/ps-freeze-log.el'): eat's output processing forces terminal redraws
-and is a suspect for the whole-main-thread `ns_flush_display' freeze.  The
-marker (not the append log) is used because this runs per output chunk; if
-Emacs wedges here, the marker file still names this op."
-  ;; `unwind-protect' so the marker is cleared even on the caught error.
-  (when (fboundp 'ps/freeze-log-op-begin)
-    (ps/freeze-log-op-begin "eat--process-output-queue"))
-  (unwind-protect
-      (condition-case err
-          (apply orig-fn args)
-        (args-out-of-range
-         (ps/claude--schedule-resync)
-         (message "ps/claude: recovered from eat output glitch (%s)"
-                  (error-message-string err))
-         nil))
-    (when (fboundp 'ps/freeze-log-op-end)
-      (ps/freeze-log-op-end))))
+`lisp/ps-freeze-log.el'): a single non-returning `eat--process-output-queue'
+call, spinning at 100%% CPU over a desynced terminal, is a confirmed freeze
+mode.  The marker records eat's geometry at entry (via
+`ps/claude--eat-geometry-string')
+so that after a freeze `cat ps-freeze-current-op.txt' shows the exact
+terminal-vs-window mismatch that triggered the runaway; a gross desync is
+also appended (throttled) to the main log so recoverable near-misses leave a
+timeline.  The marker (not per-call appends) carries the state because this
+runs per output chunk."
+  (let ((geom (ps/claude--eat-geometry)))
+    ;; `unwind-protect' so the marker is cleared even on the caught error.
+    (when (fboundp 'ps/freeze-log-op-begin)
+      (ps/freeze-log-op-begin
+       (concat "eat--process-output-queue " (ps/claude--eat-geometry-string geom))))
+    ;; Throttled append (<=1/5s) when grossly desynced, for a timeline of
+    ;; near-misses that recovered vs. the one that eventually wedged.
+    (when (and (ps/claude--eat-desync-p geom) (fboundp 'ps/freeze-log)
+               (let ((now (float-time)))
+                 (prog1 (or (null ps/claude--eat-desync-log-time)
+                            (> (- now ps/claude--eat-desync-log-time) 5))
+                   (setq ps/claude--eat-desync-log-time now))))
+      (ps/freeze-log 'eat "desync at output-queue entry: %s"
+                     (ps/claude--eat-geometry-string geom)))
+    (unwind-protect
+        (condition-case err
+            (apply orig-fn args)
+          (args-out-of-range
+           (ps/claude--schedule-resync)
+           (message "ps/claude: recovered from eat output glitch (%s)"
+                    (error-message-string err))
+           nil))
+      (when (fboundp 'ps/freeze-log-op-end)
+        (ps/freeze-log-op-end)))))
 
 ;;; Adaptive dock side (fix #7)
 
