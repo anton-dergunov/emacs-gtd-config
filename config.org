@@ -225,10 +225,14 @@ on by default, since it is how you find the track to interact with.
 Clicking anywhere in the track jumps there; disable with =ps/scrollbar-click-to-scroll= nil.
 =ps/scrollbar-tick-interval= bounds how stale the thumb's position can look while
 scrolling -- lower is snappier but costs more CPU (each tick calls =mouse-position=,
-an NS cross-process call). Losing OS focus (e.g. minimizing Emacs) already pauses
-that timer; after =ps/scrollbar-teardown-delay= seconds still unfocused, the
-remaining hooks/advice are fully uninstalled too (reinstalled transparently on
-focus gain), so nothing in this module runs at all during a long idle stretch.
+an NS cross-process call). That fast rate applies only while something is
+happening; when idle the tick drops to =ps/scrollbar-idle-poll-interval= (a scroll
+escalates it again immediately, so scroll-reveal is never delayed -- only
+hover-reveal can take up to that long to notice the pointer). Losing OS focus
+(e.g. minimizing Emacs) pauses the timer entirely; after
+=ps/scrollbar-teardown-delay= seconds still unfocused, the remaining hooks/advice
+are fully uninstalled too (reinstalled transparently on focus gain), so nothing in
+this module runs at all during a long idle stretch.
 
 To disable the custom scrollbar entirely (revert to native bars), set
 =ps/scrollbar-enabled= to =nil= in =local.el=.
@@ -242,6 +246,7 @@ To disable the custom scrollbar entirely (revert to native bars), set
         ps/scrollbar-fade-duration    0.25
         ps/scrollbar-show-on-hover    t
         ps/scrollbar-tick-interval    0.15
+        ps/scrollbar-idle-poll-interval 1.0
         ps/scrollbar-min-thumb-pixels 24
         ps/scrollbar-teardown-delay   (* 30 60))
 #+end_src

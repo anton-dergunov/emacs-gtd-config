@@ -147,12 +147,39 @@ Pair with `ps/freeze-log-op-end'.  Never signals."
             (message-log-max nil))
         (write-region "" nil ps/freeze-log-marker-file nil 'silent)))))
 
+(defvar ps/freeze-log--last-tick-count nil
+  "Previous `ps/scrollbar--tick-count', for the per-heartbeat tick rate.")
+
+(defun ps/freeze-log--scrollbar-state-string (cur last)
+  "Format the heartbeat's scrollbar-tick suffix from CUR and LAST tick counts.
+Pure/testable.  CUR nil (module not loaded) yields \"\"; LAST nil (first
+sample) omits the delta."
+  (cond
+   ((null cur) "")
+   (t (format " sb-ticks=%s%s" cur
+              (if last (format " (+%s)" (- cur last)) "")))))
+
+(defun ps/freeze-log--scrollbar-state ()
+  "Return a heartbeat suffix describing the scrollbar tick timer, or \"\".
+
+Reported because every timer firing makes Emacs run a redisplay from
+`detect_input_pending_run_timers', which on the NS build enters the nested
+AppKit event loop that freezes wedge inside.  Recording ticks-per-heartbeat
+shows whether that timer was live, and at what rate, right up to a freeze.
+Loosely coupled (`boundp'), since `ps-freeze-log' loads before `ps-scrollbar'."
+  (let ((cur (and (boundp 'ps/scrollbar--tick-count)
+                  (symbol-value 'ps/scrollbar--tick-count))))
+    (prog1 (ps/freeze-log--scrollbar-state-string
+            cur ps/freeze-log--last-tick-count)
+      (when cur (setq ps/freeze-log--last-tick-count cur)))))
+
 (defun ps/freeze-log--heartbeat ()
   "Write one heartbeat line (main-thread liveness marker)."
   (setq ps/freeze-log--heartbeat-count (1+ ps/freeze-log--heartbeat-count))
-  (ps/freeze-log 'heartbeat "alive #%d focus=%s"
+  (ps/freeze-log 'heartbeat "alive #%d focus=%s%s"
                  ps/freeze-log--heartbeat-count
-                 (frame-focus-state)))
+                 (frame-focus-state)
+                 (ps/freeze-log--scrollbar-state)))
 
 (defun ps/freeze-log--on-focus-change ()
   "Log every OS focus gain/loss (correlates freezes with backgrounding)."

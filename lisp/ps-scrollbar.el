@@ -79,6 +79,34 @@ Cancelled by `ps/scrollbar--vl-release' on quick releases (clicks).")
   "Timer that fully removes scrollbar hooks after a long unfocused stretch.
 Set on focus loss (alongside pausing the tick timer), cancelled on focus
 gain. See `ps/scrollbar--teardown-hooks'.")
+(defvar ps/scrollbar--timer-speed nil
+  "Rate the tick timer is currently running at: `fast', `slow', or nil.
+See `ps/scrollbar-idle-poll-interval' for why the tick has two speeds.")
+
+(defvar ps/scrollbar--fast-until nil
+  "`float-time' until which the tick stays at the fast rate, or nil.
+Pushed forward by `ps/scrollbar--note-activity' on each scroll or render, so
+the tick keeps full responsiveness through a burst of activity and for one
+reveal/fade cycle afterwards before dropping back to the idle rate.")
+
+(defvar ps/scrollbar--last-hover nil
+  "Window whose track the pointer was last found to be over, or nil.
+Reused on ticks where `mouse-position' is unchanged: if the pointer has not
+moved, the hover result cannot have changed either.  Besides skipping a
+`mouse-pixel-position' call, this fixes the bug that made hover-reveal
+effectively useless -- a motionless pointer counted as \"not hovering\", so a
+hovered pill faded out after `ps/scrollbar-hide-delay' while the pointer was
+still sitting on the track.")
+
+(defvar ps/scrollbar--tick-count 0
+  "Number of tick-timer firings since load.
+Read by the freeze-log heartbeat (see `lisp/ps-freeze-log.el') so that after
+a freeze the log shows whether this 0.15 s timer was still firing, and how
+fast, right up to the wedge.  Every timer firing makes Emacs run
+`redisplay_preserve_echo_area' from `detect_input_pending_run_timers', which
+on the NS build enters a nested AppKit event loop -- the operation a freeze
+gets stuck in -- so this rate is the module's freeze exposure.")
+
 (defvar ps/scrollbar--torn-down nil
   "Non-nil while the hooks/advice below are fully uninstalled.
 Set by `ps/scrollbar--teardown-hooks', cleared by
@@ -123,7 +151,28 @@ to interact with even when you have not just scrolled."
 The pill's position only updates on a tick, so this is the upper bound on
 the lag between scrolling and the thumb visually catching up. Lower is
 snappier; each tick is cheap when nothing changed, so this can go fairly
-low without a real cost."
+low without a real cost.
+
+Only in effect while there is something to do -- see
+`ps/scrollbar-idle-poll-interval'."
+  :type 'number :group 'ps-scrollbar)
+
+(defcustom ps/scrollbar-idle-poll-interval 1.0
+  "Seconds between ticks while idle: no pill shown, nothing scrolling.
+The tick runs at `ps/scrollbar-tick-interval' only when there is work --
+during and just after a scroll, and while the pill is visible or fading --
+and drops to this much slower rate the rest of the time (which is most of
+the time).  A scroll re-escalates immediately via `window-scroll-functions',
+so scroll-reveal is not delayed by this.
+
+Beyond saving CPU, this bounds a real failure mode: every timer firing makes
+Emacs run a redisplay from `detect_input_pending_run_timers', which on the
+macOS NS build enters a nested AppKit event loop, and that loop very
+occasionally never exits -- wedging all of Emacs until it is restarted (see
+design-docs/scroll-bars.md).  The idle rate is therefore this module's
+standing exposure to that bug.  Raising it lowers exposure; the only cost is
+that hover-reveal can take up to this long to notice the pointer entering
+the track."
   :type 'number :group 'ps-scrollbar)
 
 (defcustom ps/scrollbar-exclude-modes '(treemacs-mode which-key-mode)
@@ -772,6 +821,25 @@ narrower than one character cell, so a char-cell test would be too coarse."
                          x y (ps/scrollbar--strip-rect win)))
           win))))))
 
+(defun ps/scrollbar--resolve-hover (mouse-moved)
+  "Return the live window whose track the pointer is over, or nil.
+
+Recomputes (via `ps/scrollbar--strip-hover-window', which costs a
+`mouse-pixel-position' call) only when MOUSE-MOVED says the pointer changed
+character cell; otherwise reuses `ps/scrollbar--last-hover', because a
+pointer that has not moved cannot have entered or left the track.
+
+That reuse is the fix for hover-reveal being useless in practice: treating a
+motionless pointer as \"not hovering\" left no render target, so a hovered
+pill faded out after `ps/scrollbar-hide-delay' while the pointer was still
+resting on the track."
+  (when ps/scrollbar-show-on-hover
+    (let ((h (if mouse-moved
+                 (setq ps/scrollbar--last-hover
+                       (ps/scrollbar--strip-hover-window))
+               ps/scrollbar--last-hover)))
+      (and (window-live-p h) h))))
+
 (defun ps/scrollbar--scrolled-window (w)
   "Non-nil if W's `window-start' changed since the last tick (updates it)."
   (and (window-live-p w)
@@ -802,6 +870,67 @@ triggering a redisplay on every tick while the pill is stationary."
                 (unwind-protect (set-frame-position f l tp)
                   (ps/scrollbar--log-op-done))))))))))
 
+;;; Tick scheduling (two-speed: see `ps/scrollbar-idle-poll-interval')
+
+(defun ps/scrollbar--start-timer (speed)
+  "(Re)start the tick timer at SPEED, either `fast' or `slow'."
+  (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
+  (let ((interval (if (eq speed 'fast)
+                      ps/scrollbar-tick-interval
+                    ps/scrollbar-idle-poll-interval)))
+    (setq ps/scrollbar--timer-speed speed
+          ps/scrollbar--timer (run-with-timer interval interval
+                                              #'ps/scrollbar--tick))))
+
+(defun ps/scrollbar--stop-timer ()
+  "Cancel the tick timer, if any."
+  (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
+  (setq ps/scrollbar--timer nil
+        ps/scrollbar--timer-speed nil))
+
+(defun ps/scrollbar--fast-linger ()
+  "Seconds the tick stays fast after the last activity.
+Covers one full reveal-and-fade cycle, so the pill never drops to the idle
+rate mid-fade (which would make the fade visibly stutter)."
+  (+ ps/scrollbar-hide-delay ps/scrollbar-fade-duration))
+
+(defun ps/scrollbar--want-fast-p (now visible fading fast-until)
+  "Non-nil if the tick should run at the fast rate.  Pure/testable.
+VISIBLE and FADING are the current pill/fade state; FAST-UNIT is the
+`ps/scrollbar--fast-until' deadline (nil for none)."
+  (and (or visible fading (and fast-until (< now fast-until))) t))
+
+(defun ps/scrollbar--apply-speed ()
+  "Move the tick between the fast and idle rates to match current state.
+A no-op when no timer is running (mode off, or focus-paused): those states
+must not be silently restarted from here."
+  (when ps/scrollbar--timer
+    (let ((want (if (ps/scrollbar--want-fast-p
+                     (float-time)
+                     (and ps/scrollbar--visible-frame
+                          (frame-live-p ps/scrollbar--visible-frame))
+                     ps/scrollbar--fade-start
+                     ps/scrollbar--fast-until)
+                    'fast 'slow)))
+      (unless (eq want ps/scrollbar--timer-speed)
+        (ps/scrollbar--start-timer want)))))
+
+(defun ps/scrollbar--note-activity ()
+  "Record interaction and make sure the tick is running at the fast rate."
+  (setq ps/scrollbar--fast-until (+ (float-time) (ps/scrollbar--fast-linger)))
+  ;; Only escalate an already-running tick: a nil timer means the mode is off
+  ;; or focus-paused, and must stay that way.
+  (when (and ps/scrollbar--timer (not (eq ps/scrollbar--timer-speed 'fast)))
+    (ps/scrollbar--start-timer 'fast)))
+
+(defun ps/scrollbar--on-scroll (_window _start)
+  "`window-scroll-functions' hook: a window scrolled, so go to full speed.
+This is the event-driven half of the two-speed tick -- without it, the first
+render after a scroll could wait a whole `ps/scrollbar-idle-poll-interval'.
+Deliberately minimal: it runs inside redisplay, so it only touches timer
+state and never buffers, windows or frames."
+  (ps/scrollbar--note-activity))
+
 (defun ps/scrollbar--on-focus-change ()
   "Pause or resume the tick timer when Emacs gains or loses OS focus.
 Wired into `after-focus-change-function' by `ps/scrollbar--enable'.
@@ -818,16 +947,14 @@ timer so scroll and hover detection resume immediately."
           (setq ps/scrollbar--teardown-timer nil))
         (when ps/scrollbar--torn-down
           (ps/scrollbar--reinstall-hooks))
-        ;; Emacs regained focus: restart the timer if it was stopped.
+        ;; Emacs regained focus: restart the tick, idle-rate until something
+        ;; actually happens (a scroll escalates it via `--on-scroll').
         (when (and ps/scrollbar-mode (null ps/scrollbar--timer))
-          (setq ps/scrollbar--timer
-                (run-with-timer ps/scrollbar-tick-interval
-                                ps/scrollbar-tick-interval
-                                #'ps/scrollbar--tick))))
+          (ps/scrollbar--start-timer 'slow)))
     ;; Emacs lost focus: stop the timer and hide the pill.
-    (when ps/scrollbar--timer
-      (cancel-timer ps/scrollbar--timer)
-      (setq ps/scrollbar--timer nil))
+    (ps/scrollbar--stop-timer)
+    (setq ps/scrollbar--fast-until nil
+          ps/scrollbar--last-hover nil)
     (ps/scrollbar--hide-now)
     (when ps/scrollbar--teardown-timer
       (cancel-timer ps/scrollbar--teardown-timer))
@@ -845,19 +972,26 @@ only fires on the rare deletion of a whole frame, not periodically, so it
 is not part of what this guards against."
   (setq ps/scrollbar--teardown-timer nil)
   (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (remove-hook 'window-scroll-functions      #'ps/scrollbar--on-scroll)
   (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
   (ps/scrollbar--delete-all-frames)
   (ps/scrollbar--hide-now)
-  (setq ps/scrollbar--torn-down t))
+  (setq ps/scrollbar--torn-down t)
+  (when (fboundp 'ps/freeze-log)
+    (ps/freeze-log 'scrollbar "teardown (long unfocus): hooks/advice removed")))
 
 (defun ps/scrollbar--reinstall-hooks ()
   "Undo `ps/scrollbar--teardown-hooks': reinstall hooks/advice on focus gain."
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
+  (add-hook 'window-scroll-functions      #'ps/scrollbar--on-scroll)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
-  (setq ps/scrollbar--torn-down nil))
+  (setq ps/scrollbar--torn-down nil)
+  (when (fboundp 'ps/freeze-log)
+    (ps/freeze-log 'scrollbar "reinstall (focus regained): hooks/advice restored")))
 
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
+  (setq ps/scrollbar--tick-count (1+ ps/scrollbar--tick-count))
   (when (and ps/scrollbar-mode
              (not ps/scrollbar--drag-in-progress)
              ;; Skip entirely when Emacs is definitely not focused: no hover
@@ -867,7 +1001,11 @@ is not part of what this guards against."
              (not (null (frame-focus-state))))
     (condition-case err
         (ps/scrollbar--tick-1)
-      (error (message "ps/scrollbar: %S" err)))))
+      (error (message "ps/scrollbar: %S" err))))
+  ;; Outside the guard above: the rate must be re-evaluated every cycle,
+  ;; including cycles whose body was skipped, so an idle or drag-suppressed
+  ;; tick still drops back to `ps/scrollbar-idle-poll-interval'.
+  (ps/scrollbar--apply-speed))
 
 (defun ps/scrollbar--tick-1 ()
   (let* ((now (float-time))
@@ -896,10 +1034,7 @@ is not part of what this guards against."
          (mouse-scrolled (and mouse-win (ps/scrollbar--scrolled-window mouse-win)))
          (sel-scrolled   (and (not (eq sel mouse-win))
                               (ps/scrollbar--scrolled-window sel)))
-         ;; Hover: only when mouse moved — skips mouse-pixel-position otherwise.
-         (hovered (and ps/scrollbar-show-on-hover
-                       mouse-moved
-                       (ps/scrollbar--strip-hover-window)))
+         (hovered (ps/scrollbar--resolve-hover mouse-moved))
          target)
     (setq ps/scrollbar--last-mp mp)
     (cond
@@ -921,7 +1056,11 @@ is not part of what this guards against."
           (when ps/scrollbar--fade-start (ps/scrollbar--fade-cancel))
           (let ((res (ps/scrollbar--render target)))
             (unless (eq res 'skip)
-              (setq ps/scrollbar--shown-at now))))
+              (setq ps/scrollbar--shown-at now
+                    ;; Keep the tick at full speed through this reveal and
+                    ;; the fade that follows it.
+                    ps/scrollbar--fast-until
+                    (+ now (ps/scrollbar--fast-linger))))))
       ;; No activity.
       (cond
        ;; Fade in progress: advance one step.
@@ -1072,17 +1211,19 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (add-function :after after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
+  (add-hook 'window-scroll-functions #'ps/scrollbar--on-scroll)
   (setq ps/scrollbar--last-sig nil
-        ps/scrollbar--torn-down nil)
-  (when ps/scrollbar--timer (cancel-timer ps/scrollbar--timer))
-  (setq ps/scrollbar--timer
-        (run-with-timer ps/scrollbar-tick-interval ps/scrollbar-tick-interval
-                        #'ps/scrollbar--tick)))
+        ps/scrollbar--torn-down nil
+        ps/scrollbar--fast-until nil
+        ps/scrollbar--last-hover nil)
+  ;; Start idle: nothing is happening yet, and a scroll escalates instantly.
+  (ps/scrollbar--start-timer 'slow))
 
 (defun ps/scrollbar--disable ()
-  (when ps/scrollbar--timer
-    (cancel-timer ps/scrollbar--timer)
-    (setq ps/scrollbar--timer nil))
+  (ps/scrollbar--stop-timer)
+  (remove-hook 'window-scroll-functions #'ps/scrollbar--on-scroll)
+  (setq ps/scrollbar--fast-until nil
+        ps/scrollbar--last-hover nil)
   (when ps/scrollbar--teardown-timer
     (cancel-timer ps/scrollbar--teardown-timer)
     (setq ps/scrollbar--teardown-timer nil))

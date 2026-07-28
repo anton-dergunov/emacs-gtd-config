@@ -144,6 +144,115 @@ Claude Code session buffers are excluded by name (not by mode) -- see
   (should (eq (lookup-key ps/scrollbar-mode-map [left-fringe drag-mouse-1])
               #'ps/scrollbar--vl-release)))
 
+;;; Hover resolution (sustained-hover fix)
+
+(ert-deftest ps/scrollbar--resolve-hover-disabled-returns-nil ()
+  "With hover-reveal off, nothing is computed and nil is returned."
+  (let ((ps/scrollbar-show-on-hover nil)
+        (ps/scrollbar--last-hover (selected-window))
+        (called nil))
+    (cl-letf (((symbol-function 'ps/scrollbar--strip-hover-window)
+               (lambda () (setq called t) (selected-window))))
+      (should-not (ps/scrollbar--resolve-hover t))
+      (should-not called))))
+
+(ert-deftest ps/scrollbar--resolve-hover-recomputes-when-moved ()
+  "A moved pointer recomputes the hover window and caches it."
+  (let ((ps/scrollbar-show-on-hover t)
+        (ps/scrollbar--last-hover nil)
+        (calls 0))
+    (cl-letf (((symbol-function 'ps/scrollbar--strip-hover-window)
+               (lambda () (setq calls (1+ calls)) (selected-window))))
+      (should (eq (ps/scrollbar--resolve-hover t) (selected-window)))
+      (should (= calls 1))
+      (should (eq ps/scrollbar--last-hover (selected-window))))))
+
+(ert-deftest ps/scrollbar--resolve-hover-reuses-cache-when-still ()
+  "A motionless pointer reuses the cached window WITHOUT recomputing.
+This is the regression guard for the fade-while-hovering bug."
+  (let ((ps/scrollbar-show-on-hover t)
+        (ps/scrollbar--last-hover (selected-window))
+        (calls 0))
+    (cl-letf (((symbol-function 'ps/scrollbar--strip-hover-window)
+               (lambda () (setq calls (1+ calls)) nil)))
+      ;; Still hovering, and no expensive recomputation happened.
+      (should (eq (ps/scrollbar--resolve-hover nil) (selected-window)))
+      (should (= calls 0)))))
+
+(ert-deftest ps/scrollbar--resolve-hover-drops-dead-window ()
+  "A cached window that has since died is not returned."
+  (let* ((ps/scrollbar-show-on-hover t)
+         (dead (with-temp-buffer (split-window)))
+         (ps/scrollbar--last-hover dead))
+    (delete-window dead)
+    (should-not (ps/scrollbar--resolve-hover nil))))
+
+;;; Two-speed tick (activity-driven scheduling)
+
+(ert-deftest ps/scrollbar--want-fast-p-states ()
+  "Fast while the pill is visible, fading, or inside the activity window."
+  ;; Visible pill -> fast.
+  (should (ps/scrollbar--want-fast-p 100.0 t nil nil))
+  ;; Mid-fade -> fast (so the fade does not stutter at the idle rate).
+  (should (ps/scrollbar--want-fast-p 100.0 nil 99.5 nil))
+  ;; Within the post-activity linger -> fast.
+  (should (ps/scrollbar--want-fast-p 100.0 nil nil 101.0))
+  ;; Fully idle -> slow.
+  (should-not (ps/scrollbar--want-fast-p 100.0 nil nil nil))
+  ;; Linger expired -> slow.
+  (should-not (ps/scrollbar--want-fast-p 100.0 nil nil 99.0)))
+
+(ert-deftest ps/scrollbar--fast-linger-covers-reveal-and-fade ()
+  "The linger spans a whole reveal+fade cycle, so speed never drops mid-fade."
+  (let ((ps/scrollbar-hide-delay 1.0)
+        (ps/scrollbar-fade-duration 0.25))
+    (should (= (ps/scrollbar--fast-linger) 1.25))))
+
+(ert-deftest ps/scrollbar--note-activity-does-not-start-a-paused-tick ()
+  "Activity must never resurrect a timer that is off (mode off / focus-paused)."
+  (let ((ps/scrollbar--timer nil)
+        (ps/scrollbar--timer-speed nil)
+        (ps/scrollbar--fast-until nil))
+    (ps/scrollbar--note-activity)
+    ;; Deadline is recorded, but no timer is created.
+    (should ps/scrollbar--fast-until)
+    (should (null ps/scrollbar--timer))
+    (should (null ps/scrollbar--timer-speed))))
+
+(ert-deftest ps/scrollbar--note-activity-escalates-a-running-slow-tick ()
+  "A running idle tick is escalated to the fast rate by activity."
+  (let* ((ps/scrollbar-tick-interval 0.15)
+         (ps/scrollbar-idle-poll-interval 1.0)
+         (ps/scrollbar--timer nil)
+         (ps/scrollbar--timer-speed nil)
+         (ps/scrollbar--fast-until nil))
+    (unwind-protect
+        (progn
+          (ps/scrollbar--start-timer 'slow)
+          (should (eq ps/scrollbar--timer-speed 'slow))
+          (ps/scrollbar--note-activity)
+          (should (eq ps/scrollbar--timer-speed 'fast))
+          (should (timerp ps/scrollbar--timer)))
+      (ps/scrollbar--stop-timer))))
+
+(ert-deftest ps/scrollbar--stop-timer-clears-speed ()
+  (let ((ps/scrollbar--timer nil)
+        (ps/scrollbar--timer-speed nil)
+        (ps/scrollbar-idle-poll-interval 1.0))
+    (ps/scrollbar--start-timer 'slow)
+    (should (timerp ps/scrollbar--timer))
+    (ps/scrollbar--stop-timer)
+    (should (null ps/scrollbar--timer))
+    (should (null ps/scrollbar--timer-speed))))
+
+(ert-deftest ps/scrollbar--on-scroll-notes-activity ()
+  "The `window-scroll-functions' hook records activity (ignoring its args)."
+  (let ((ps/scrollbar--timer nil)
+        (ps/scrollbar--timer-speed nil)
+        (ps/scrollbar--fast-until nil))
+    (ps/scrollbar--on-scroll (selected-window) 1)
+    (should ps/scrollbar--fast-until)))
+
 ;;; Long-unfocus teardown / reinstall
 
 (defmacro ps/scrollbar--with-clean-focus-state (&rest body)

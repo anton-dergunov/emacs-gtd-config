@@ -93,6 +93,32 @@
           (should-not (file-exists-p ps/freeze-log-file)))
       (delete-directory dir t))))
 
+;;; Heartbeat scrollbar-state suffix
+
+(ert-deftest ps/freeze-log--scrollbar-state-string-pure ()
+  "Suffix formatting: absent module, first sample, and subsequent deltas."
+  ;; Module not loaded (nil count) -> no suffix at all.
+  (should (equal (ps/freeze-log--scrollbar-state-string nil nil) ""))
+  (should (equal (ps/freeze-log--scrollbar-state-string nil 50) ""))
+  ;; First sample -> count only, no delta.
+  (should (equal (ps/freeze-log--scrollbar-state-string 100 nil) " sb-ticks=100"))
+  ;; Subsequent sample -> delta against the previous count.
+  (should (equal (ps/freeze-log--scrollbar-state-string 113 100)
+                 " sb-ticks=113 (+13)"))
+  ;; A stalled timer shows +0 -- the signature of a paused/torn-down tick,
+  ;; which is what distinguishes "timer died" from "timer ran into the wedge".
+  (should (equal (ps/freeze-log--scrollbar-state-string 113 113)
+                 " sb-ticks=113 (+0)")))
+
+(ert-deftest ps/freeze-log--scrollbar-state-tracks-last-count ()
+  "The stateful wrapper records the previous count so deltas advance."
+  (defvar ps/scrollbar--tick-count)
+  (let ((ps/scrollbar--tick-count 100)
+        (ps/freeze-log--last-tick-count nil))
+    (should (equal (ps/freeze-log--scrollbar-state) " sb-ticks=100"))
+    (setq ps/scrollbar--tick-count 113)
+    (should (equal (ps/freeze-log--scrollbar-state) " sb-ticks=113 (+13)"))))
+
 (ert-deftest ps/freeze-log--setup-teardown-manage-timer ()
   "Setup starts a heartbeat timer and focus hook; teardown removes both."
   (let ((ps/freeze-log-enabled t)

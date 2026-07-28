@@ -26,10 +26,13 @@ your colour theme.
   always a hard, dark stripe that can't be recoloured or hidden.
 - *Everywhere.* It works in all windows — Org files, =*Messages*=, the Claude
   Code terminal, and any split.
-- *Backs off when idle.* Nothing in this feature runs while Emacs sits in the
-  background: losing focus pauses it immediately, and after half an hour still
-  unfocused it goes further and fully unloads its hooks, transparently putting
-  them back the moment you return.
+- *Backs off when idle.* The indicator only does continuous work while
+  something is actually happening — while you scroll, and while the pill is on
+  screen or fading. The rest of the time it idles at a much slower rate, and a
+  scroll wakes it instantly, so nothing feels slower. Nothing at all runs while
+  Emacs sits in the background: losing focus pauses it immediately, and after
+  half an hour still unfocused it goes further and fully unloads its hooks,
+  transparently putting them back the moment you return.
 
 Scroll with the trackpad, mouse wheel, or keyboard. Smooth, pixel-precise
 momentum scrolling is enabled alongside it.
@@ -47,6 +50,7 @@ where):
   Scroll bars/ ( =ps/scrollbar-hide-delay= , =ps/scrollbar-fade-duration= ,
   =ps/scrollbar-show-on-hover= , =ps/scrollbar-width= ,
   =ps/scrollbar-min-thumb-pixels= , =ps/scrollbar-click-to-scroll= ,
-  =ps/scrollbar-teardown-delay= ). The colour comes from the
-  =ps/scrollbar-thumb= face. Turn it off with =M-x ps/scrollbar-mode=.
+  =ps/scrollbar-teardown-delay= , =ps/scrollbar-idle-poll-interval= ). The
+  colour comes from the =ps/scrollbar-thumb= face. Turn it off with
+  =M-x ps/scrollbar-mode=.
 - Smooth scrolling: =config.org= → /Editor & UI → Smooth scrolling (ultra-scroll)/.
