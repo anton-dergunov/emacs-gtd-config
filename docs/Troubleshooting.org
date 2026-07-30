@@ -47,6 +47,13 @@ missing optional dependency or a path that needs setting.
   extending]]). If it works there, the issue is in your =local.el= or Org data.
 - Launch with =emacs --debug-init= to get a backtrace on startup errors.
 
+* The mouse pointer jumps to the corner of the frame
+Ediff moves the physical mouse pointer by itself — into its control panel when
+a comparison starts, and to the top-left of the frame when one ends. That is
+what you see when an AI-assistant diff opens or closes. This config turns it
+off by setting =ediff-grab-mouse= to =nil= (see [[file:AI-integration.org][AI integration]]); set it back to
+=t= for the stock behaviour.
+
 * Git sync did something unexpected
 - Open =C-x g= (Magit) to inspect the repository state and history.
 - Pause sync with =C-c p s= while you sort things out.

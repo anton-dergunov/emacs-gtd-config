@@ -1684,6 +1684,14 @@ the current selection, and shows proposed edits as Emacs diffs. Runs on the
 Claude Pro/Max subscription (no separate pay-per-token cost). Bound under
 =C-c c=.
 
+** Ediff: don't move the mouse pointer
+Ediff warps the physical mouse pointer to the top-left of the frame when a
+session ends (and, in its default multi-frame layout, into the control frame
+when one starts). Leave the pointer alone.
+#+begin_src emacs-lisp
+  (setq ediff-grab-mouse nil)
+#+end_src
+
 ** Claude Code IDE (claude-code-ide.el)
 =eat= is the terminal backend (pure Elisp, no native build). The package is not
 on MELPA, so it is installed once via =package-vc-install= (Emacs 29 has no

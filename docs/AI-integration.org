@@ -25,6 +25,18 @@ selected in your Org files — select a few lines and ask about "this", and it
 knows what you mean. It can also open files, show you diffs, and report Emacs
 diagnostics.
 
+* Reviewing proposed edits
+Changes the assistant wants to make are shown as an Emacs diff (Ediff) so you
+can step through them and accept or reject. Your mouse pointer is left where
+you put it — out of the box, Ediff physically moves the pointer to the corner
+of the frame when a diff closes, which is disabled here.
+
+To get the stock behaviour back, set =ediff-grab-mouse= to =t=.
+
+** Under the hood
+Settings block: =config.org= → /AI Assistant → Ediff: don't move the mouse
+pointer/ — =ediff-grab-mouse=.
+
 * Telling it how to work with your notes
 The assistant reads a file named =AGENTS.md= in your Org directory (with a tiny
 =CLAUDE.md= alongside that just points to it). That file tells the assistant that
