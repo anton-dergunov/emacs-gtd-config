@@ -68,6 +68,10 @@ To compare your buffer against what is on disk, run =M-x ediff-current-file=
 (or =M-x diff-buffer-with-file= for a quick diff), then decide whether to keep
 your version or reload.
 
+This only applies when you have /unsaved/ edits. If the buffer matches what you
+last saved, it simply refreshes to the new content without asking — see
+[[file:Sync-and-backups.org][Sync & backups]].
+
 * If the assistant window looks wrong after resizing
 The session window is a terminal, and resizing it makes the assistant redraw
 its whole display. If it ever ends up showing blank space, missing text at the

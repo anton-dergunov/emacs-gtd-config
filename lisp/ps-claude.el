@@ -60,7 +60,11 @@
 ;;    prompt.  We advise the open/diff entry points to quietly revert a
 ;;    *stale, unmodified* visiting buffer first, closing the race.  Modified
 ;;    buffers are deliberately left alone, so a genuine edit conflict still
-;;    prompts ("Discard your edits?").
+;;    prompts ("Discard your edits?").  This is only the Claude-specific fast
+;;    path, and it covers just the two entry points advised below for files
+;;    under `my-org-base-directory'; the general backstop is
+;;    `revert-without-query' in config.org's auto-revert block, which closes
+;;    the same race on every `find-file-noselect' path and for any path.
 ;;
 ;; 6. When the diff window first opens, eat's terminal width state can briefly
 ;;    desync and `eat--process-output-queue' signals `args-out-of-range' from

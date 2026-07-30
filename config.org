@@ -1351,6 +1351,18 @@ slow or failing save cannot take the rest of `after-focus-change-function'
         auto-revert-verbose nil
         auto-revert-check-vc-info nil)
   (global-auto-revert-mode t)
+
+  ;; `global-auto-revert-mode' already rereads unmodified buffers when the
+  ;; file changes on disk, but it waits for a filesystem notification (see
+  ;; `auto-revert-avoid-polling' above).  Anything that visits the file inside
+  ;; that window -- e.g. Claude Code re-opening a file it just wrote -- hits
+  ;; `find-file-noselect's "Reread from disk?  (yes or no)" prompt instead.
+  ;; Answer it the same way auto-revert would.  The empty regexp matches every
+  ;; file, and only ever applies to *unmodified* buffers: one with unsaved
+  ;; edits still prompts ("Discard your edits?"), so real conflicts are never
+  ;; silently lost.  Trade-off: the silent reread echoes "Reverting file
+  ;; ...done" instead, which is transient but does land in *Messages*.
+  (setq revert-without-query '(""))
 #+end_src
 
 *** Do not add a CLOSED timestamp on DONE
