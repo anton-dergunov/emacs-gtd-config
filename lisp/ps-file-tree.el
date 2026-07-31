@@ -19,7 +19,13 @@
 (declare-function treemacs-project->path "treemacs-workspaces")
 (declare-function treemacs-canonical-path "treemacs-core-utils")
 (declare-function treemacs--filename "treemacs-core-utils")
+(declare-function treemacs--evade-image "treemacs-core-utils")
+(declare-function treemacs-find-in-dom "treemacs-dom")
+(declare-function treemacs-dom-node->position "treemacs-dom")
 (declare-function org-find-exact-headline-in-buffer "org")
+(defvar treemacs-post-buffer-init-hook)
+(defvar treemacs-post-refresh-hook)
+(defvar treemacs-mode-hook)
 ;; Optional: git-sync status is appended to the file-tree mode line when the
 ;; module is loaded.  Guarded with `fboundp', so this file stays standalone.
 (declare-function ps/git-sync--modeline "ps-git-sync" ())
@@ -32,9 +38,18 @@
   :group 'ps)
 
 (defcustom ps/file-tree-ignored-files
-  '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'")
+  '("\\`init\\.org\\'" "\\`workspace\\.org\\'"
+    "\\`AGENTS\\.md\\'" "\\`CLAUDE\\.md\\'"
+    "\\`\\." "\\`elpa\\'" "\\.elc\\'")
   "Regexps matched against file/dir names to hide in the file tree.
-A file or directory is hidden if its name matches any regexp here."
+A file or directory is hidden if its name matches any regexp here.  The
+defaults hide the config files that live beside your notes (`init.org',
+`workspace.org', `AGENTS.md', `CLAUDE.md') along with dotfiles and build
+artifacts.
+
+This is a *display* list.  What the agenda scans is a separate question,
+answered by `ps/org-files-exclude-directories' and
+`ps/org-files-exclude-files'."
   :type '(repeat regexp)
   :group 'ps-file-tree)
 
@@ -99,8 +114,49 @@ modes are mutually exclusive."
 
 (defcustom ps/file-tree-root-name nil
   "Label for the single root project when `ps/file-tree-root-mode' is `single'.
-When nil, the Org base directory's own name is used."
+When nil, the Org base directory's own name is used.  Ignored while
+`ps/file-tree-hide-root' is on, since the label is then not drawn at all."
   :type '(choice (const :tag "The directory's own name" nil) string)
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-hide-root t
+  "Whether to hide the project root line, showing its contents directly.
+The tree then starts at the Org directory's own entries instead of naming
+the directory first.  Only meaningful when `ps/file-tree-root-mode' is
+`single' -- with `subdirs' the root labels are the section headers and
+hiding them would leave nothing to group by."
+  :type 'boolean
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-top-level-spacing 6
+  "Extra pixels of vertical space drawn above each top-level directory.
+Separates the tree into sections the way a blank line used to when every
+top-level folder was its own project.  Set to 0 for no gap."
+  :type 'integer
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-bold-top-level t
+  "Whether top-level directories are drawn bold, as section headers.
+Takes over from `treemacs-root-face', which no longer applies once
+`ps/file-tree-hide-root' removes the root line."
+  :type 'boolean
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-follow-current-file t
+  "Whether the file tree highlights the file being edited.
+The tree stays exactly as it is: nothing is expanded, no project is added or
+removed, and the view is not re-rooted.  If the current file is not already
+rendered -- because it is hidden by `ps/file-tree-ignored-files', filtered out
+by the active file set, or sits inside a collapsed folder -- the highlight is
+left where it is."
+  :type 'boolean
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-follow-delay 0.2
+  "Idle seconds to wait before moving the highlight to the current file.
+Debounces `ps/file-tree-follow-current-file' so rapid buffer switching does
+not repeatedly search the tree."
+  :type 'number
   :group 'ps-file-tree)
 
 (defcustom ps/file-tree-use-custom-icons t
@@ -262,7 +318,8 @@ already-rendered nodes."
                          (treemacs-get-local-buffer))))
     (with-current-buffer buf
       (ps/file-tree-collapse-all)
-      (ps/file-tree-expand-all))))
+      (ps/file-tree-expand-all)
+      (ps/file-tree--decorate))))
 
 ;;;###autoload
 (defun ps/file-tree-set-file-set (name)
@@ -355,12 +412,188 @@ forward without restarting."
   (let ((buf (treemacs-get-local-buffer)))
     (when buf
       (with-current-buffer buf
-        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)))))
+        (ps/file-tree--toggle-matching '(root-node-closed dir-node-closed) t)
+        (ps/file-tree--decorate)))))
 
 (defun ps/file-tree-collapse-all ()
-  "Recursively collapse every directory in the file tree."
+  "Recursively collapse every directory in the file tree.
+With the root line hidden, the root itself is left expanded -- collapsing it
+would hide the whole tree behind a line that isn't drawn, leaving no way to
+open it again."
   (interactive)
-  (treemacs-collapse-all-projects))
+  (if (ps/file-tree--root-hidden-p)
+      (let ((buf (treemacs-get-local-buffer)))
+        (when buf
+          (with-current-buffer buf
+            (ps/file-tree--toggle-matching '(dir-node-open) t)
+            (ps/file-tree--decorate))))
+    (treemacs-collapse-all-projects)))
+
+;;; Rendering decorations (hidden root, section gaps, bold top level)
+
+;; Treemacs offers no way to render a project without its root line, and no
+;; single hook fires after every re-render (`treemacs-toggle-node' fires none at
+;; all).  So the look is re-applied by one idempotent pass, `ps/file-tree--decorate',
+;; called from `treemacs-post-buffer-init-hook', `treemacs-post-refresh-hook', a
+;; buffer-local `post-command-hook', and our own expand/collapse commands.
+
+(defconst ps/file-tree--invisible-spec 'ps/file-tree-root
+  "Symbol used to hide the root line, via `buffer-invisibility-spec'.
+A dedicated symbol so we never hide text belonging to anything else.")
+
+(defvar-local ps/file-tree--decorated-tick nil
+  "Value of `buffer-chars-modified-tick' when this buffer was last decorated.")
+
+(defun ps/file-tree--root-hidden-p ()
+  "Return non-nil if the root line should be hidden.
+Only the `single' root mode has a root worth hiding."
+  (and ps/file-tree-hide-root (not (eq ps/file-tree-root-mode 'subdirs))))
+
+(defun ps/file-tree--decorate ()
+  "Re-apply the file tree's structural styling to the current buffer.
+Hides the root line (`ps/file-tree-hide-root'), draws a gap above each
+top-level directory (`ps/file-tree-top-level-spacing') and renders those
+directories bold (`ps/file-tree-bold-top-level').  Idempotent: safe to call
+after any render.  Only touches text properties, so it does not bump
+`buffer-chars-modified-tick' and cannot retrigger itself."
+  (when (derived-mode-p 'treemacs-mode)
+    ;; Same effect as treemacs's own `treemacs-with-writable-buffer', spelled
+    ;; out so this file needs no treemacs macro at load time.
+    (let (buffer-read-only)
+     (remove-text-properties (point-min) (point-max)
+                             `(line-spacing nil
+                               invisible ,ps/file-tree--invisible-spec))
+     (save-excursion
+       (let ((pos (next-button (point-min) t))
+             (first t))
+         (while pos
+           (goto-char pos)
+           (let ((state (treemacs-button-get pos :state))
+                 (depth (treemacs-button-get pos :depth)))
+             (cond
+              ((memq state '(root-node-open root-node-closed))
+               (when (ps/file-tree--root-hidden-p)
+                 (put-text-property (line-beginning-position)
+                                    (min (point-max) (1+ (line-end-position)))
+                                    'invisible ps/file-tree--invisible-spec)))
+              ((and (eql depth 1) (memq state '(dir-node-open dir-node-closed)))
+               (unless first
+                 (when (> ps/file-tree-top-level-spacing 0)
+                   ;; `line-spacing' on the newline that ends the previous line
+                   ;; adds space below it -- i.e. above this one -- without
+                   ;; inserting a screen line treemacs would have to account for.
+                   (let ((prev (1- (line-beginning-position))))
+                     (when (> prev 0)
+                       (put-text-property prev (1+ prev)
+                                          'line-spacing
+                                          ps/file-tree-top-level-spacing)))))
+               (when ps/file-tree-bold-top-level
+                 (add-face-text-property (line-beginning-position)
+                                         (line-end-position)
+                                         '(:weight bold))))))
+           (when (eql (treemacs-button-get pos :depth) 1) (setq first nil))
+           (setq pos (next-button pos)))))
+     (setq ps/file-tree--decorated-tick (buffer-chars-modified-tick)))))
+
+(defun ps/file-tree--decorate-buffer ()
+  "Decorate the file tree buffer, wherever it is called from."
+  (when-let* ((buf (and (fboundp 'treemacs-get-local-buffer)
+                        (treemacs-get-local-buffer))))
+    (with-current-buffer buf
+      (ps/file-tree--decorate))))
+
+(defun ps/file-tree--decorate-if-changed ()
+  "Re-decorate the tree if its text changed since the last pass.
+Cheap enough for `post-command-hook': the guard is a tick comparison, and
+text-property edits do not bump `buffer-chars-modified-tick'."
+  (unless (eql ps/file-tree--decorated-tick (buffer-chars-modified-tick))
+    (ps/file-tree--decorate)))
+
+;;;###autoload
+(defun ps/file-tree-decorations-setup ()
+  "Install the file tree's rendering decorations.
+Call once from the treemacs `:config' block.  The buffer-local
+`post-command-hook' entry is what catches interactive expand/collapse, which
+treemacs itself reports through no hook."
+  (add-hook 'treemacs-post-buffer-init-hook #'ps/file-tree--decorate)
+  (add-hook 'treemacs-post-refresh-hook #'ps/file-tree--decorate-buffer)
+  (add-hook 'treemacs-mode-hook #'ps/file-tree--decorations-mode-setup))
+
+(defun ps/file-tree--decorations-mode-setup ()
+  "Buffer-local setup for the tree's decorations, for `treemacs-mode-hook'."
+  (add-to-invisibility-spec ps/file-tree--invisible-spec)
+  (add-hook 'post-command-hook #'ps/file-tree--decorate-if-changed nil t))
+
+;;; Follow the current file
+
+;; Unlike `treemacs-follow-mode', this never expands a node and never changes
+;; what the tree shows: it is a pure "is this file already on screen, and where"
+;; lookup followed by a point move.
+
+(defvar ps/file-tree--follow-timer nil
+  "Pending idle timer for `ps/file-tree--follow'.")
+
+(defun ps/file-tree--visible-node-position (path)
+  "Return the buffer position of PATH in the current tree buffer, or nil.
+Pure: nil means \"not rendered right now\", and nothing is expanded to make it
+so.  `treemacs-dom' holds an entry only for nodes that are actually drawn, so
+the lookup doubles as the visibility test.  Deliberately avoids
+`treemacs-find-visible-node', which despite its name falls back to
+`treemacs-find-node' -- and that expands ancestors -- whenever the dom node's
+position marker has not been cached yet."
+  (let ((canonical (treemacs-canonical-path path)))
+    (when-let* ((dom-node (treemacs-find-in-dom canonical)))
+      (let ((marker (treemacs-dom-node->position dom-node)))
+        (if (and marker (marker-position marker))
+            (marker-position marker)
+          ;; No cached marker -- the usual case for a leaf file, since treemacs
+          ;; fills the slot in lazily.  Find the button by scanning, which is
+          ;; what keeps this from having to expand anything.
+          (save-excursion
+            (let ((pos (next-button (point-min) t))
+                  (found nil))
+              (while (and pos (not found))
+                (when (equal (treemacs-button-get pos :path) canonical)
+                  (setq found (copy-marker pos nil)))
+                (setq pos (next-button pos)))
+              (and found (marker-position found)))))))))
+
+(defun ps/file-tree--follow ()
+  "Move the file tree's highlight to the current buffer's file, if it is shown."
+  (setq ps/file-tree--follow-timer nil)
+  (when-let* (((and ps/file-tree-follow-current-file
+                    (not (minibufferp))
+                    (not (derived-mode-p 'treemacs-mode))))
+              (file buffer-file-name)
+              ((file-exists-p file))
+              (buf (and (fboundp 'treemacs-get-local-buffer)
+                        (treemacs-get-local-buffer)))
+              (win (treemacs-get-local-window))
+              (pos (with-current-buffer buf
+                     (ps/file-tree--visible-node-position file))))
+    ;; `with-selected-window' rather than `select-window': focus stays in the
+    ;; buffer being edited.  `set-window-point' makes the position stick, and
+    ;; `hl-line-highlight' redraws the highlight there.
+    (with-selected-window win
+      (goto-char pos)
+      (when (fboundp 'treemacs--evade-image) (treemacs--evade-image))
+      (hl-line-highlight)
+      (set-window-point win (point)))))
+
+(defun ps/file-tree--follow-schedule ()
+  "Schedule a debounced `ps/file-tree--follow' run."
+  (when (and ps/file-tree-follow-current-file
+             (not ps/file-tree--follow-timer))
+    (setq ps/file-tree--follow-timer
+          (run-with-idle-timer ps/file-tree-follow-delay nil
+                               #'ps/file-tree--follow))))
+
+;;;###autoload
+(defun ps/file-tree-follow-setup ()
+  "Make the file tree's highlight track the buffer being edited.
+Call once from the treemacs `:config' block; `ps/file-tree-follow-current-file'
+is re-checked on every run, so it can be toggled at any time."
+  (add-hook 'buffer-list-update-hook #'ps/file-tree--follow-schedule))
 
 ;;; Multi-root project setup
 
@@ -412,7 +645,8 @@ Idempotent — safe to call repeatedly (e.g. from staggered timers) while
 treemacs's async directory rendering settles."
   (when (treemacs-get-local-buffer)
     (ps/file-tree-set-projects base-dir)
-    (ps/file-tree-expand-all)))
+    (ps/file-tree-expand-all)
+    (ps/file-tree--decorate-buffer)))
 
 ;;; Mouse click handlers
 

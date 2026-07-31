@@ -325,8 +325,16 @@ Files/dirs whose name matches any regexp here are hidden from the file tree
 your whole Org directory as one root, so files sitting directly in it are
 visible and subdirectories nest to any depth; =subdirs= instead gives every
 immediate subdirectory its own bold root, at the cost of hiding files that live
-directly in the Org directory. =ps/file-tree-root-name= labels the single root
-(=nil= uses the directory's own name).
+directly in the Org directory. With =ps/file-tree-hide-root= on, that single
+root line isn't drawn at all — the tree simply starts at your folders and files
+— and =ps/file-tree-root-name= (the root's label) goes unused.
+=ps/file-tree-top-level-spacing= is the gap above each top-level folder, and
+=ps/file-tree-bold-top-level= draws those folders bold, so the tree still reads
+as sections.
+
+=ps/file-tree-follow-current-file= keeps the tree's highlight on the file you're
+editing. It never expands anything and never moves the view: if the file isn't
+already on screen in the tree, the highlight simply stays put.
 
 Category icons
 come from the Material Symbols font (see above); =ps/file-tree-icon-ascent= sets
@@ -336,10 +344,18 @@ If the font is unavailable, the tree falls back to the =folder=/=folder_open=
 to =nil= to use treemacs's generic icons instead.
 #+begin_src emacs-lisp
   (setq ps/file-tree-ignored-files
-        '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
+        '("\\`init\\.org\\'" "\\`workspace\\.org\\'"
+          "\\`AGENTS\\.md\\'" "\\`CLAUDE\\.md\\'"
+          "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
 
   (setq ps/file-tree-root-mode 'single)
   (setq ps/file-tree-root-name nil)
+  (setq ps/file-tree-hide-root t)
+  (setq ps/file-tree-top-level-spacing 6)
+  (setq ps/file-tree-bold-top-level t)
+
+  (setq ps/file-tree-follow-current-file t)
+  (setq ps/file-tree-follow-delay 0.2)
 
   (setq ps/file-tree-use-custom-icons t)
   (setq ps/file-tree-name-spacing 0.5)
@@ -1601,7 +1617,9 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
 
     ;; Root project labels should look like ordinary file-tree entries (not
     ;; underlined or oversized like the default hyperlink-style root face),
-    ;; but bold to stand out as section headers.
+    ;; but bold to stand out as section headers. Only visible with
+    ;; `ps/file-tree-hide-root' off, or in `subdirs' root mode; the default
+    ;; layout gets its section headers from `ps/file-tree-bold-top-level'.
     (set-face-attribute 'treemacs-root-face nil
       :inherit 'treemacs-file-face
       :height 1.0
@@ -1623,9 +1641,17 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (setq treemacs-file-name-transformer #'ps/file-tree-transform-file-name)
     (setq treemacs-directory-name-transformer #'ps/file-tree-transform-dir-name)
 
-    ;; Never follow the current buffer/file - the tree stays where it is.
+    ;; treemacs's own follow-mode expands directories and re-roots the view to
+    ;; reveal the current file. Ours only moves the highlight, and only when the
+    ;; file is already on screen, so the tree never shifts under you.
     (treemacs-follow-mode -1)
     (treemacs-tag-follow-mode -1)
+    (ps/file-tree-follow-setup)
+
+    ;; Hidden root line, section gaps and bold top-level folders. treemacs
+    ;; re-renders through several paths that report no hook, so this installs
+    ;; the handful of hooks needed to re-apply the styling after each one.
+    (ps/file-tree-decorations-setup)
 
     ;; This is a curated org-category navigator, not a code-project view, so
     ;; don't tint files by git status (a modified file would otherwise show in
@@ -1645,8 +1671,13 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
         (setq-local truncate-lines t)
         (setq-local auto-hscroll-mode nil)))
 
-    ;; Restore some vertical breathing room between entries.
-    (add-hook 'treemacs-mode-hook (lambda () (setq-local line-spacing 2)))
+    ;; Restore some vertical breathing room between entries. `hl-line-sticky-flag'
+    ;; keeps the current-file highlight drawn while the tree window is not the
+    ;; selected one; treemacs relies on the Emacs default here without setting it.
+    (add-hook 'treemacs-mode-hook
+      (lambda ()
+        (setq-local line-spacing 2)
+        (setq-local hl-line-sticky-flag t)))
 
     ;; treemacs toggles a node on button *press* (down-mouse-1) when its icon
     ;; is clicked; our release handler toggles again, causing an icon click to

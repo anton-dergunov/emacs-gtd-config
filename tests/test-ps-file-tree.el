@@ -34,6 +34,16 @@ others as empty files."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
     (should (ps/file-tree--ignored-p ".git" "/some/path/.git"))))
 
+(ert-deftest ps/file-tree--ignored-default-hides-config-files ()
+  "The config files that sit beside the notes are hidden from the tree."
+  (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
+    (should (ps/file-tree--ignored-p "workspace.org" "/base/workspace.org"))
+    (should (ps/file-tree--ignored-p "AGENTS.md" "/base/AGENTS.md"))
+    (should (ps/file-tree--ignored-p "CLAUDE.md" "/base/CLAUDE.md"))
+    ;; Only those exact names — similar files are still shown.
+    (should-not (ps/file-tree--ignored-p "Agents.org" "/base/Work/Agents.org"))
+    (should-not (ps/file-tree--ignored-p "Notes.md" "/base/Notes.md"))))
+
 (ert-deftest ps/file-tree--ignored-default-keeps-regular-org-files ()
   "A regular Org file is not hidden by the default ignore list."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
@@ -206,6 +216,30 @@ others as empty files."
   "A non-existent base directory yields nil."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
     (should (null (ps/file-tree--list-subdirs "/no/such/dir/at/all")))))
+
+;;; -------------------------------------------------------
+;;; ps/file-tree--root-hidden-p
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree--root-hidden-by-default ()
+  "With the default single-root layout, the root line is hidden."
+  (let ((ps/file-tree-hide-root t)
+        (ps/file-tree-root-mode 'single))
+    (should (ps/file-tree--root-hidden-p))))
+
+(ert-deftest ps/file-tree--root-not-hidden-in-subdirs-mode ()
+  "In `subdirs' mode the roots are the section headers, so they stay visible.
+Hiding them would leave the tree with nothing to group by, and collapse-all
+with no way back."
+  (let ((ps/file-tree-hide-root t)
+        (ps/file-tree-root-mode 'subdirs))
+    (should-not (ps/file-tree--root-hidden-p))))
+
+(ert-deftest ps/file-tree--root-not-hidden-when-disabled ()
+  "Turning `ps/file-tree-hide-root' off restores the root line."
+  (let ((ps/file-tree-hide-root nil)
+        (ps/file-tree-root-mode 'single))
+    (should-not (ps/file-tree--root-hidden-p))))
 
 ;;; -------------------------------------------------------
 ;;; ps/file-tree--desired-projects

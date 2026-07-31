@@ -155,6 +155,26 @@ See =samples/realistic/workspace.org= for a complete example. To fine-tune
 size/alignment, adjust =ps/material-icons-height-scale= and
 =ps/file-tree-icon-ascent= in =config.org= → /Settings/.
 
+* File tree layout
+All of these live in =config.org= → /Settings → File Tree/.
+
+| Setting                            | What it does                                         |
+|------------------------------------+------------------------------------------------------|
+| =ps/file-tree-hide-root=           | don't name the Org directory at the top (default on) |
+| =ps/file-tree-top-level-spacing=   | pixels of gap above each top-level folder            |
+| =ps/file-tree-bold-top-level=      | draw top-level folders bold, as section headers      |
+| =ps/file-tree-follow-current-file= | highlight the file you're editing                    |
+| =ps/file-tree-root-mode=           | =single= (one tree) or =subdirs= (a root per folder) |
+| =ps/file-tree-ignored-files=       | names never shown in the tree                        |
+
+Two different lists decide what you see. =ps/file-tree-ignored-files= is about
+*display* — it hides =init.org=, =workspace.org=, =AGENTS.md=, =CLAUDE.md=,
+dotfiles and build artifacts from the tree. What the *agenda* reads is a
+separate question, answered by =ps/org-files-exclude-directories= and
+=ps/org-files-exclude-files= (see [[file:Planning-setup.org][Planning setup]]). A file can be in one list
+and not the other: your journal is scanned out of the agenda but still browsable
+in the tree.
+
 * Live markup preview while editing
 Org markup — =*bold*=, =/italic/=, =_underline_=, =+strikethrough+=, =code=,
 =~verbatim~=, link brackets, entities like =\alpha=, and sub/superscripts like
