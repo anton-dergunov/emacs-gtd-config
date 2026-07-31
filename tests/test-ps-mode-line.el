@@ -29,6 +29,46 @@
     (should (equal (ps/mode-line--frame-title) "Claude Code"))))
 
 ;;; -------------------------------------------------------
+;;; ps/mode-line--display-name (uniquified buffer names)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--display-name-plain ()
+  "Without a uniquify qualifier the name just loses its extension."
+  (should (equal (ps/mode-line--display-name "Work.org") "Work"))
+  (should (equal (ps/mode-line--display-name "scratch") "scratch")))
+
+(ert-deftest ps/mode-line--display-name-moves-qualifier-to-front ()
+  "`uniquify''s trailing <dir> becomes a leading dir/ and the extension goes."
+  (should (equal (ps/mode-line--display-name "Work.org<mydir>") "mydir/Work"))
+  (should (equal (ps/mode-line--display-name "Inbox.org<Personal>")
+                 "Personal/Inbox")))
+
+(ert-deftest ps/mode-line--display-name-nested-qualifier ()
+  "A deeper qualifier already reads as a path and needs no special handling."
+  (should (equal (ps/mode-line--display-name "Work.org<a/b>") "a/b/Work")))
+
+(ert-deftest ps/mode-line--display-name-keeps-numeric-suffix ()
+  "Emacs's own <2> fallback is not a directory, so it stays put."
+  (should (equal (ps/mode-line--display-name "Work.org<2>") "Work<2>")))
+
+(ert-deftest ps/mode-line--display-name-non-org-file ()
+  "The reformatting is not Org-specific."
+  (should (equal (ps/mode-line--display-name "init.el<emacs>") "emacs/init.el")))
+
+(ert-deftest ps/mode-line--display-name-leaves-bracketed-filename ()
+  "A file whose own name contains <> is not a uniquified name."
+  (should (equal (ps/mode-line--display-name "<draft>.org") "<draft>"))
+  (should (equal (ps/mode-line--display-name "*claude-code[org]*")
+                 "*claude-code[org]*")))
+
+(ert-deftest ps/mode-line--buffer-name-uses-display-name ()
+  "The mode line and frame title both go through the reformatting."
+  (with-temp-buffer
+    (rename-buffer "Photo.org<Trips>" t)
+    (should (equal (ps/mode-line--buffer-name) "Trips/Photo"))
+    (should (equal (ps/mode-line--frame-title) "Trips/Photo"))))
+
+;;; -------------------------------------------------------
 ;;; ps/mode-line--escape
 ;;; -------------------------------------------------------
 

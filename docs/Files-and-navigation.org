@@ -92,6 +92,17 @@ up stacked the wrong way round. It only ever toggles your two regular windows;
 the file tree and the [[file:AI-integration.org][Claude Code]] side panel, if
 open, are left exactly where they are.
 
+* What the window title says
+The window title and the mode line name the file you are editing without its
+=.org= extension, so =Work.org= simply reads /Work/.
+
+When two open files share a name, that alone would be ambiguous, so the folder
+is put in front: open =Personal/Inbox.org= and =Work/Inbox.org= together and
+they read /Personal/Inbox/ and /Work/Inbox/. The prefix appears only while both
+are open — close one and the other goes back to plain /Inbox/. If the folder
+name is still not enough to tell them apart, as much of the path as it takes is
+shown.
+
 * Jumping around
 - =C-c p f= — open a *recent file* (=recentf=).
 - =C-c p i= — *imenu*: jump to a heading in the current file by name.
@@ -114,3 +125,7 @@ open, are left exactly where they are.
 - The icon-vs-name click behaviour is =ps/file-tree-click= /
   =ps/file-tree--click-label= in =lisp/ps-file-tree.el=.
 - The split-toggle command is defined in =config.org= → /Keybindings & Menu/.
+- The window title and mode line are =lisp/ps-mode-line.el=; the name itself is
+  built by =ps/mode-line--display-name=, and =ps/mode-line-separator= sets the
+  separator. How same-named files are told apart is Emacs's
+  =uniquify-buffer-name-style=, pinned in =config.org= → /Package Management/.

@@ -852,8 +852,17 @@ resting on the track."
   "Re-apply the visible pill's intended geometry (undo an accidental nudge).
 macOS lets the user move/resize the borderless pill window; we put it back.
 Position is only written when the frame has actually moved, to avoid
-triggering a redisplay on every tick while the pill is stationary."
+triggering a redisplay on every tick while the pill is stationary.
+
+A pill whose window has been deleted is snapped nowhere -- it is hidden.
+`ps/scrollbar--on-size-change' already hides on layout changes; this is the
+backstop for a window dying without one (and the tick is the only thing that
+would otherwise keep such a pill pinned in place)."
   (let ((f ps/scrollbar--visible-frame))
+    (when (and f (frame-live-p f)
+               (not (window-live-p (frame-parameter f 'ps/scrollbar-window))))
+      (ps/scrollbar--hide-now)
+      (setq f nil))
     (when (and f (frame-live-p f))
       (let ((geom (frame-parameter f 'ps/scrollbar-geom)))
         (when geom
@@ -1154,20 +1163,47 @@ scrollbar at the current mouse position."
 (defun ps/scrollbar--on-size-change (frame)
   "React to window-layout changes in FRAME.
 `window-size-change-functions' fires both when the frame itself is resized
-and when windows within it rearrange (e.g. a vertical-line divider drag).
-We ignore our own changes (`--busy') and our own pill frames.
-- Frame pixel size changed → hide pill (frame resize).
-- Any window-layout change → extend drag suppression so the tick does not
-  show the pill via hover detection during an ongoing NS-level VL drag."
+and when windows within it rearrange -- a vertical-line divider drag, but
+equally a window opening or closing (ediff, the file tree, a split).  We
+ignore our own changes (`--busy') and our own pill frames.
+
+Any layout change invalidates the pill: it means \"you are scrolling here,
+now\", and \"here\" just moved.  So the pill is hidden outright and the
+per-window scroll baselines are dropped, then it comes back on the next
+real scroll or hover.  Drag suppression is only *extended* here, never
+started -- see below."
   (unless (or ps/scrollbar--busy (ps/scrollbar--own-frame-p frame))
-    (let ((size (cons (frame-pixel-width frame) (frame-pixel-height frame)))
-          (prev (frame-parameter frame 'ps/scrollbar--last-size)))
-      (unless (equal size prev)
-        (set-frame-parameter frame 'ps/scrollbar--last-size size)
-        (when prev (ps/scrollbar--hide-now))))
-    ;; Extend drag suppression for any window-layout change (covers the
-    ;; NS-level VL drag that runs outside our Lisp handler).
-    (ps/scrollbar--drag-suppress-extend)))
+    ;; Bookkeeping kept so a frame resize stays distinguishable from a
+    ;; window rearrange, though both now hide the pill.
+    (let ((size (cons (frame-pixel-width frame) (frame-pixel-height frame))))
+      (unless (equal size (frame-parameter frame 'ps/scrollbar--last-size))
+        (set-frame-parameter frame 'ps/scrollbar--last-size size)))
+    ;; A no-op (and so free of native frame calls) whenever no pill is up.
+    (ps/scrollbar--hide-now)
+    ;; Drop the scroll baselines for this frame's windows.  Restoring a
+    ;; window configuration -- what ediff does on quit -- gives windows a
+    ;; `window-start' that differs from the one recorded before the layout
+    ;; changed, and `ps/scrollbar--scrolled-window' would read that as a
+    ;; user scroll and reveal a pill nobody asked for.  It returns nil for a
+    ;; nil baseline and re-seeds it, so the next tick simply re-baselines.
+    (dolist (w (window-list frame 'no-minibuf))
+      (set-window-parameter w 'ps/scrollbar--last-start nil))
+    ;; Extend -- never start -- drag suppression.  An NS-level divider drag
+    ;; runs at C level after our Lisp handler exits, so its resize steps have
+    ;; to keep the suppression alive; but `ps/scrollbar--click-on-vertical-line'
+    ;; has already set `--drag-in-progress' before the first of those steps
+    ;; can arrive, so gating on it costs the drag nothing.  Starting
+    ;; suppression from cold here instead froze the tick for the full
+    ;; `ps/scrollbar--drag-suppress-extend' fallback timeout (2 s) on every
+    ;; *programmatic* window change, which is what left a stray pill frozen
+    ;; on screen after ediff opened or closed.  That call was written when the
+    ;; timeout was 200 ms and a different commit later repurposed it as the
+    ;; missed-release fallback.  `track-mouse' covers Lisp-level drag loops we
+    ;; have no advice on (e.g. `mouse-drag-mode-line') and is nil for
+    ;; programmatic changes.
+    (when (or ps/scrollbar--drag-in-progress
+              (bound-and-true-p track-mouse))
+      (ps/scrollbar--drag-suppress-extend))))
 
 ;;; Enable / disable
 

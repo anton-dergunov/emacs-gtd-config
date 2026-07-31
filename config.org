@@ -106,6 +106,12 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-heading-stars)
   (require 'ps-scrollbar)
 
+  ;; Two open files with the same name are told apart by their folder, and the
+  ;; mode line / frame title reformat that into "Personal/Inbox".  Pinned rather
+  ;; than inherited from the Emacs default, since `ps/mode-line--display-name'
+  ;; parses this exact shape.
+  (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
   (ps/mode-line-setup)

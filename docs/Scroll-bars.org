@@ -21,6 +21,9 @@ your colour theme.
   bare track above or below it.
 - *Shows your place.* The pill's height reflects how much of the buffer is on
   screen, and its position tracks where you are in the document.
+- *Gets out of the way when the layout changes.* Opening or closing a split, a
+  diff view, or the file tree makes the indicator disappear at once rather than
+  linger over the new layout. It comes back on your next scroll.
 - *Calm and theme-aware.* It is a soft, muted pill that takes its colour from
   your theme, so it never looks harsh — unlike the native macOS bar, which is
   always a hard, dark stripe that can't be recoloured or hidden.

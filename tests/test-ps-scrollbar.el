@@ -336,5 +336,100 @@ and the module reports itself torn down."
       (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
       (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice))))
 
+;;; Window-layout changes (ps/scrollbar--on-size-change)
+
+(defmacro ps/scrollbar--with-clean-drag-state (&rest body)
+  "Run BODY with fresh drag/pill state, cancelling any timer it leaves behind."
+  (declare (indent 0))
+  `(let ((ps/scrollbar--busy nil)
+         (ps/scrollbar--visible-frame nil)
+         (ps/scrollbar--drag-in-progress nil)
+         (ps/scrollbar--drag-suppress-timer nil)
+         (track-mouse nil)
+         (hidden 0))
+     (cl-letf (((symbol-function 'ps/scrollbar--hide-now)
+                (lambda () (setq hidden (1+ hidden)))))
+       (unwind-protect (progn ,@body)
+         (when (timerp ps/scrollbar--drag-suppress-timer)
+           (cancel-timer ps/scrollbar--drag-suppress-timer))))))
+
+(ert-deftest ps/scrollbar--layout-change-hides-the-pill ()
+  "A window-layout change hides the pill even with the frame size unchanged.
+This is the ediff case: windows open and close inside a frame whose own
+pixel size never changes, which used to leave the pill frozen on screen."
+  (ps/scrollbar--with-clean-drag-state
+    (let ((frame (selected-frame)))
+      ;; Seed the size baseline so the frame reads as *not* resized.
+      (set-frame-parameter frame 'ps/scrollbar--last-size
+                           (cons (frame-pixel-width frame)
+                                 (frame-pixel-height frame)))
+      (ps/scrollbar--on-size-change frame)
+      (should (= hidden 1)))))
+
+(ert-deftest ps/scrollbar--layout-change-does-not-start-drag-suppression ()
+  "A programmatic layout change must not freeze the tick.
+Starting drag suppression from cold here suppressed `ps/scrollbar--tick'
+for the full fallback timeout, which is what stranded the pill on screen."
+  (ps/scrollbar--with-clean-drag-state
+    (ps/scrollbar--on-size-change (selected-frame))
+    (should-not ps/scrollbar--drag-in-progress)
+    (should-not ps/scrollbar--drag-suppress-timer)))
+
+(ert-deftest ps/scrollbar--layout-change-extends-an-active-drag ()
+  "During a real divider drag the flag is already set, so it is re-armed.
+`ps/scrollbar--click-on-vertical-line' sets it before the NS-level drag can
+produce its first resize step, so drag suppression is unaffected."
+  (ps/scrollbar--with-clean-drag-state
+    (setq ps/scrollbar--drag-in-progress t)
+    (ps/scrollbar--on-size-change (selected-frame))
+    (should ps/scrollbar--drag-in-progress)
+    (should (timerp ps/scrollbar--drag-suppress-timer))))
+
+(ert-deftest ps/scrollbar--layout-change-extends-during-track-mouse ()
+  "A Lisp-level mouse drag we have no advice on still suppresses the pill."
+  (ps/scrollbar--with-clean-drag-state
+    (setq track-mouse t)
+    (ps/scrollbar--on-size-change (selected-frame))
+    (should ps/scrollbar--drag-in-progress)))
+
+(ert-deftest ps/scrollbar--layout-change-clears-scroll-baselines ()
+  "Scroll baselines are dropped so a restored layout is not read as a scroll.
+`window-start' differs after a window-configuration restore; without this,
+the next tick would treat that as a user scroll and reveal a pill."
+  (ps/scrollbar--with-clean-drag-state
+    (let ((w (selected-window)))
+      (set-window-parameter w 'ps/scrollbar--last-start 1234)
+      (ps/scrollbar--on-size-change (selected-frame))
+      (should-not (window-parameter w 'ps/scrollbar--last-start))
+      ;; A nil baseline reports "no scroll" and re-seeds itself.
+      (should-not (ps/scrollbar--scrolled-window w))
+      (should (window-parameter w 'ps/scrollbar--last-start)))))
+
+(ert-deftest ps/scrollbar--layout-change-ignores-own-frames-and-busy ()
+  "Our own pill frames, and our own frame operations, are still skipped."
+  (ps/scrollbar--with-clean-drag-state
+    (let ((ps/scrollbar--busy t))
+      (ps/scrollbar--on-size-change (selected-frame)))
+    (should (= hidden 0))
+    (cl-letf (((symbol-function 'ps/scrollbar--own-frame-p) (lambda (_) t)))
+      (ps/scrollbar--on-size-change (selected-frame)))
+    (should (= hidden 0))))
+
+(ert-deftest ps/scrollbar--snap-back-hides-pill-of-dead-window ()
+  "A pill whose window has been deleted is hidden, not snapped into place."
+  (ps/scrollbar--with-clean-drag-state
+    (cl-letf* ((geom-asked nil)
+               ((symbol-function 'frame-live-p) (lambda (_) t))
+               ((symbol-function 'frame-parameter)
+                (lambda (_f param)
+                  (pcase param
+                    ('ps/scrollbar-window 'a-dead-window)
+                    ('ps/scrollbar-geom (setq geom-asked t) '(0 0 6 24))
+                    (_ nil)))))
+      (setq ps/scrollbar--visible-frame 'pill)
+      (ps/scrollbar--snap-back)
+      (should (= hidden 1))
+      (should-not geom-asked))))
+
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here

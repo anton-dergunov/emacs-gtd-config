@@ -6,10 +6,11 @@
 ;; Org buffers show:   <file> · <pct>% · <heading breadcrumb>
 ;; Agenda buffers show: <view title> [· <pct>%]
 ;;
-;; The filename drops its ".org" extension; the position is a percentage only
-;; (the line-number gutter already shows the line); the breadcrumb is the
-;; ancestor + current heading TITLES (no TODO keyword, priority, tags, or
-;; cookies).  When the line overflows the window, breadcrumb segments are
+;; The filename drops its ".org" extension, and gains its folder as a prefix
+;; ("Personal/Inbox") when two open files share a name; the position is a
+;; percentage only (the line-number gutter already shows the line); the
+;; breadcrumb is the ancestor + current heading TITLES (no TODO keyword,
+;; priority, tags, or cookies).  When the line overflows, breadcrumb segments are
 ;; ellipsized individually, longest first, while the filename and position are
 ;; always preserved.
 ;;
@@ -62,12 +63,37 @@
 
 ;;; Filename
 
+(defun ps/mode-line--strip-org (name)
+  "Return NAME with a trailing \".org\" removed."
+  (if (fboundp 'ps/file-tree--strip-org-extension)
+      (ps/file-tree--strip-org-extension name)
+    name))
+
+(defun ps/mode-line--display-name (name)
+  "Return buffer NAME formatted for display: \".org\" dropped, folder prefixed.
+
+When two open files share a name, `uniquify' renames one of them by
+appending a directory qualifier in angle brackets -- \"Work.org<mydir>\"
+\(see `uniquify-buffer-name-style', pinned in config.org).  That suffix
+defeats a plain extension strip, and it reads better as a path anyway, so
+the qualifier is moved to the front: \"mydir/Work\".  This matches how the
+File Tree presents the same file.  Deeper qualifiers already contain \"/\"
+\(\"Work.org<a/b>\" -> \"a/b/Work\"), so they need no special handling.
+
+An all-digit qualifier is Emacs's own fallback for buffers with no file
+\(\"Work.org<2>\"); it is not a directory, so it is left where it is."
+  (if (string-match "\\`\\(.*\\)<\\([^<>]+\\)>\\'" name)
+      (let ((base (match-string 1 name))
+            (qualifier (match-string 2 name)))
+        (if (string-match-p "\\`[0-9]+\\'" qualifier)
+            (concat (ps/mode-line--strip-org base) "<" qualifier ">")
+          (concat qualifier "/" (ps/mode-line--strip-org base))))
+    (ps/mode-line--strip-org name)))
+
 (defun ps/mode-line--buffer-name ()
-  "Return the current buffer's name without a trailing \".org\"."
-  (let ((name (buffer-name)))
-    (if (fboundp 'ps/file-tree--strip-org-extension)
-        (ps/file-tree--strip-org-extension name)
-      name)))
+  "Return the current buffer's name formatted for display.
+See `ps/mode-line--display-name'."
+  (ps/mode-line--display-name (buffer-name)))
 
 ;;; Position
 
@@ -343,30 +369,40 @@ click (select window) and drag-to-resize are left untouched."
 
 ;;; Setup
 
+(defun ps/mode-line--cache-valid-p ()
+  "Non-nil when this window's cached mode-line string is still current.
+Both the line and the buffer name are checked: `uniquify' renames an
+already-open buffer the moment a second file of the same name is opened,
+and without the name in the key the renamed buffer would keep showing its
+old title until point happened to move to another line."
+  (and (eql (pos-bol) (window-parameter nil 'ps-ml-bol))
+       (equal (buffer-name) (window-parameter nil 'ps-ml-name))))
+
 (defun ps/mode-line--render-window-cached ()
   "Return the Org-buffer mode-line string using a per-window cache.
-Recomputes only when point moves to a different line; otherwise returns the
-cached result.  Stored in window parameters (`ps-ml-bol', `ps-ml-str') so
-two windows showing the same buffer each track their own position."
-  (let* ((bol (pos-bol))
-         (cached-bol (window-parameter nil 'ps-ml-bol)))
-    (if (eql bol cached-bol)
-        (or (window-parameter nil 'ps-ml-str) "")
-      (let ((str (ps/mode-line--render)))
-        (set-window-parameter nil 'ps-ml-bol bol)
-        (set-window-parameter nil 'ps-ml-str str)
-        str))))
+Recomputes only when the cache key changes (see
+`ps/mode-line--cache-valid-p'); otherwise returns the cached result.
+Stored in window parameters (`ps-ml-bol', `ps-ml-name', `ps-ml-str') so two
+windows showing the same buffer each track their own position."
+  (if (ps/mode-line--cache-valid-p)
+      (or (window-parameter nil 'ps-ml-str) "")
+    (let ((str (ps/mode-line--render)))
+      (set-window-parameter nil 'ps-ml-bol (pos-bol))
+      (set-window-parameter nil 'ps-ml-name (buffer-name))
+      (set-window-parameter nil 'ps-ml-str str)
+      str)))
 
 (defun ps/mode-line--maybe-refresh ()
-  "Call `force-mode-line-update' when point moves to a different line.
-A `post-command-hook'; compares current bol against the window-parameter
-cache set by `ps/mode-line--render-window-cached'."
-  (unless (eql (pos-bol) (window-parameter nil 'ps-ml-bol))
+  "Call `force-mode-line-update' when this window's cached line goes stale.
+A `post-command-hook'; compares the current key against the
+window-parameter cache set by `ps/mode-line--render-window-cached'."
+  (unless (ps/mode-line--cache-valid-p)
     (force-mode-line-update)))
 
 (defun ps/mode-line--org-setup ()
   "Install the planning mode line in the current Org buffer."
   (set-window-parameter nil 'ps-ml-bol (pos-bol))
+  (set-window-parameter nil 'ps-ml-name (buffer-name))
   (set-window-parameter nil 'ps-ml-str (ps/mode-line--render))
   (setq-local mode-line-format '((:eval (ps/mode-line--render-window-cached))))
   (add-hook 'post-command-hook #'ps/mode-line--maybe-refresh nil t))
