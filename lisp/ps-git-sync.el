@@ -255,7 +255,15 @@ without the sentinel running, or kill it when it has hung past
                    (setq ps/git-sync--last-success-time (current-time))
                    (ps/git-sync--set-status
                     ps/git-sync--icon-ok
-                    "Git sync OK"))
+                    "Git sync OK")
+                   ;; "Already up to date." is git's exact wording when the pull
+                   ;; brought in nothing; its absence means files may have
+                   ;; arrived from another device, so the tree needs a look.
+                   ;; `ps/file-tree-refresh' itself is quiet when the tree isn't
+                   ;; even open (`treemacs-get-local-buffer' returns nil then).
+                   (when (and (fboundp 'ps/file-tree-refresh)
+                              (not (string-match-p "Already up to date" output)))
+                     (ps/file-tree-refresh)))
 
                ;; Failure
                (if (string-match-p

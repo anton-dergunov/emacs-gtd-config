@@ -24,6 +24,13 @@ listed before loose files, so anything sitting at the top level appears at the
 bottom. Every folder gets an icon of its own, and you can give a particular
 folder its own icon — see [[file:Customization.org][Customization & appearance]].
 
+The tree stays current on its own in the situations that matter most: it
+refreshes after a =git-sync= pull brings in anything, and it notices whole
+folders appearing or disappearing on disk. A single file dropped straight
+into an already-open folder from outside Emacs — say, from Finder — may not
+trigger that; use the manual refresh button below if the tree ever looks
+behind.
+
 Config files that live beside your notes — =init.org=, =workspace.org=,
 =AGENTS.md=, =CLAUDE.md= — are hidden. That is a display choice only, separate
 from what the agenda scans; both lists are described in
@@ -78,6 +85,14 @@ A small button in the tree's top-right corner collapses everything, and turns
 into an expand button once it has. =M-+= and =M--= inside the tree do the same
 from the keyboard. Hide the button with =ps/file-tree-show-toggle-button=.
 
+* Refreshing the tree
+A second small button, just left of the collapse/expand button, fully
+re-renders the tree and re-applies the active file set's filters — a manual
+fallback alongside the automatic refresh described above, useful right after
+editing =workspace.org= or when you just want to be sure the tree matches
+disk. It has no keyboard equivalent; click it, or use Productivity → Layout &
+Navigation → Refresh File Tree.
+
 * Window management
 | Key               | Action                              |
 |-------------------+-------------------------------------|
@@ -117,7 +132,12 @@ shown.
   (=ps/file-tree-hide-root=, =ps/file-tree-top-level-spacing=,
   =ps/file-tree-bold-top-level=, =ps/file-tree-root-mode=), file following
   (=ps/file-tree-follow-current-file=) and file sets are in =config.org= →
-  /File Tree/ and in your =workspace.org=.
+  /File Tree/ and in your =workspace.org=. Automatic refresh after a
+  =git-sync= pull is a call to =ps/file-tree-refresh= from
+  =lisp/ps-git-sync.el=; folder-level auto-refresh is treemacs's built-in
+  =treemacs-filewatch-mode=, enabled in =config.org= → /=treemacs= file
+  tree/. =ps/file-tree-refresh= is also the manual full refresh behind the
+  header-line button.
 - To go back to the older shape — each top-level folder its own bold root — set
   =ps/file-tree-root-mode= to ='subdirs=. Files sitting directly in the Org base
   directory are then not shown anywhere, because treemacs cannot nest one

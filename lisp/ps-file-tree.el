@@ -170,10 +170,10 @@ come after every folder, whatever this says."
   :group 'ps-file-tree)
 
 (defcustom ps/file-tree-show-toggle-button t
-  "Whether to show the collapse/expand-all button in the tree's header line.
-The button sits in the top-right corner and reflects the tree's state: it
-offers to collapse while anything is expanded, and to expand once everything
-is closed."
+  "Whether to show the header line's collapse/expand-all and refresh buttons.
+Both sit in the top-right corner. The collapse/expand button reflects the
+tree's state: it offers to collapse while anything is expanded, and to expand
+once everything is closed. The refresh button fully re-renders the tree."
   :type 'boolean
   :group 'ps-file-tree)
 
@@ -406,26 +406,37 @@ Falls back to the first entry of `ps/file-tree-file-sets'."
   (unless (assoc ps/file-tree-current-set ps/file-tree-file-sets)
     (setq ps/file-tree-current-set (car (car ps/file-tree-file-sets)))))
 
-(defun ps/file-tree--refresh ()
-  "Re-render the file tree, re-applying the active file set's filters.
+;;;###autoload
+(defun ps/file-tree-refresh ()
+  "Fully re-render the file tree and refresh dependent state.
 Collapses and re-expands every project so each directory is rescanned against
 the current `ps/file-tree-current-set' rather than reusing already-rendered
-nodes.
+nodes, then re-applies the tree's structural decorations. Also refreshes
+`org-agenda-files' via `ps/agenda-files-refresh' when that is bound, since a
+full rescan is the same work a file-set switch or an external change (a file
+appearing on disk) may need reflected there too.
+
+Heavier than treemacs's own incremental refresh -- appropriate for an
+explicit user action (the header-line button, the menu item, or a file-set
+switch), not for every automatic file-watch event.
 
 Collapses via `treemacs-collapse-all-projects' rather than
 `ps/file-tree-collapse-all': the latter deliberately leaves a hidden root
 expanded, and a root that never closes is a root whose children are never
 re-read -- which would leave the top-level entries frozen as the set changes.
 Nothing is visible in between, since the re-expand follows immediately."
+  (interactive)
   (when-let* ((buf (and (fboundp 'treemacs-get-local-buffer)
                          (treemacs-get-local-buffer))))
     (with-current-buffer buf
       ;; Treemacs announces the collapse in the echo area; here it is an
-      ;; implementation detail of switching sets, not something to report.
+      ;; implementation detail, not something to report.
       (let ((inhibit-message t))
         (treemacs-collapse-all-projects))
       (ps/file-tree-expand-all)
-      (ps/file-tree--decorate))))
+      (ps/file-tree--decorate)))
+  (when (fboundp 'ps/agenda-files-refresh)
+    (ps/agenda-files-refresh)))
 
 ;;;###autoload
 (defun ps/file-tree-set-file-set (name)
@@ -436,9 +447,7 @@ Nothing is visible in between, since the re-expand follows immediately."
                            nil t nil nil ps/file-tree-current-set)))
   (setq ps/file-tree-current-set name)
   (ps/file-tree--ensure-valid-set)
-  (ps/file-tree--refresh)
-  (when (fboundp 'ps/agenda-files-refresh)
-    (ps/agenda-files-refresh))
+  (ps/file-tree-refresh)
   (force-mode-line-update t))
 
 (defun ps/file-tree-cycle-file-set ()
@@ -782,6 +791,8 @@ is re-checked on every run, so it can be toggled at any time."
   "Material Symbols name for the \"collapse everything\" button.")
 (defconst ps/file-tree--expand-icon "unfold_more"
   "Material Symbols name for the \"expand everything\" button.")
+(defconst ps/file-tree--refresh-icon "refresh"
+  "Material Symbols name for the \"refresh the tree\" button.")
 
 (defun ps/file-tree--any-expanded-p ()
   "Return non-nil if any directory in the tree is currently expanded.
@@ -812,6 +823,12 @@ Stops at the first one, so this is cheap enough to call from redisplay."
   (ignore event)
   (ps/file-tree-toggle-all))
 
+(defun ps/file-tree--refresh-button-click (event)
+  "Fully refresh the tree, for a click on EVENT."
+  (interactive "e")
+  (ignore event)
+  (ps/file-tree-refresh))
+
 (defun ps/file-tree--button-glyph (name fallback)
   "Return an icon string for Material Symbols NAME, or FALLBACK text.
 Resolved through `ps/material-icons-image' only when that module happens to be
@@ -822,28 +839,36 @@ loaded, so this file keeps working on its own."
              (propertize " " 'display image)))
       fallback))
 
+(defun ps/file-tree--header-line-button (glyph-name fallback help-echo command)
+  "Return a propertized header-line button for GLYPH-NAME.
+FALLBACK is the no-font text, HELP-ECHO the tooltip, and COMMAND runs on
+mouse-1."
+  (let ((map (let ((m (make-sparse-keymap)))
+               (define-key m [header-line mouse-1] command)
+               m)))
+    (propertize (ps/file-tree--button-glyph glyph-name fallback)
+                'mouse-face 'mode-line-highlight
+                'help-echo help-echo
+                'local-map map)))
+
 (defun ps/file-tree--header-line ()
-  "Return the tree's header line: a right-aligned collapse/expand button."
+  "Return the tree's header line: right-aligned refresh and collapse/expand buttons."
   (when ps/file-tree-show-toggle-button
-    (let* ((expanded (ps/file-tree--any-expanded-p))
-           (glyph (ps/file-tree--button-glyph
-                   (if expanded
-                       ps/file-tree--collapse-icon
-                     ps/file-tree--expand-icon)
-                   (if expanded "-" "+")))
-           (map (let ((m (make-sparse-keymap)))
-                  (define-key m [header-line mouse-1]
-                              #'ps/file-tree--toggle-button-click)
-                  m)))
+    (let ((expanded (ps/file-tree--any-expanded-p)))
       (list
-       ;; Push the button to the right edge, leaving room for the glyph itself.
+       ;; Refresh button, one slot left of the collapse/expand button.
+       (propertize " " 'display '(space :align-to (- right 6)))
+       (ps/file-tree--header-line-button
+        ps/file-tree--refresh-icon "R" "mouse-1: refresh the file tree"
+        #'ps/file-tree--refresh-button-click)
+       ;; Push the collapse/expand button to the right edge, leaving room for
+       ;; the glyph itself.
        (propertize " " 'display '(space :align-to (- right 3)))
-       (propertize glyph
-                   'mouse-face 'mode-line-highlight
-                   'help-echo (if expanded
-                                  "mouse-1: collapse everything"
-                                "mouse-1: expand everything")
-                   'local-map map)))))
+       (ps/file-tree--header-line-button
+        (if expanded ps/file-tree--collapse-icon ps/file-tree--expand-icon)
+        (if expanded "-" "+")
+        (if expanded "mouse-1: collapse everything" "mouse-1: expand everything")
+        #'ps/file-tree--toggle-button-click)))))
 
 ;;; Multi-root project setup
 

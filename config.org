@@ -343,8 +343,8 @@ as sections.
 keyword are pinned to the top, names after it to the bottom, and everything
 unlisted fills the middle alphabetically. Leave it =nil= for plain alphabetical
 order. Real orderings usually belong in your =workspace.org=, next to the icon
-maps. =ps/file-tree-show-toggle-button= puts a collapse/expand-all button in the
-tree's top-right corner.
+maps. =ps/file-tree-show-toggle-button= puts a collapse/expand-all button and a
+refresh button in the tree's top-right corner.
 
 =ps/file-tree-follow-current-file= keeps the tree's highlight on the file you're
 editing. It never expands anything and never moves the view: if the file isn't
@@ -589,7 +589,7 @@ loads it, then deletes it. Silently does nothing when the file is absent."
     (ps/agenda-icons-apply)
     (when (and ps/file-tree-use-custom-icons (featurep 'treemacs))
       (ps/file-tree-icons-apply my-org-base-directory)
-      (when (fboundp 'ps/file-tree--refresh) (ps/file-tree--refresh))))
+      (when (fboundp 'ps/file-tree-refresh) (ps/file-tree-refresh))))
 
   (defun ps/open-workspace-config ()
     "Open this Org folder's workspace.org (a fresh buffer if it doesn't exist)."
@@ -1692,6 +1692,30 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; treemacs-git-modified-face, e.g. blue, hiding the category styling).
     (when (fboundp 'treemacs-git-mode) (treemacs-git-mode -1))
 
+    ;; treemacs already turns this on by default when the package loads (see
+    ;; `treemacs-only-during-init' in treemacs-filewatch-mode.el) -- stated
+    ;; explicitly here, like the two toggles above, so it isn't silently
+    ;; relying on that default. Watches every expanded directory, but only
+    ;; reacts to whole files/folders appearing or disappearing there -- a
+    ;; plain content change is a "changed" event, and treemacs drops those
+    ;; unless `treemacs-git-mode' is on (see `treemacs--is-event-relevant?'
+    ;; in treemacs-filewatch-mode.el), which this config deliberately keeps
+    ;; off. In practice that covers a folder appearing or being removed; a
+    ;; single new file landing inside an already-open folder often does not
+    ;; fire a distinct enough event to be picked up. The more reliable
+    ;; automatic path is `ps/git-sync--run's success sentinel, which calls
+    ;; `ps/file-tree-refresh' after any pull that actually brought something
+    ;; in; the header-line refresh button covers everything else.
+    (treemacs-filewatch-mode 1)
+
+    ;; Filewatch-triggered refreshes go through `treemacs--process-file-events',
+    ;; a different path from `treemacs-refresh' that never fires
+    ;; `treemacs-post-refresh-hook' -- so decorations (hidden root, section
+    ;; gaps, bold top-level folders) would otherwise go stale after an
+    ;; automatic refresh. Re-decorate after every batch of filewatch changes.
+    (advice-add 'treemacs--process-file-events :after
+                (lambda (&rest _) (ps/file-tree--decorate-buffer)))
+
     (add-hook 'treemacs-mode-hook (lambda () (display-line-numbers-mode 0)))
     (add-hook 'treemacs-mode-hook
       (lambda () (setq-local frame-title-format "File Tree")))
@@ -2191,6 +2215,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
        ["Switch Split: Horizontal <-> Vertical" ps/window-split-toggle   :keys "C-c p |   /   C-x |"]
        ["Toggle File Tree"          ps/file-tree-toggle      :keys "F8"]
+       ["Refresh File Tree"         ps/file-tree-refresh     t]
        ["Cycle File Set"            ps/file-tree-cycle-file-set :keys "C-c p F"]
        ["File Set Restricts Agenda" ps/file-tree-toggle-agenda-filter
         :style toggle
