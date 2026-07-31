@@ -23,6 +23,7 @@
 (declare-function treemacs-find-in-dom "treemacs-dom")
 (declare-function treemacs-dom-node->position "treemacs-dom")
 (declare-function org-find-exact-headline-in-buffer "org")
+(defvar treemacs-indentation)
 (defvar treemacs-post-buffer-init-hook)
 (defvar treemacs-post-refresh-hook)
 (defvar treemacs-mode-hook)
@@ -128,11 +129,12 @@ hiding them would leave nothing to group by."
   :type 'boolean
   :group 'ps-file-tree)
 
-(defcustom ps/file-tree-top-level-spacing 6
-  "Extra pixels of vertical space drawn above each top-level directory.
-Separates the tree into sections the way a blank line used to when every
-top-level folder was its own project.  Set to 0 for no gap."
-  :type 'integer
+(defcustom ps/file-tree-top-level-spacing 0.5
+  "Height of the blank strip drawn above each top-level section.
+A fraction of one line: 0.5 is half a blank line.  Separates the tree into
+sections the way a blank line used to when every top-level folder was its own
+project.  Set to 0 for no gap."
+  :type 'number
   :group 'ps-file-tree)
 
 (defcustom ps/file-tree-bold-top-level t
@@ -449,51 +451,102 @@ A dedicated symbol so we never hide text belonging to anything else.")
 Only the `single' root mode has a root worth hiding."
   (and ps/file-tree-hide-root (not (eq ps/file-tree-root-mode 'subdirs))))
 
+(defun ps/file-tree--hide-line (beg end)
+  "Hide the line spanning BEG to END, including any icon image on it.
+`invisible' alone leaves an image drawn by a `display' property on screen, so
+the property is stripped as well -- the line is going away, and what is left
+underneath is a plain space."
+  (remove-text-properties beg end '(display nil))
+  (put-text-property beg (min (point-max) (1+ end))
+                     'invisible ps/file-tree--invisible-spec))
+
+(defconst ps/file-tree--zero-width '(space :width 0)
+  "Display spec collapsing a character to nothing.")
+
+(defun ps/file-tree--plain-space-p (pos)
+  "Return non-nil if POS holds a space carrying no icon.
+Icons are themselves space characters with an image `display' property, so a
+bare `char-after' test is not enough to tell indentation from an icon."
+  (and (eq (char-after pos) ?\s)
+       (let ((d (get-text-property pos 'display)))
+         (or (null d) (equal d ps/file-tree--zero-width)))))
+
+(defun ps/file-tree--trim-indent (beg)
+  "Collapse one indentation level of leading space on the line at BEG.
+With the root line hidden its children still render at depth 1, so every line
+carries one level of indent that now leads nowhere.  Collapsing it to zero
+width shifts the whole tree left without touching buffer positions.  Uses
+`display' rather than `invisible' deliberately: an invisible character at the
+start of a line swallows the gap overlay's `before-string' and leaves the line
+highlight starting mid-label."
+  (let ((stop beg)
+        (limit (min (line-end-position) (+ beg treemacs-indentation))))
+    (while (and (< stop limit) (ps/file-tree--plain-space-p stop))
+      (setq stop (1+ stop)))
+    (when (> stop beg)
+      (put-text-property beg stop 'display ps/file-tree--zero-width))))
+
+(defun ps/file-tree--add-gap (beg)
+  "Draw a blank strip above the line starting at BEG.
+An overlay `before-string' rather than a `line-spacing' text property on the
+line above: `line-spacing' adds its space *below* that line, so the previous
+entry's highlight extends into the gap and it reads as part of that entry
+rather than as a separator.  A `before-string' gap belongs to neither line and
+stays clear of both highlights."
+  (when (and (> ps/file-tree-top-level-spacing 0) (> beg (point-min)))
+    (let ((ov (make-overlay beg beg)))
+      (overlay-put ov 'ps/file-tree-gap t)
+      (overlay-put ov 'before-string
+                   (propertize "\n" 'face
+                               (list :height ps/file-tree-top-level-spacing))))))
+
 (defun ps/file-tree--decorate ()
   "Re-apply the file tree's structural styling to the current buffer.
-Hides the root line (`ps/file-tree-hide-root'), draws a gap above each
-top-level directory (`ps/file-tree-top-level-spacing') and renders those
-directories bold (`ps/file-tree-bold-top-level').  Idempotent: safe to call
-after any render.  Only touches text properties, so it does not bump
-`buffer-chars-modified-tick' and cannot retrigger itself."
+Hides the root line (`ps/file-tree-hide-root') and the now-pointless
+indentation level it leaves behind, draws a gap above each top-level section
+\(`ps/file-tree-top-level-spacing') and renders top-level directories bold
+\(`ps/file-tree-bold-top-level').  Idempotent: safe to call after any render.
+Changes no characters, so it does not bump `buffer-chars-modified-tick' and
+cannot retrigger itself."
   (when (derived-mode-p 'treemacs-mode)
     ;; Same effect as treemacs's own `treemacs-with-writable-buffer', spelled
     ;; out so this file needs no treemacs macro at load time.
-    (let (buffer-read-only)
-     (remove-text-properties (point-min) (point-max)
-                             `(line-spacing nil
-                               invisible ,ps/file-tree--invisible-spec))
-     (save-excursion
-       (let ((pos (next-button (point-min) t))
-             (first t))
-         (while pos
-           (goto-char pos)
-           (let ((state (treemacs-button-get pos :state))
-                 (depth (treemacs-button-get pos :depth)))
-             (cond
-              ((memq state '(root-node-open root-node-closed))
-               (when (ps/file-tree--root-hidden-p)
-                 (put-text-property (line-beginning-position)
-                                    (min (point-max) (1+ (line-end-position)))
-                                    'invisible ps/file-tree--invisible-spec)))
-              ((and (eql depth 1) (memq state '(dir-node-open dir-node-closed)))
-               (unless first
-                 (when (> ps/file-tree-top-level-spacing 0)
-                   ;; `line-spacing' on the newline that ends the previous line
-                   ;; adds space below it -- i.e. above this one -- without
-                   ;; inserting a screen line treemacs would have to account for.
-                   (let ((prev (1- (line-beginning-position))))
-                     (when (> prev 0)
-                       (put-text-property prev (1+ prev)
-                                          'line-spacing
-                                          ps/file-tree-top-level-spacing)))))
-               (when ps/file-tree-bold-top-level
-                 (add-face-text-property (line-beginning-position)
-                                         (line-end-position)
-                                         '(:weight bold))))))
-           (when (eql (treemacs-button-get pos :depth) 1) (setq first nil))
-           (setq pos (next-button pos)))))
-     (setq ps/file-tree--decorated-tick (buffer-chars-modified-tick)))))
+    (let ((buffer-read-only nil)
+          (hide-root (ps/file-tree--root-hidden-p)))
+      (remove-overlays (point-min) (point-max) 'ps/file-tree-gap t)
+      ;; Nothing else in a file tree uses `invisible' -- treemacs sets it only on
+      ;; the hidden parent of a variadic extension node, and there are none here.
+      (remove-text-properties (point-min) (point-max) '(invisible nil))
+      (save-excursion
+        (let ((pos (next-button (point-min) t))
+              (seen-top-level nil)
+              (seen-top-file nil))
+          (while pos
+            (goto-char pos)
+            (let ((state (treemacs-button-get pos :state))
+                  (depth (treemacs-button-get pos :depth))
+                  (beg (line-beginning-position))
+                  (end (line-end-position)))
+              (cond
+               ((memq state '(root-node-open root-node-closed))
+                (when hide-root (ps/file-tree--hide-line beg end)))
+               ((eql depth 1)
+                (let ((dir (memq state '(dir-node-open dir-node-closed))))
+                  ;; A gap before every top-level directory, and one before the
+                  ;; block of loose files that follows them -- treemacs renders
+                  ;; every directory before any file, so the files are one block.
+                  (when (and (or dir (not seen-top-file)) seen-top-level)
+                    (ps/file-tree--add-gap beg))
+                  (when (and dir ps/file-tree-bold-top-level
+                             (not (get-text-property beg 'ps/file-tree-bold)))
+                    (add-face-text-property beg end '(:weight bold))
+                    (put-text-property beg (1+ beg) 'ps/file-tree-bold t))
+                  (setq seen-top-level t)
+                  (unless dir (setq seen-top-file t)))))
+              (when (and hide-root (not (memq state '(root-node-open root-node-closed))))
+                (ps/file-tree--trim-indent beg)))
+            (setq pos (next-button pos)))))
+      (setq ps/file-tree--decorated-tick (buffer-chars-modified-tick)))))
 
 (defun ps/file-tree--decorate-buffer ()
   "Decorate the file tree buffer, wherever it is called from."

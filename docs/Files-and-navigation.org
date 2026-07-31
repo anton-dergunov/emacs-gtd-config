@@ -17,8 +17,9 @@ in the agenda.
 
 The tree shows the contents of your Org base directory directly — the directory
 itself is not named at the top. Files sitting at the top level are visible and
-subfolders nest to *any depth*. Top-level folders are drawn bold with a little
-space above each, so the tree still reads as sections. Note that folders are
+subfolders nest to *any depth*. Top-level folders are drawn bold with a blank
+strip above each, so the tree still reads as sections. The strip belongs to
+neither neighbour, so the current-line highlight never bleeds into it. Note that folders are
 listed before loose files, so anything sitting at the top level appears at the
 bottom. Every folder gets an icon of its own, and you can give a particular
 folder its own icon — see [[file:Customization.org][Customization & appearance]].

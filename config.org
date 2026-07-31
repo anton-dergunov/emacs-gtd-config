@@ -328,7 +328,8 @@ immediate subdirectory its own bold root, at the cost of hiding files that live
 directly in the Org directory. With =ps/file-tree-hide-root= on, that single
 root line isn't drawn at all — the tree simply starts at your folders and files
 — and =ps/file-tree-root-name= (the root's label) goes unused.
-=ps/file-tree-top-level-spacing= is the gap above each top-level folder, and
+=ps/file-tree-top-level-spacing= is the gap above each top-level folder (in
+fractions of a line), and
 =ps/file-tree-bold-top-level= draws those folders bold, so the tree still reads
 as sections.
 
@@ -351,7 +352,7 @@ to =nil= to use treemacs's generic icons instead.
   (setq ps/file-tree-root-mode 'single)
   (setq ps/file-tree-root-name nil)
   (setq ps/file-tree-hide-root t)
-  (setq ps/file-tree-top-level-spacing 6)
+  (setq ps/file-tree-top-level-spacing 0.5)
   (setq ps/file-tree-bold-top-level t)
 
   (setq ps/file-tree-follow-current-file t)

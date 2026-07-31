@@ -158,14 +158,14 @@ size/alignment, adjust =ps/material-icons-height-scale= and
 * File tree layout
 All of these live in =config.org= → /Settings → File Tree/.
 
-| Setting                            | What it does                                         |
-|------------------------------------+------------------------------------------------------|
-| =ps/file-tree-hide-root=           | don't name the Org directory at the top (default on) |
-| =ps/file-tree-top-level-spacing=   | pixels of gap above each top-level folder            |
-| =ps/file-tree-bold-top-level=      | draw top-level folders bold, as section headers      |
-| =ps/file-tree-follow-current-file= | highlight the file you're editing                    |
-| =ps/file-tree-root-mode=           | =single= (one tree) or =subdirs= (a root per folder) |
-| =ps/file-tree-ignored-files=       | names never shown in the tree                        |
+| Setting                            | What it does                                            |
+|------------------------------------+---------------------------------------------------------|
+| =ps/file-tree-hide-root=           | don't name the Org directory at the top (default on)    |
+| =ps/file-tree-top-level-spacing=   | gap above each top-level folder, in fractions of a line |
+| =ps/file-tree-bold-top-level=      | draw top-level folders bold, as section headers         |
+| =ps/file-tree-follow-current-file= | highlight the file you're editing                       |
+| =ps/file-tree-root-mode=           | =single= (one tree) or =subdirs= (a root per folder)    |
+| =ps/file-tree-ignored-files=       | names never shown in the tree                           |
 
 Two different lists decide what you see. =ps/file-tree-ignored-files= is about
 *display* — it hides =init.org=, =workspace.org=, =AGENTS.md=, =CLAUDE.md=,
