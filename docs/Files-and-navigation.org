@@ -32,9 +32,11 @@ from what the agenda scans; both lists are described in
 ** Following the file you're editing
 The tree highlights whichever file you are editing, so the two never disagree.
 It only ever moves the highlight: it never expands a folder, never re-roots, and
-never scrolls to somewhere you weren't looking. If the current file isn't
-already on screen in the tree — hidden, filtered out by a file set, or inside a
-folder you collapsed — the highlight simply stays where it is. Turn it off with
+never scrolls to somewhere you weren't looking. If what you're editing has no
+entry in the tree — it isn't a file, or it's hidden, filtered out by a file set,
+or inside a folder you collapsed — the highlight is *removed*, rather than left
+pointing at something you aren't editing. It reappears as soon as you click or
+move in the tree. Turn the whole thing off with
 =ps/file-tree-follow-current-file=.
 
 If the Material Symbols font isn't installed, files fall back to simple

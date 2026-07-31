@@ -23,7 +23,12 @@
 (declare-function treemacs-find-in-dom "treemacs-dom")
 (declare-function treemacs-dom-node->position "treemacs-dom")
 (declare-function org-find-exact-headline-in-buffer "org")
+(declare-function hl-line-highlight "hl-line")
 (defvar treemacs-indentation)
+;; Current-line highlight overlays we clear when nothing matches; both are
+;; revived by `move-overlay' the next time their owner redraws.
+(defvar hl-line-overlay)
+(defvar treemacs--fringe-indicator-overlay)
 (defvar treemacs-post-buffer-init-hook)
 (defvar treemacs-post-refresh-hook)
 (defvar treemacs-mode-hook)
@@ -129,11 +134,11 @@ hiding them would leave nothing to group by."
   :type 'boolean
   :group 'ps-file-tree)
 
-(defcustom ps/file-tree-top-level-spacing 0.5
+(defcustom ps/file-tree-top-level-spacing 0.35
   "Height of the blank strip drawn above each top-level section.
-A fraction of one line: 0.5 is half a blank line.  Separates the tree into
-sections the way a blank line used to when every top-level folder was its own
-project.  Set to 0 for no gap."
+A fraction of one line: 0.35 is roughly a third of a blank line.  Separates the
+tree into sections the way a blank line used to when every top-level folder was
+its own project.  Set to 0 for no gap."
   :type 'number
   :group 'ps-file-tree)
 
@@ -147,10 +152,12 @@ Takes over from `treemacs-root-face', which no longer applies once
 (defcustom ps/file-tree-follow-current-file t
   "Whether the file tree highlights the file being edited.
 The tree stays exactly as it is: nothing is expanded, no project is added or
-removed, and the view is not re-rooted.  If the current file is not already
-rendered -- because it is hidden by `ps/file-tree-ignored-files', filtered out
-by the active file set, or sits inside a collapsed folder -- the highlight is
-left where it is."
+removed, and the view is not re-rooted.  When the current buffer has no entry
+in the tree -- it is not a file, or it is hidden by
+`ps/file-tree-ignored-files', filtered out by the active file set, or inside a
+collapsed folder -- the highlight is removed rather than left pointing at
+something you are not editing.  It comes back as soon as you click or move in
+the tree."
   :type 'boolean
   :group 'ps-file-tree)
 
@@ -496,6 +503,13 @@ stays clear of both highlights."
   (when (and (> ps/file-tree-top-level-spacing 0) (> beg (point-min)))
     (let ((ov (make-overlay beg beg)))
       (overlay-put ov 'ps/file-tree-gap t)
+      ;; Treemacs marks the current line with an overlay of its own, whose
+      ;; `before-string' carries a fringe bitmap and sits at this same position.
+      ;; Emacs orders competing overlay strings by priority, and the fringe
+      ;; overlay already exists by the time this one is made -- without a lower
+      ;; priority here the bitmap is drawn on the blank strip instead of on the
+      ;; line, which reads as a stray mark floating above the entry.
+      (overlay-put ov 'priority -100)
       (overlay-put ov 'before-string
                    (propertize "\n" 'face
                                (list :height ps/file-tree-top-level-spacing))))))
@@ -519,7 +533,6 @@ cannot retrigger itself."
       (remove-text-properties (point-min) (point-max) '(invisible nil))
       (save-excursion
         (let ((pos (next-button (point-min) t))
-              (seen-top-level nil)
               (seen-top-file nil))
           (while pos
             (goto-char pos)
@@ -532,16 +545,17 @@ cannot retrigger itself."
                 (when hide-root (ps/file-tree--hide-line beg end)))
                ((eql depth 1)
                 (let ((dir (memq state '(dir-node-open dir-node-closed))))
-                  ;; A gap before every top-level directory, and one before the
-                  ;; block of loose files that follows them -- treemacs renders
-                  ;; every directory before any file, so the files are one block.
-                  (when (and (or dir (not seen-top-file)) seen-top-level)
+                  ;; A gap before every top-level directory -- including the
+                  ;; first, so the tree doesn't start flush against the window
+                  ;; edge -- and one before the block of loose files that
+                  ;; follows them.  Treemacs renders every directory before any
+                  ;; file, so those files are a single block at the end.
+                  (when (or dir (not seen-top-file))
                     (ps/file-tree--add-gap beg))
                   (when (and dir ps/file-tree-bold-top-level
                              (not (get-text-property beg 'ps/file-tree-bold)))
                     (add-face-text-property beg end '(:weight bold))
                     (put-text-property beg (1+ beg) 'ps/file-tree-bold t))
-                  (setq seen-top-level t)
                   (unless dir (setq seen-top-file t)))))
               (when (and hide-root (not (memq state '(root-node-open root-node-closed))))
                 (ps/file-tree--trim-indent beg)))
@@ -611,27 +625,44 @@ position marker has not been cached yet."
                 (setq pos (next-button pos)))
               (and found (marker-position found)))))))))
 
+(defun ps/file-tree--clear-highlight (buf)
+  "Remove the current-line highlight from the file tree buffer BUF.
+Deletes the `hl-line' overlay and treemacs\='s fringe indicator rather than
+switching their modes off: both are re-created by `move-overlay' the moment
+their owner redraws, so the highlight returns by itself as soon as you touch
+the tree."
+  (with-current-buffer buf
+    (when (and (boundp 'hl-line-overlay) hl-line-overlay)
+      (delete-overlay hl-line-overlay))
+    (when (and (boundp 'treemacs--fringe-indicator-overlay)
+               treemacs--fringe-indicator-overlay)
+      (delete-overlay treemacs--fringe-indicator-overlay))))
+
 (defun ps/file-tree--follow ()
-  "Move the file tree's highlight to the current buffer's file, if it is shown."
+  "Point the file tree's highlight at the current buffer's file.
+Clears the highlight instead when that file has no entry in the tree."
   (setq ps/file-tree--follow-timer nil)
-  (when-let* (((and ps/file-tree-follow-current-file
-                    (not (minibufferp))
-                    (not (derived-mode-p 'treemacs-mode))))
-              (file buffer-file-name)
-              ((file-exists-p file))
-              (buf (and (fboundp 'treemacs-get-local-buffer)
-                        (treemacs-get-local-buffer)))
-              (win (treemacs-get-local-window))
-              (pos (with-current-buffer buf
-                     (ps/file-tree--visible-node-position file))))
-    ;; `with-selected-window' rather than `select-window': focus stays in the
-    ;; buffer being edited.  `set-window-point' makes the position stick, and
-    ;; `hl-line-highlight' redraws the highlight there.
-    (with-selected-window win
-      (goto-char pos)
-      (when (fboundp 'treemacs--evade-image) (treemacs--evade-image))
-      (hl-line-highlight)
-      (set-window-point win (point)))))
+  (when (and ps/file-tree-follow-current-file
+             (not (minibufferp))
+             (not (derived-mode-p 'treemacs-mode)))
+    (let* ((buf (and (fboundp 'treemacs-get-local-buffer)
+                     (treemacs-get-local-buffer)))
+           (win (and buf (treemacs-get-local-window)))
+           (file (and win buffer-file-name))
+           (pos (and file (file-exists-p file)
+                     (with-current-buffer buf
+                       (ps/file-tree--visible-node-position file)))))
+      (when win
+        (if pos
+            ;; `with-selected-window' rather than `select-window': focus stays
+            ;; in the buffer being edited.  `set-window-point' makes the
+            ;; position stick, and `hl-line-highlight' redraws the highlight.
+            (with-selected-window win
+              (goto-char pos)
+              (when (fboundp 'treemacs--evade-image) (treemacs--evade-image))
+              (hl-line-highlight)
+              (set-window-point win (point)))
+          (ps/file-tree--clear-highlight buf))))))
 
 (defun ps/file-tree--follow-schedule ()
   "Schedule a debounced `ps/file-tree--follow' run."

@@ -352,7 +352,7 @@ to =nil= to use treemacs's generic icons instead.
   (setq ps/file-tree-root-mode 'single)
   (setq ps/file-tree-root-name nil)
   (setq ps/file-tree-hide-root t)
-  (setq ps/file-tree-top-level-spacing 0.5)
+  (setq ps/file-tree-top-level-spacing 0.35)
   (setq ps/file-tree-bold-top-level t)
 
   (setq ps/file-tree-follow-current-file t)
@@ -1626,6 +1626,14 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
       :height 1.0
       :weight 'bold
       :underline nil)
+
+    ;; Folders read as the same kind of thing as the files under them, so give
+    ;; them the file colour rather than treemacs's accent blue. Clearing the
+    ;; theme's own :foreground is what lets the :inherit through. Top-level
+    ;; folders still stand out, via `ps/file-tree-bold-top-level'.
+    (set-face-attribute 'treemacs-directory-face nil
+      :inherit 'treemacs-file-face
+      :foreground 'unspecified)
 
     ;; Narrower than treemacs's 35-column default.
     (setq treemacs-width 25)
