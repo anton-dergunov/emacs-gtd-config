@@ -119,6 +119,46 @@
     (setq ps/scrollbar--tick-count 113)
     (should (equal (ps/freeze-log--scrollbar-state) " sb-ticks=113 (+13)"))))
 
+;;; Frame-count reporting (exposure multiplier)
+
+(ert-deftest ps/freeze-log--frame-state-string-pure ()
+  "Frame counts render as `frames=N child=M'."
+  (should (equal (ps/freeze-log--frame-state-string '(1 . 0)) " frames=1 child=0"))
+  (should (equal (ps/freeze-log--frame-state-string '(2 . 1)) " frames=2 child=1")))
+
+(ert-deftest ps/freeze-log--frame-counts-separates-children ()
+  "Child frames (those with a `parent-frame') are counted separately."
+  (let ((counts (ps/freeze-log--frame-counts)))
+    (should (consp counts))
+    (should (integerp (car counts)))
+    (should (integerp (cdr counts)))
+    ;; Every live frame is classified as exactly one of the two.
+    (should (= (+ (car counts) (cdr counts)) (length (frame-list))))
+    ;; Batch mode still has the initial frame.
+    (should (>= (car counts) 1))))
+
+(ert-deftest ps/freeze-log--frame-change-skips-child-frames ()
+  "Child-frame churn must not flood the log; only top-level frames log."
+  (let* ((dir (make-temp-file "ps-freeze-test" t))
+         (ps/freeze-log-file (expand-file-name "log" dir))
+         (ps/freeze-log-enabled t))
+    (unwind-protect
+        (progn
+          ;; A frame reporting a parent-frame is skipped entirely.
+          (cl-letf (((symbol-function 'frame-parameter)
+                     (lambda (&rest _) 'some-parent)))
+            (ps/freeze-log--on-frame-change 'fake "created"))
+          (should-not (file-exists-p ps/freeze-log-file))
+          ;; A top-level frame (no parent) is logged.
+          (cl-letf (((symbol-function 'frame-parameter)
+                     (lambda (&rest _) nil)))
+            (ps/freeze-log--on-frame-change 'fake "created"))
+          (should (file-exists-p ps/freeze-log-file))
+          (with-temp-buffer
+            (insert-file-contents ps/freeze-log-file)
+            (should (string-match-p "top-level frame created" (buffer-string)))))
+      (delete-directory dir t))))
+
 (ert-deftest ps/freeze-log--setup-teardown-manage-timer ()
   "Setup starts a heartbeat timer and focus hook; teardown removes both."
   (let ((ps/freeze-log-enabled t)

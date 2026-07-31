@@ -173,13 +173,50 @@ Loosely coupled (`boundp'), since `ps-freeze-log' loads before `ps-scrollbar'."
             cur ps/freeze-log--last-tick-count)
       (when cur (setq ps/freeze-log--last-tick-count cur)))))
 
+(defun ps/freeze-log--frame-counts ()
+  "Return (TOP-LEVEL . CHILD) counts of live frames.
+Child frames are those with a `parent-frame' (e.g. the scrollbar pill)."
+  (let ((top 0) (child 0))
+    (dolist (f (frame-list))
+      (if (frame-parameter f 'parent-frame)
+          (setq child (1+ child))
+        (setq top (1+ top))))
+    (cons top child)))
+
+(defun ps/freeze-log--frame-state-string (counts)
+  "Format COUNTS (from `ps/freeze-log--frame-counts') for a heartbeat.
+Pure/testable.  Reported because each live frame is a native window that
+redisplay must flush, and every flush enters the nested AppKit event loop a
+freeze wedges in -- so the frame count is a direct exposure multiplier.  A
+freeze first seen with a second top-level frame open is what prompted this."
+  (format " frames=%d child=%d" (car counts) (cdr counts)))
+
+(defun ps/freeze-log--on-frame-change (frame verb)
+  "Log FRAME creation/deletion (VERB) -- top-level frames only.
+Child frames are deliberately skipped: the scrollbar creates and destroys
+its pill frame constantly, which would flood the log."
+  (unless (frame-parameter frame 'parent-frame)
+    (ps/freeze-log 'frame "top-level frame %s;%s" verb
+                   (ps/freeze-log--frame-state-string
+                    (ps/freeze-log--frame-counts)))))
+
+(defun ps/freeze-log--on-make-frame (frame)
+  "`after-make-frame-functions' hook: note a new top-level frame."
+  (ps/freeze-log--on-frame-change frame "created"))
+
+(defun ps/freeze-log--on-delete-frame (frame)
+  "`delete-frame-functions' hook: note a top-level frame going away."
+  (ps/freeze-log--on-frame-change frame "deleted"))
+
 (defun ps/freeze-log--heartbeat ()
   "Write one heartbeat line (main-thread liveness marker)."
   (setq ps/freeze-log--heartbeat-count (1+ ps/freeze-log--heartbeat-count))
-  (ps/freeze-log 'heartbeat "alive #%d focus=%s%s"
+  (ps/freeze-log 'heartbeat "alive #%d focus=%s%s%s"
                  ps/freeze-log--heartbeat-count
                  (frame-focus-state)
-                 (ps/freeze-log--scrollbar-state)))
+                 (ps/freeze-log--scrollbar-state)
+                 (ps/freeze-log--frame-state-string
+                  (ps/freeze-log--frame-counts))))
 
 (defun ps/freeze-log--on-focus-change ()
   "Log every OS focus gain/loss (correlates freezes with backgrounding)."
@@ -202,6 +239,8 @@ Idempotent; safe to call again to pick up changed settings."
                    (emacs-pid) emacs-version)
     (add-function :after after-focus-change-function
                   #'ps/freeze-log--on-focus-change)
+    (add-hook 'after-make-frame-functions #'ps/freeze-log--on-make-frame)
+    (add-hook 'delete-frame-functions     #'ps/freeze-log--on-delete-frame)
     (setq ps/freeze-log--heartbeat-timer
           (run-with-timer ps/freeze-log-heartbeat-interval
                           ps/freeze-log-heartbeat-interval
@@ -214,7 +253,9 @@ Idempotent; safe to call again to pick up changed settings."
     (cancel-timer ps/freeze-log--heartbeat-timer)
     (setq ps/freeze-log--heartbeat-timer nil))
   (remove-function after-focus-change-function
-                   #'ps/freeze-log--on-focus-change))
+                   #'ps/freeze-log--on-focus-change)
+  (remove-hook 'after-make-frame-functions #'ps/freeze-log--on-make-frame)
+  (remove-hook 'delete-frame-functions     #'ps/freeze-log--on-delete-frame))
 
 (provide 'ps-freeze-log)
 ;;; ps-freeze-log.el ends here
