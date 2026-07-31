@@ -66,8 +66,17 @@ A *file set* is a named subset of your Org files — for example "Work" or
   *scopes the agenda* — when on, the agenda only includes tasks from the files
   in the current set. Turn it off to always see everything.
 
+While a set is active, folders it has emptied disappear too, rather than
+lingering with nothing under them. Under "All" — which filters nothing — a
+folder that is genuinely empty on disk still shows.
+
 File sets are defined per Org folder in =workspace.org= — see
 [[file:Customization.org][Customization & appearance]].
+
+* Collapsing the whole tree
+A small button in the tree's top-right corner collapses everything, and turns
+into an expand button once it has. =M-+= and =M--= inside the tree do the same
+from the keyboard. Hide the button with =ps/file-tree-show-toggle-button=.
 
 * Window management
 | Key               | Action                              |

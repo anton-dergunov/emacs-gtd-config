@@ -333,9 +333,16 @@ fractions of a line), and
 =ps/file-tree-bold-top-level= draws those folders bold, so the tree still reads
 as sections.
 
+=ps/file-tree-order= sets the order entries appear in: names before the =:rest=
+keyword are pinned to the top, names after it to the bottom, and everything
+unlisted fills the middle alphabetically. Leave it =nil= for plain alphabetical
+order. Real orderings usually belong in your =workspace.org=, next to the icon
+maps. =ps/file-tree-show-toggle-button= puts a collapse/expand-all button in the
+tree's top-right corner.
+
 =ps/file-tree-follow-current-file= keeps the tree's highlight on the file you're
 editing. It never expands anything and never moves the view: if the file isn't
-already on screen in the tree, the highlight simply stays put.
+already on screen in the tree, the highlight is cleared instead.
 
 Category icons
 come from the Material Symbols font (see above); =ps/file-tree-icon-ascent= sets
@@ -354,6 +361,9 @@ to =nil= to use treemacs's generic icons instead.
   (setq ps/file-tree-hide-root t)
   (setq ps/file-tree-top-level-spacing 0.35)
   (setq ps/file-tree-bold-top-level t)
+
+  (setq ps/file-tree-order nil)
+  (setq ps/file-tree-show-toggle-button t)
 
   (setq ps/file-tree-follow-current-file t)
   (setq ps/file-tree-follow-delay 0.2)
@@ -1615,6 +1625,15 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; Replace the file tree's mode line entirely with the active file-set
     ;; indicator; click it to switch sets.
     (setq treemacs-user-mode-line-format '(:eval (ps/file-tree--modeline)))
+
+    ;; A collapse/expand-all button in the top-right corner. The header line is
+    ;; the only spot up there that stays put while the tree scrolls.
+    (setq treemacs-user-header-line-format '(:eval (ps/file-tree--header-line)))
+
+    ;; `treemacs-sorting' takes a predicate over absolute paths, which is how
+    ;; `ps/file-tree-order' gets to place folders explicitly. With that unset
+    ;; this sorts alphabetically, exactly like treemacs's own default.
+    (setq treemacs-sorting #'ps/file-tree-sort-predicate)
 
     ;; Root project labels should look like ordinary file-tree entries (not
     ;; underlined or oversized like the default hyperlink-style root face),

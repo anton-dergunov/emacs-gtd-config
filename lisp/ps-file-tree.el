@@ -24,6 +24,7 @@
 (declare-function treemacs-dom-node->position "treemacs-dom")
 (declare-function org-find-exact-headline-in-buffer "org")
 (declare-function hl-line-highlight "hl-line")
+(defvar my-org-base-directory)
 (defvar treemacs-indentation)
 ;; Current-line highlight overlays we clear when nothing matches; both are
 ;; revived by `move-overlay' the next time their owner redraws.
@@ -149,6 +150,33 @@ Takes over from `treemacs-root-face', which no longer applies once
   :type 'boolean
   :group 'ps-file-tree)
 
+(defcustom ps/file-tree-order nil
+  "Explicit display order for file-tree entries, or nil for alphabetical.
+A list of names.  Entries named before the keyword `:rest' are pinned to the
+top in the order given, entries named after it are pinned to the bottom, and
+everything unlisted fills the middle alphabetically.  With no `:rest' the
+unlisted entries all go last.
+
+A name matches an entry by its file name, its file name without the .org
+extension, or its path relative to the Org base directory -- the same matching
+`ps/material-icons-folder-map' uses.  For example:
+
+  (setq ps/file-tree-order \\='(:rest \"Current\" \"Vision\"))
+
+Treemacs always renders directories before files, so \"bottom\" means the
+bottom of the folder list: files sitting directly in the Org directory still
+come after every folder, whatever this says."
+  :type '(repeat (choice string (const :rest)))
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-show-toggle-button t
+  "Whether to show the collapse/expand-all button in the tree's header line.
+The button sits in the top-right corner and reflects the tree's state: it
+offers to collapse while anything is expanded, and to expand once everything
+is closed."
+  :type 'boolean
+  :group 'ps-file-tree)
+
 (defcustom ps/file-tree-follow-current-file t
   "Whether the file tree highlights the file being edited.
 The tree stays exactly as it is: nothing is expanded, no project is added or
@@ -201,6 +229,49 @@ Each file is named after the Material Symbols glyph it stands in for."
   :type 'directory
   :group 'ps-file-tree)
 
+;;; Display order
+
+(defun ps/file-tree--order-names (path)
+  "Return the names PATH may be matched against in `ps/file-tree-order'."
+  (let* ((bare (directory-file-name path))
+         (name (file-name-nondirectory bare)))
+    (delq nil (list name
+                    (file-name-sans-extension name)
+                    (and (boundp 'my-org-base-directory) my-org-base-directory
+                         (file-relative-name bare my-org-base-directory))))))
+
+(defun ps/file-tree--order-position (path)
+  "Return PATH\='s index in `ps/file-tree-order', or nil if unlisted."
+  (let ((names (ps/file-tree--order-names path))
+        (index 0)
+        (found nil))
+    (dolist (entry ps/file-tree-order found)
+      (when (and (null found) (stringp entry) (member entry names))
+        (setq found index))
+      (setq index (1+ index)))))
+
+(defun ps/file-tree--order-group (position rest)
+  "Return the sort group for POSITION given the `:rest' index REST.
+0 pinned to the top, 1 unlisted, 2 pinned to the bottom."
+  (cond ((null position) 1)
+        ((< position rest) 0)
+        (t 2)))
+
+(defun ps/file-tree-sort-predicate (f1 f2)
+  "Return non-nil if F1 sorts before F2, per `ps/file-tree-order'.
+Suitable as a `treemacs-sorting' value, which takes a predicate over absolute
+file paths.  With `ps/file-tree-order' unset this is plain alphabetical order,
+matching treemacs\='s own `alphabetic-asc' default."
+  (let* ((rest (or (cl-position :rest ps/file-tree-order)
+                   (length ps/file-tree-order)))
+         (p1 (ps/file-tree--order-position f1))
+         (p2 (ps/file-tree--order-position f2))
+         (g1 (ps/file-tree--order-group p1 rest))
+         (g2 (ps/file-tree--order-group p2 rest)))
+    (cond ((/= g1 g2) (< g1 g2))
+          ((and p1 p2) (< p1 p2))
+          (t (string-lessp f1 f2)))))
+
 ;;; Ignore predicate
 
 (defun ps/file-tree--current-set-spec ()
@@ -211,33 +282,50 @@ Each file is named after the Material Symbols glyph it stands in for."
   "Return non-nil if PATH contains a substring match for any of REGEXPS."
   (cl-some (lambda (rx) (string-match-p rx path)) regexps))
 
-(defun ps/file-tree--descendant-included-p (dir include-regexps)
-  "Return non-nil if DIR has a descendant whose path matches INCLUDE-REGEXPS.
-Recurses into subdirectories; stops at the first match."
+(defun ps/file-tree--set-shows-file-p (file include exclude)
+  "Return non-nil if a file set with INCLUDE/EXCLUDE would show FILE."
+  (and (not (and exclude (ps/file-tree--path-matches-any-p file exclude)))
+       (or (null include) (ps/file-tree--path-matches-any-p file include))))
+
+(defun ps/file-tree--set-has-visible-file-p (dir include exclude)
+  "Return non-nil if DIR contains a file a set with INCLUDE/EXCLUDE would show.
+Recurses to any depth and stops at the first hit.  Entries whose name matches
+`ps/file-tree-ignored-files' are skipped: they are never drawn, so a folder
+holding only those has nothing to show either."
   (cl-some
    (lambda (entry)
      (let ((name (file-name-nondirectory entry)))
-       (unless (member name '("." ".."))
-         (or (ps/file-tree--path-matches-any-p entry include-regexps)
-             (and (file-directory-p entry)
-                  (ps/file-tree--descendant-included-p entry include-regexps))))))
+       (unless (or (member name '("." ".."))
+                   (cl-some (lambda (rx) (string-match-p rx name))
+                            ps/file-tree-ignored-files))
+         (if (file-directory-p entry)
+             (and (not (and exclude
+                            (ps/file-tree--path-matches-any-p entry exclude)))
+                  (ps/file-tree--set-has-visible-file-p entry include exclude))
+           (ps/file-tree--set-shows-file-p entry include exclude)))))
    (and (file-directory-p dir) (directory-files dir t))))
 
 (defun ps/file-tree--set-hidden-p (absolute-path)
   "Return non-nil if ABSOLUTE-PATH is hidden by the current file set.
-Hidden if ABSOLUTE-PATH matches the current set's :exclude regexps, or if
-:include is non-nil and neither ABSOLUTE-PATH nor (for directories) any of
-its descendants matches an :include regexp."
+Hidden if ABSOLUTE-PATH matches the set\='s :exclude regexps; if it is a file
+and :include is non-nil but matches none of them; or if it is a *directory the
+set has emptied* -- one with no remaining visible file at any depth.
+
+That last rule only applies while a set is actually filtering.  Under a set
+with neither :include nor :exclude (the default \"All\"), nothing is hidden, so
+a folder that is empty on disk still shows."
   (let ((spec (ps/file-tree--current-set-spec)))
     (when spec
       (let ((include (plist-get spec :include))
             (exclude (plist-get spec :exclude)))
-        (or
-         (and exclude (ps/file-tree--path-matches-any-p absolute-path exclude))
-         (and include
-              (not (ps/file-tree--path-matches-any-p absolute-path include))
-              (not (and (file-directory-p absolute-path)
-                        (ps/file-tree--descendant-included-p absolute-path include)))))))))
+        (cond
+         ;; A set that filters nothing hides nothing -- including empty folders.
+         ((and (null include) (null exclude)) nil)
+         ((and exclude (ps/file-tree--path-matches-any-p absolute-path exclude)) t)
+         ((file-directory-p absolute-path)
+          (not (ps/file-tree--set-has-visible-file-p absolute-path include exclude)))
+         (t (and include
+                 (not (ps/file-tree--path-matches-any-p absolute-path include)))))))))
 
 (defun ps/file-tree-filter-files (files)
   "Return FILES, minus those hidden by the active file set, if enabled.
@@ -320,13 +408,22 @@ Falls back to the first entry of `ps/file-tree-file-sets'."
 
 (defun ps/file-tree--refresh ()
   "Re-render the file tree, re-applying the active file set's filters.
-Collapses and re-expands every project so each directory is rescanned
-against the current `ps/file-tree-current-set' rather than reusing
-already-rendered nodes."
+Collapses and re-expands every project so each directory is rescanned against
+the current `ps/file-tree-current-set' rather than reusing already-rendered
+nodes.
+
+Collapses via `treemacs-collapse-all-projects' rather than
+`ps/file-tree-collapse-all': the latter deliberately leaves a hidden root
+expanded, and a root that never closes is a root whose children are never
+re-read -- which would leave the top-level entries frozen as the set changes.
+Nothing is visible in between, since the re-expand follows immediately."
   (when-let* ((buf (and (fboundp 'treemacs-get-local-buffer)
                          (treemacs-get-local-buffer))))
     (with-current-buffer buf
-      (ps/file-tree-collapse-all)
+      ;; Treemacs announces the collapse in the echo area; here it is an
+      ;; implementation detail of switching sets, not something to report.
+      (let ((inhibit-message t))
+        (treemacs-collapse-all-projects))
       (ps/file-tree-expand-all)
       (ps/file-tree--decorate))))
 
@@ -678,6 +775,75 @@ Clears the highlight instead when that file has no entry in the tree."
 Call once from the treemacs `:config' block; `ps/file-tree-follow-current-file'
 is re-checked on every run, so it can be toggled at any time."
   (add-hook 'buffer-list-update-hook #'ps/file-tree--follow-schedule))
+
+;;; Collapse / expand toggle button
+
+(defconst ps/file-tree--collapse-icon "unfold_less"
+  "Material Symbols name for the \"collapse everything\" button.")
+(defconst ps/file-tree--expand-icon "unfold_more"
+  "Material Symbols name for the \"expand everything\" button.")
+
+(defun ps/file-tree--any-expanded-p ()
+  "Return non-nil if any directory in the tree is currently expanded.
+Stops at the first one, so this is cheap enough to call from redisplay."
+  (save-excursion
+    (let ((pos (next-button (point-min) t))
+          (found nil))
+      (while (and pos (not found))
+        (when (eq (treemacs-button-get pos :state) 'dir-node-open)
+          (setq found t))
+        (setq pos (next-button pos)))
+      found)))
+
+;;;###autoload
+(defun ps/file-tree-toggle-all ()
+  "Collapse the whole tree, or expand it if it is already fully collapsed."
+  (interactive)
+  (when-let* ((buf (and (fboundp 'treemacs-get-local-buffer)
+                        (treemacs-get-local-buffer))))
+    (with-current-buffer buf
+      (if (ps/file-tree--any-expanded-p)
+          (ps/file-tree-collapse-all)
+        (ps/file-tree-expand-all)))))
+
+(defun ps/file-tree--toggle-button-click (event)
+  "Toggle the tree open or closed, for a click on EVENT."
+  (interactive "e")
+  (ignore event)
+  (ps/file-tree-toggle-all))
+
+(defun ps/file-tree--button-glyph (name fallback)
+  "Return an icon string for Material Symbols NAME, or FALLBACK text.
+Resolved through `ps/material-icons-image' only when that module happens to be
+loaded, so this file keeps working on its own."
+  (or (and (fboundp 'ps/material-icons-image)
+           (when-let* ((image (ps/material-icons-image
+                               name ps/file-tree-icon-ascent)))
+             (propertize " " 'display image)))
+      fallback))
+
+(defun ps/file-tree--header-line ()
+  "Return the tree's header line: a right-aligned collapse/expand button."
+  (when ps/file-tree-show-toggle-button
+    (let* ((expanded (ps/file-tree--any-expanded-p))
+           (glyph (ps/file-tree--button-glyph
+                   (if expanded
+                       ps/file-tree--collapse-icon
+                     ps/file-tree--expand-icon)
+                   (if expanded "-" "+")))
+           (map (let ((m (make-sparse-keymap)))
+                  (define-key m [header-line mouse-1]
+                              #'ps/file-tree--toggle-button-click)
+                  m)))
+      (list
+       ;; Push the button to the right edge, leaving room for the glyph itself.
+       (propertize " " 'display '(space :align-to (- right 3)))
+       (propertize glyph
+                   'mouse-face 'mode-line-highlight
+                   'help-echo (if expanded
+                                  "mouse-1: collapse everything"
+                                "mouse-1: expand everything")
+                   'local-map map)))))
 
 ;;; Multi-root project setup
 

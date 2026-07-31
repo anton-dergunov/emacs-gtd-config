@@ -5,6 +5,11 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-file-tree)
 
+;; `(defvar my-org-base-directory)' with no value, as in ps-file-tree.el, only
+;; marks the symbol special within that file -- repeat it here so the `let'
+;; bindings below are dynamic rather than lexical.
+(defvar my-org-base-directory)
+
 (defmacro ps/file-tree-test--with-base-dir (entries &rest body)
   "Create a temp dir containing ENTRIES, bind `dir', run BODY, then clean up.
 Each entry is a name; names ending in \"/\" are created as subdirectories,
@@ -110,6 +115,104 @@ others as empty files."
     (should (ps/file-tree--ignored-p "init.org" "/base/init.org"))
     (should (ps/file-tree--ignored-p "Diary.org" "/base/Mind/Diary.org"))
     (should-not (ps/file-tree--ignored-p "Career.org" "/base/Work/Career.org"))))
+
+(ert-deftest ps/file-tree--set-hides-folder-it-emptied ()
+  "A folder whose every file the set excludes is hidden, not left empty."
+  (let ((ps/file-tree-file-sets
+         '(("No Money" . (:include nil :exclude ("/Admin/Financial\\.org\\'")))))
+        (ps/file-tree-current-set "No Money")
+        (ps/file-tree-ignored-files nil))
+    (ps/file-tree-test--with-base-dir '("Admin/" "Admin/Financial.org"
+                                       "Work/" "Work/Career.org")
+      ;; Admin held only the excluded file, so it goes too.
+      (should (ps/file-tree--set-hidden-p (expand-file-name "Admin" dir)))
+      ;; Work still has something to show.
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work" dir))))))
+
+(ert-deftest ps/file-tree--set-hides-folder-with-no-included-file ()
+  "With :include, a folder containing nothing that matches is hidden."
+  (let ((ps/file-tree-file-sets
+         '(("Work" . (:include ("/Work/") :exclude nil))))
+        (ps/file-tree-current-set "Work")
+        (ps/file-tree-ignored-files nil))
+    (ps/file-tree-test--with-base-dir '("Work/" "Work/Career.org"
+                                       "Play/" "Play/Photo.org")
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work" dir)))
+      (should (ps/file-tree--set-hidden-p (expand-file-name "Play" dir))))))
+
+(ert-deftest ps/file-tree--set-all-keeps-empty-folders ()
+  "Under a set that filters nothing, an empty folder still shows."
+  (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))))
+        (ps/file-tree-current-set "All")
+        (ps/file-tree-ignored-files nil))
+    (ps/file-tree-test--with-base-dir '("Empty/" "Work/" "Work/Career.org")
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Empty" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work" dir))))))
+
+(ert-deftest ps/file-tree--set-hides-folder-of-only-ignored-files ()
+  "Files hidden by the ignore list don't keep a folder alive under a set."
+  (let ((ps/file-tree-file-sets
+         '(("Work" . (:include nil :exclude ("Secret")))))
+        (ps/file-tree-current-set "Work")
+        (ps/file-tree-ignored-files '("\\`workspace\\.org\\'")))
+    (ps/file-tree-test--with-base-dir '("Cfg/" "Cfg/workspace.org"
+                                       "Work/" "Work/Career.org")
+      (should (ps/file-tree--set-hidden-p (expand-file-name "Cfg" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work" dir))))))
+
+;;; -------------------------------------------------------
+;;; ps/file-tree-sort-predicate / ps/file-tree-order
+;;; -------------------------------------------------------
+
+(defun ps/file-tree-test--sorted (paths)
+  "Sort PATHS with `ps/file-tree-sort-predicate', returning base names."
+  (mapcar #'file-name-nondirectory
+          (sort (copy-sequence paths) #'ps/file-tree-sort-predicate)))
+
+(ert-deftest ps/file-tree-sort-alphabetical-without-an-order ()
+  "With `ps/file-tree-order' unset the predicate is plain alphabetical."
+  (let ((ps/file-tree-order nil)
+        (my-org-base-directory "/base/"))
+    (should (equal (ps/file-tree-test--sorted
+                    '("/base/Work" "/base/Admin" "/base/ML"))
+                   '("Admin" "ML" "Work")))))
+
+(ert-deftest ps/file-tree-sort-pins-names-after-rest-to-the-bottom ()
+  "Names after `:rest' sort last, in the order they are listed."
+  (let ((ps/file-tree-order '(:rest "Current" "Vision"))
+        (my-org-base-directory "/base/"))
+    (should (equal (ps/file-tree-test--sorted
+                    '("/base/Vision" "/base/Work" "/base/Current" "/base/Admin"))
+                   '("Admin" "Work" "Current" "Vision")))))
+
+(ert-deftest ps/file-tree-sort-pins-names-before-rest-to-the-top ()
+  "Names before `:rest' sort first, in the order they are listed."
+  (let ((ps/file-tree-order '("Work" "ML" :rest "Vision"))
+        (my-org-base-directory "/base/"))
+    (should (equal (ps/file-tree-test--sorted
+                    '("/base/Vision" "/base/Admin" "/base/ML" "/base/Work"))
+                   '("Work" "ML" "Admin" "Vision")))))
+
+(ert-deftest ps/file-tree-sort-without-rest-puts-unlisted-last ()
+  "Omitting `:rest' pins the listed names to the top."
+  (let ((ps/file-tree-order '("Work" "ML"))
+        (my-org-base-directory "/base/"))
+    (should (equal (ps/file-tree-test--sorted
+                    '("/base/Admin" "/base/ML" "/base/Work"))
+                   '("Work" "ML" "Admin")))))
+
+(ert-deftest ps/file-tree-sort-matches-basename-and-relative-path ()
+  "An entry matches by file name, by name without .org, or by relative path."
+  (let ((my-org-base-directory "/base/"))
+    (let ((ps/file-tree-order '(:rest "Misc.org")))
+      (should (equal (ps/file-tree-test--sorted '("/base/Misc.org" "/base/Inbox.org"))
+                     '("Inbox.org" "Misc.org"))))
+    (let ((ps/file-tree-order '(:rest "Misc")))
+      (should (equal (ps/file-tree-test--sorted '("/base/Misc.org" "/base/Inbox.org"))
+                     '("Inbox.org" "Misc.org"))))
+    (let ((ps/file-tree-order '("ML/older")))
+      (should (equal (ps/file-tree-test--sorted '("/base/ML/deep" "/base/ML/older"))
+                     '("older" "deep"))))))
 
 ;;; -------------------------------------------------------
 ;;; ps/file-tree--ensure-valid-set / set switching

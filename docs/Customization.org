@@ -163,10 +163,29 @@ All of these live in =config.org= → /Settings → File Tree/.
 | =ps/file-tree-hide-root=           | don't name the Org directory at the top (default on)    |
 | =ps/file-tree-top-level-spacing=   | gap above each top-level folder, in fractions of a line |
 | =ps/file-tree-bold-top-level=      | draw top-level folders bold, as section headers         |
+| =ps/file-tree-order=               | explicit folder order; see below                        |
+| =ps/file-tree-show-toggle-button=  | collapse/expand-all button in the top-right corner      |
 | =ps/file-tree-follow-current-file= | highlight the file you're editing                       |
 | =ps/file-tree-root-mode=           | =single= (one tree) or =subdirs= (a root per folder)    |
 | =ps/file-tree-ignored-files=       | names never shown in the tree                           |
 
+** Ordering the folders
+By default entries are alphabetical. =ps/file-tree-order= overrides that: names
+listed before the =:rest= keyword are pinned to the top in that order, names
+after it are pinned to the bottom, and everything unlisted fills the middle
+alphabetically. A name matches an entry by its file name, its name without the
+=.org= extension, or its path relative to the Org base — the same matching the
+icon maps use. Put it in your =workspace.org=:
+
+#+begin_src elisp
+(setq ps/file-tree-order '(:rest "Current" "Vision"))
+#+end_src
+
+Treemacs always draws folders before loose files, so "bottom" means the bottom
+of the *folder* list: files sitting directly in your Org directory still come
+after every folder, whatever this says.
+
+** What the file sets hide
 Two different lists decide what you see. =ps/file-tree-ignored-files= is about
 *display* — it hides =init.org=, =workspace.org=, =AGENTS.md=, =CLAUDE.md=,
 dotfiles and build artifacts from the tree. What the *agenda* reads is a

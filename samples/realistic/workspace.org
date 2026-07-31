@@ -20,6 +20,15 @@ The label shown for the whole Org folder at the top of the file tree.
   (setq ps/file-tree-root-name "Notes")
 #+end_src
 
+* Folder order
+Names before =:rest= are pinned to the top, names after it to the bottom, and
+everything unlisted fills the middle alphabetically. Here the two time-horizon
+folders sit at the end, after the topic folders. Note that folders always come
+before loose files, so =Inbox= and =Misc= still follow them.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-order '(:rest "Current" "Vision"))
+#+end_src
+
 * Category icons
 The icon drawn for a =<Name>.org= file, wherever it sits in the tree.
 #+begin_src emacs-lisp
