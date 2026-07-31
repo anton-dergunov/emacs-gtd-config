@@ -13,7 +13,7 @@ right file first.
 
 - Press =C-c p k= (Productivity → Capture & Notes → Capture…), or
   =M-x org-capture=.
-- A typical home for fresh items is =Areas/Inbox.org=; you sort them into the
+- A typical home for fresh items is an =Inbox.org=; you sort them into the
   right area later during a review.
 
 #+begin_quote
@@ -23,9 +23,9 @@ a "Task → Inbox" template. See the [[https://orgmode.org/manual/Capture.html][
 syntax, and add yours in =config.org=.
 #+end_quote
 
-* Open the Areas folder
-To browse or pick a file directly, *Productivity → Capture & Notes → Open Areas
-Folder* opens =Areas/= in Dired (Emacs's file manager).
+* Open the notes folder
+To browse or pick a file directly, *Productivity → Capture & Notes → Open Notes
+Folder* opens your Org base directory in Dired (Emacs's file manager).
 
 * Journal
 A journal is a dated log — daily notes, a weekly review, a record of decisions.
@@ -34,7 +34,9 @@ This config uses [[https://github.com/bastibe/org-journal][org-journal]], organi
 - Press =C-c p j= (Productivity → Capture & Notes → New Journal Entry), or
   =M-x org-journal-new-entry=. It opens this week's journal file and drops in a
   dated heading ready to type under.
-- Entries live in a =Journal/= folder inside your Org base directory.
+- Entries live in a =Journal/= folder inside your Org base directory. That
+  folder is deliberately left out of the agenda scan, so dated notes never
+  crowd out your tasks.
 
 * Storing links to come back to
 =C-c p l= (=org-store-link=) remembers a pointer to wherever you are — a file, a

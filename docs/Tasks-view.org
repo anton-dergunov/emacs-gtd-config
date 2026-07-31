@@ -6,7 +6,7 @@
 
 Where [[file:Agenda.org][the Agenda]] answers "what matters today?", the *Tasks* view answers "show
 me everything that's still open." It's a single flat list of all unfinished
-tasks across your =Areas/= files, which you then slice down with filters.
+tasks in your Org files, which you then slice down with filters.
 
 * Opening it
 Press =F9= or =C-c p n= (Productivity → Plan & Review → Tasks), or run

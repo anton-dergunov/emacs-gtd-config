@@ -80,6 +80,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (setq load-prefer-newer t)
   (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
+  (require 'ps-org-files)
   (require 'ps-window)
   (require 'ps-links)
   (require 'ps-done)
@@ -195,6 +196,25 @@ same height as the main font on macOS; adjust per font if a glyph still
 sits taller.")
 #+end_src
 
+** Org files (ps-org-files.el)
+Which =.org= files the agenda, the conflict checker and the availability
+computation see. The scan starts at your Org base directory and walks it
+*recursively*, so any layout works — a flat folder, one level of topic
+directories, or arbitrary nesting. Set =ps/org-files-root= only if you want to
+scan a subdirectory rather than the whole base directory.
+
+The two exclusion lists are regexps matched against a *name* (not a path):
+directories matching the first are not descended into at all, and =.org= files
+matching the second are dropped. The defaults skip dotted directories, the
+journal, archives, and the two config files that live in the Org base directory.
+#+begin_src emacs-lisp
+  (setq ps/org-files-root nil)
+  (setq ps/org-files-exclude-directories
+        '("\\`\\." "\\`Journal\\'" "\\`Archive\\'"))
+  (setq ps/org-files-exclude-files
+        '("\\`init\\.org\\'" "\\`workspace\\.org\\'"))
+#+end_src
+
 ** Availability (ps-availability.el)
 #+begin_src emacs-lisp
   (setq ps/org-avail-days             15
@@ -279,23 +299,36 @@ Symbols Outlined" font — no per-icon SVG files. See the README for installing
 the font. Icon *size* auto-derives from your font height (so alignment stays
 stable across fonts/OSes); tune =ps/material-icons-height-scale= once if needed.
 
-The =category-map= (=<Category>.org= → icon name) and =folder-map= (whole-folder
-icons) are left *empty* here: =config.org= renders every file with the generic
-=File= icon unless overridden. Real mappings live in your Org folder's
-=workspace.org= (see "Workspace config" below), so your personal categories
-never enter this public repo. Names come from https://fonts.google.com/icons.
+Three maps decide which icon each tree entry gets: =category-map=
+(=<Category>.org= → icon), =folder-map= (a *directory's own* icon, at any
+depth), and =folder-contents-map= (one icon for every file under a folder).
+All three are left *empty* here, so =config.org= alone renders files with the
+generic =File= icon and directories with a plain folder. Real mappings live in
+your Org folder's =workspace.org= (see "Workspace config" below), so your
+personal categories never enter this public repo. Names come from
+https://fonts.google.com/icons.
 #+begin_src emacs-lisp
   (setq ps/material-icons-font-family "Material Symbols Outlined")
   (setq ps/material-icons-color       "#5f6368")
   (setq ps/material-icons-height      'auto)
   (setq ps/material-icons-height-scale 1.0)
-  (setq ps/material-icons-category-map nil)
-  (setq ps/material-icons-folder-map   nil)
+  (setq ps/material-icons-category-map        nil)
+  (setq ps/material-icons-folder-map          nil)
+  (setq ps/material-icons-folder-contents-map nil)
 #+end_src
 
 ** File Tree (ps-file-tree.el / ps-file-tree-icons.el)
 Files/dirs whose name matches any regexp here are hidden from the file tree
-(=init.org=, dotfiles, =elpa/=, byte-compiled files by default). Category icons
+(=init.org=, dotfiles, =elpa/=, byte-compiled files by default).
+
+=ps/file-tree-root-mode= decides the tree's shape: =single= (the default) shows
+your whole Org directory as one root, so files sitting directly in it are
+visible and subdirectories nest to any depth; =subdirs= instead gives every
+immediate subdirectory its own bold root, at the cost of hiding files that live
+directly in the Org directory. =ps/file-tree-root-name= labels the single root
+(=nil= uses the directory's own name).
+
+Category icons
 come from the Material Symbols font (see above); =ps/file-tree-icon-ascent= sets
 the vertical alignment of every file-tree icon (root projects and files alike).
 If the font is unavailable, the tree falls back to the =folder=/=folder_open=
@@ -304,6 +337,9 @@ to =nil= to use treemacs's generic icons instead.
 #+begin_src emacs-lisp
   (setq ps/file-tree-ignored-files
         '("\\`init\\.org\\'" "\\`\\." "\\`elpa\\'" "\\.elc\\'"))
+
+  (setq ps/file-tree-root-mode 'single)
+  (setq ps/file-tree-root-name nil)
 
   (setq ps/file-tree-use-custom-icons t)
   (setq ps/file-tree-name-spacing 0.5)
@@ -324,12 +360,12 @@ switched from the file tree's mode line, and persists across restarts.
   (setq ps/file-tree-file-sets
         '(("All" . (:include nil :exclude nil))
           ;; ;; Examples:
-          ;; ("Work" . (:include ("/Areas/Work\\.org\\'"
+          ;; ("Work" . (:include ("/Work/"
           ;;                      "/Current/")
           ;;            :exclude nil))
           ;; ("No Sensitive" . (:include nil
-          ;;                     :exclude ("/Areas/Financial\\.org\\'"
-          ;;                               "/Areas/Interviews\\.org\\'")))
+          ;;                     :exclude ("/Admin/Financial\\.org\\'"
+          ;;                               "/Work/Interviews\\.org\\'")))
           ))
 #+end_src
 
@@ -883,7 +919,8 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
 
 *** Agenda files
 #+begin_src emacs-lisp
-  ;; https://stackoverflow.com/questions/11384516/how-to-make-all-org-files-under-a-folder-added-in-agenda-list-automatically
+  ;; The file list comes from ps-org-files (see "Org files" under Settings):
+  ;; the whole Org base directory, recursively, minus the excluded names.
   ;; Wrapped in a function so it can be re-run whenever the file-tree set
   ;; or its agenda-filter toggle changes (see ps/file-tree-set-file-set,
   ;; ps/file-tree-cycle-file-set, ps/file-tree-toggle-agenda-filter).
@@ -891,10 +928,7 @@ This does not persist — edit `ps/color-theme' in Settings to keep a theme."
     "Recompute `org-agenda-files', applying the active file-tree set's
 filter if `ps/file-tree-set-applies-to-agenda' is enabled."
     (setq org-agenda-files
-          (ps/file-tree-filter-files
-           (directory-files-recursively
-            (concat my-org-base-directory "Areas/")
-            "\\.org$"))))
+          (ps/file-tree-filter-files (ps/org-files-all))))
   (ps/agenda-files-refresh)
 #+end_src
 
@@ -1536,7 +1570,7 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
 * Files & Navigation
 ** Default directory
 #+begin_src emacs-lisp
-  (setq default-directory (concat my-org-base-directory "Areas/"))
+  (setq default-directory my-org-base-directory)
 #+end_src
 
 ** Workaround for unsupported =ls --dired= on macOS
@@ -1565,9 +1599,9 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; indicator; click it to switch sets.
     (setq treemacs-user-mode-line-format '(:eval (ps/file-tree--modeline)))
 
-    ;; Root project labels (Areas/Current/Vision) should look like ordinary
-    ;; file-tree entries (not underlined or oversized like the default
-    ;; hyperlink-style root face), but bold to stand out as section headers.
+    ;; Root project labels should look like ordinary file-tree entries (not
+    ;; underlined or oversized like the default hyperlink-style root face),
+    ;; but bold to stand out as section headers.
     (set-face-attribute 'treemacs-root-face nil
       :inherit 'treemacs-file-face
       :height 1.0
@@ -1676,8 +1710,8 @@ in place while choosing; it is restored after the agenda is built either way."
           (apply orig-fn args)))))
 
 
-  ;; Open the file tree at `my-org-base-directory' on startup, one project per
-  ;; immediate subdirectory, fully expanded. treemacs expands directories
+  ;; Open the file tree at `my-org-base-directory' on startup, laid out per
+  ;; `ps/file-tree-root-mode' and fully expanded. treemacs expands directories
   ;; asynchronously (git-status/flatten-dirs subprocesses), so re-run the
   ;; idempotent setup a few times to ride out late-arriving updates.
   (add-hook 'emacs-startup-hook
@@ -2069,9 +2103,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Capture…"            org-capture              :keys "C-c p k"]
        ["New Journal Entry"   org-journal-new-entry    :keys "C-c p j"]
        ["Store Link"          org-store-link           :keys "C-c p l"]
-       ["Open Areas Folder"
-        (lambda () (interactive)
-          (dired (concat my-org-base-directory "Areas/")))
+       ["Open Notes Folder"
+        (lambda () (interactive) (dired my-org-base-directory))
         t])
       ("Insert Links"
        ["URL with Auto-title"        ps/org-insert-link-async                 :keys "C-c p u   /   F6"]

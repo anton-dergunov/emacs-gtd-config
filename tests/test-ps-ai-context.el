@@ -50,7 +50,7 @@
   (let ((block (ps/ai-context--render-conventions
                 '("TODO" "NEXT" "INPR" "WAIT" "MAYB") '("DONE")
                 ?A ?C
-                "Areas/" nil
+                "." nil
                 "Journal/" "%Y-%m-%d.org"
                 nil)))
     (should (string-prefix-p "<!-- BEGIN ps-generated -->\n" block))
@@ -61,27 +61,37 @@
     (should (string-match-p "`DONE` is the only terminal state" block))
     (should (string-match-p "`\\[#A\\]` (highest) to `\\[#C\\]` (lowest)" block))
     (should (string-match-p "no fixed tag list" block))
-    (should (string-match-p "under `Areas/` (any depth)" block))
+    (should (string-match-p "every `.org` file in these notes feeds the agenda" block))
     (should (string-match-p "does not log a timestamp automatically" block))
     (should (string-match-p "`Journal/`, named like `%Y-%m-%d.org`" block))))
+
+(ert-deftest ps/ai-context-test-render-conventions-subdir-scope ()
+  "A scan root below the Org base is named explicitly, not called \"these notes\"."
+  (let ((block (ps/ai-context--render-conventions
+                '("TODO") '("DONE") ?A ?C
+                "Areas/" nil
+                "Journal/" "%Y-%m-%d.org" nil)))
+    (should (string-match-p "under `Areas/` (any depth)" block))
+    (should (string-match-p "not in `Areas/`" block))
+    (should-not (string-match-p "these notes" block))))
 
 (ert-deftest ps/ai-context-test-render-conventions-no-journal ()
   "Without a journal configured, the journaling bullet is omitted entirely."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "Areas/" nil nil nil nil)))
+                '("TODO") '("DONE") ?A ?C "." nil nil nil nil)))
     (should-not (string-match-p "Journaling" block))))
 
 (ert-deftest ps/ai-context-test-render-conventions-fixed-tags ()
   "A defined tag list is rendered instead of the 'no fixed tag list' line."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "Areas/" '("work" "home") nil nil nil)))
+                '("TODO") '("DONE") ?A ?C "." '("work" "home") nil nil nil)))
     (should (string-match-p "a fixed set is defined: `work`, `home`" block))
     (should-not (string-match-p "no fixed tag list" block))))
 
 (ert-deftest ps/ai-context-test-render-conventions-log-done ()
   "When DONE logging is on, the block says so instead of the opposite."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "Areas/" nil nil nil t)))
+                '("TODO") '("DONE") ?A ?C "." nil nil nil t)))
     (should (string-match-p "logs a `CLOSED:` timestamp automatically" block))))
 
 ;;; Region replacement

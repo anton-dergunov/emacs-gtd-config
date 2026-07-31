@@ -3,6 +3,7 @@
 (require 'cl-lib)
 (require 'calendar)
 (require 'ps-file-tree)
+(require 'ps-org-files)
 (require 'ps-window)
 (require 'ps-mode-line)
 
@@ -127,13 +128,14 @@ Returns a list of `ps/conflict--event' structs."
     (nreverse events)))
 
 (defun ps/conflicts--load-events (directory)
-  "Load timed events from all .org files in DIRECTORY (recursive).
-Returns a list of `ps/conflict--event' structs. The file list is passed
-through `ps/file-tree-filter-files', so it is scoped to the active file
-set when `ps/file-tree-set-applies-to-agenda' is enabled."
+  "Load timed events from all .org files under DIRECTORY, at any depth.
+Returns a list of `ps/conflict--event' structs. The file list comes from
+`ps/org-files-in-directory' (so the same exclusions as the agenda apply) and
+is passed through `ps/file-tree-filter-files', so it is scoped to the active
+file set when `ps/file-tree-set-applies-to-agenda' is enabled."
   (let ((events '()))
     (dolist (file (ps/file-tree-filter-files
-                   (directory-files-recursively directory "\\.org$")))
+                   (ps/org-files-in-directory directory)))
       (setq events (append events
                             (ps/conflicts--extract-events-from-file file))))
     events))
@@ -394,7 +396,7 @@ ACTIVE non-nil renders it in the pressed/active face."
     (goto-char (point-min))))
 
 (defun ps/show-conflicts ()
-  "Show scheduling conflicts from the org Areas directory in a dedicated buffer.
+  "Show scheduling conflicts from the org notes directory in a dedicated buffer.
 Use +/- to adjust the gap threshold, p to toggle past events, g/r to refresh.
 Press RET or click on any task to jump to it in its org file."
   (interactive)
@@ -406,7 +408,7 @@ Press RET or click on any task to jump to it in its org file."
         (setq ps/conflicts--cur-gap          ps/conflicts-gap-minutes
               ps/conflicts--cur-include-past ps/conflicts-include-past))
       (setq ps/conflicts--cur-directory
-            (concat my-org-base-directory "Areas/"))
+            (ps/org-files-root))
       (ps/conflicts--buffer-render))
     (ps/window-show-here buf)))
 
@@ -427,7 +429,7 @@ Press RET or click on any task to jump to it in its org file."
   "Recompute the scheduling-conflict count for the agenda mode line."
   (when (and (boundp 'my-org-base-directory)
              (buffer-live-p (get-buffer org-agenda-buffer-name)))
-    (let* ((directory (concat my-org-base-directory "Areas/"))
+    (let* ((directory (ps/org-files-root))
            (result (ps/conflicts--find-all
                     directory ps/conflicts-gap-minutes ps/conflicts-include-past))
            (n (ps/conflicts--count result)))

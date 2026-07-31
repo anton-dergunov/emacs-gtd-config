@@ -3,6 +3,7 @@
 (require 'calendar)
 (require 'cl-lib)
 (require 'ps-file-tree)
+(require 'ps-org-files)
 (require 'ps-window)
 (require 'ps-mode-line)
 
@@ -116,13 +117,15 @@ Returns a list of (month day year start-mins end-mins) entries."
     (nreverse events)))
 
 (defun ps/org-avail--load-events (directory)
-  "Load timed events from all .org files in DIRECTORY.
+  "Load timed events from all .org files under DIRECTORY, at any depth.
 Returns a list of (month day year start-mins end-mins) entries. The file
-list is passed through `ps/file-tree-filter-files', so it is scoped to
-the active file set when `ps/file-tree-set-applies-to-agenda' is enabled."
+list comes from `ps/org-files-in-directory' (so the same exclusions as the
+agenda apply) and is passed through `ps/file-tree-filter-files', so it is
+scoped to the active file set when `ps/file-tree-set-applies-to-agenda' is
+enabled."
   (let ((events '()))
     (dolist (file (ps/file-tree-filter-files
-                   (directory-files directory t "\\.org$")))
+                   (ps/org-files-in-directory directory)))
       (setq events (append events
                             (ps/org-avail--extract-events-from-file file))))
     events))
@@ -285,7 +288,7 @@ RAW non-nil disables buffer expansion and minimum-duration filtering."
 ;;; Interactive buffer mode
 
 (defvar-local ps/org-avail--cur-directory nil
-  "Org Areas directory for the current availability buffer session.")
+  "Org notes directory for the current availability buffer session.")
 (defvar-local ps/org-avail--cur-days nil)
 (defvar-local ps/org-avail--cur-weekends nil)
 (defvar-local ps/org-avail--cur-time-fmt nil)
@@ -412,7 +415,7 @@ ACTIVE non-nil uses the pressed/active face instead of the normal button face."
     (goto-char (point-min))))
 
 (defun ps/org-show-availability ()
-  "Show availability from the org Areas directory in a dedicated buffer.
+  "Show availability from the org notes directory in a dedicated buffer.
 Settings persist for the session; use the header buttons or keybindings
 to adjust: +/- days, w weekends, t time format, l layout, g refresh."
   (interactive)
@@ -427,7 +430,7 @@ to adjust: +/- days, w weekends, t time format, l layout, g refresh."
               ps/org-avail--cur-time-fmt ps/org-avail-time-format
               ps/org-avail--cur-layout   ps/org-avail-layout))
       (setq ps/org-avail--cur-directory
-            (concat my-org-base-directory "Areas/"))
+            (ps/org-files-root))
       (ps/org-avail--buffer-render))
     (ps/window-show-here buf)))
 

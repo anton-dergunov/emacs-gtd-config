@@ -1,0 +1,15 @@
+#+TITLE: 2026-07-13
+
+* Monday, 13 July 2026
+** 09:20 Planning
+Sketched out the week. The retrieval evaluation work is the only thing that
+really matters this week; everything else can slip.
+
+** 17:45 Notes
+The async queue bug turned out to be a missing await, not a race. Worth
+remembering that "intermittent" does not automatically mean "concurrency".
+
+* Wednesday, 15 July 2026
+** 08:10 Notes
+Tried the paper habit sheet for the first time. Easier to glance at than an
+app, harder to ignore.

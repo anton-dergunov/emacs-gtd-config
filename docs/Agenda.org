@@ -5,7 +5,7 @@
 [[file:Index.org][↑ Back to the documentation index]]
 
 The agenda is the heart of this config: a single, calm view of what matters
-today, built from all the tasks across your =Areas/= files. This page explains
+today, built from all the tasks across your Org files. This page explains
 how to open it, how to read it, and the visual touches that make it pleasant to
 live in.
 

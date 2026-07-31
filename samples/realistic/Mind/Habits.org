@@ -1,0 +1,26 @@
+#+TITLE: Habits
+
+* Daily
+** INPR Morning planning block before opening email
+** TODO Shut the laptop at a fixed time
+** TODO Ten minutes of reading before bed
+** TODO One short walk between deep-work blocks
+
+* Weekly
+** NEXT Weekly review every Friday afternoon
+** TODO Clear the inbox down to zero
+** TODO Plan the week's focus on Sunday evening
+
+* Tracking
+** TODO Decide what is actually worth tracking
+** TODO Try a paper habit sheet for a month
+** MAYB Compare habit-tracking apps
+
+* Breaking
+** TODO Cut phone use in the first hour of the day
+** TODO Stop context-switching mid-task
+** WAIT Reduce evening screen time once the project ships
+
+* Notes
+- A habit needs a trigger, not just an intention
+- Two weeks is not enough to judge whether one stuck

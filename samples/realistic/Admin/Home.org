@@ -1,0 +1,24 @@
+#+TITLE: Home
+
+* Flat
+** TODO Fix the dripping kitchen tap
+** TODO Replace the hallway light bulbs
+** TODO Descale the kettle
+** WAIT Wait for the landlord's reply about the radiator
+
+* Purchases
+** TODO Buy a decent desk lamp
+** TODO Replace the worn-out doormat
+** MAYB Look at standing-desk converters
+
+* Admin
+** NEXT Renew the home insurance before it lapses
+** TODO File the utility statements
+** TODO Cancel the unused streaming subscription
+
+* Bicycle
+** TODO Service the gears
+** TODO Buy a stronger lock
+
+* Notes
+- Errands here are done once and then deleted

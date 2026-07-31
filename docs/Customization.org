@@ -140,8 +140,16 @@ Icons in the agenda and file tree come from the *Material Symbols Outlined* font
 until you provide a map. Do that in your =workspace.org= (so your categories stay
 private):
 
-- per-file: =ps/material-icons-category-map= (=<Category>.org= → icon name);
-- whole folders (e.g. =Current/=, =Vision/=): =ps/material-icons-folder-map=.
+- per file: =ps/material-icons-category-map= (=<Category>.org= → icon name);
+- per folder: =ps/material-icons-folder-map= — the icon drawn for the *folder
+  itself*, e.g. =("Current" . "calendar_month")=. Unmapped folders get a plain
+  folder icon;
+- for a folder's *contents*: =ps/material-icons-folder-contents-map= — one icon
+  for every =.org= file under that folder, instead of listing them all.
+
+Folder keys match a folder's name at any depth, or its path relative to the Org
+base — so ="older"= icons every folder of that name, while ="ML/older"= icons
+just the one. Category icons work the same wherever the file sits.
 
 See =samples/realistic/workspace.org= for a complete example. To fine-tune
 size/alignment, adjust =ps/material-icons-height-scale= and

@@ -2,24 +2,34 @@
 
 This file lives in your Org base directory (beside =init.org=) and is loaded
 after =config.org='s defaults, overriding them. It holds settings specific to
-*this data folder*: which Material Symbols icon each file/folder uses, and the
-file-tree file sets. Keeping them here (not in =config.org=) means pulling
-upstream changes never conflicts.
+*this data folder*: which Material Symbols icon each file/folder uses, the label
+of the file tree's root, and the file-tree file sets. Keeping them here (not in
+=config.org=) means pulling upstream changes never conflicts.
 
 Each =("Name" . "icon")= below is one alist pair (a cons cell): the left side is
-your =<Name>.org= file's basename, the right side is a Material Symbols name
-from https://fonts.google.com/icons. Keys must match your real file basenames.
+a file basename or a folder, the right side is a Material Symbols name from
+https://fonts.google.com/icons. Keys must match your real names.
 
 This particular file is the example shipped with the repo; it maps the sample
-=Areas/= files. Open =Productivity → Config → Workspace= to edit your own.
+folder's files and directories. Open =Productivity → Config → Workspace= to edit
+your own.
+
+* File tree root
+The label shown for the whole Org folder at the top of the file tree.
+#+begin_src emacs-lisp
+  (setq ps/file-tree-root-name "Notes")
+#+end_src
 
 * Category icons
+The icon drawn for a =<Name>.org= file, wherever it sits in the tree.
 #+begin_src emacs-lisp
   (ps/material-icons-add
    '(("Blog"         . "edit_square")
      ("Career"       . "work")
      ("Financial"    . "savings")
+     ("Habits"       . "repeat")
      ("Health"       . "spa")
+     ("Home"         . "cottage")
      ("Inbox"        . "drafts")
      ("Interviews"   . "frame_person_mic")
      ("Languages"    . "dictionary")
@@ -27,18 +37,38 @@ This particular file is the example shipped with the repo; it maps the sample
      ("Math"         . "calculate")
      ("Misc"         . "help_center")
      ("Photo"        . "photo_camera")
+     ("Prep"         . "school")
      ("Productivity" . "avg_time")
      ("Programming"  . "terminal")
      ("Projects"     . "lightbulb")
+     ("Sport"        . "exercise")
      ("Statistics"   . "finance")
-     ("Travel"       . "explore")
-     ("Work"         . "badge")))
+     ("Travel"       . "explore")))
 #+end_src
 
-* Whole-folder icons
-Icon every =.org= file directly inside a folder (here =Current/= and =Vision/=).
+* Folder icons
+The icon drawn for a *directory* itself. A key matches a folder's name at any
+depth, or its path relative to the Org base (e.g. ="ML/older"=). Folders with no
+entry get the plain folder glyph.
 #+begin_src emacs-lisp
   (setq ps/material-icons-folder-map
+        '(("ML"      . "neurology")
+          ("Work"    . "badge")
+          ("Body"    . "exercise")
+          ;("Mind"    . "psychology")
+          ("Play"    . "palette")
+          ("Admin"   . "home_work")
+          ("Current" . "calendar_month")
+          ("Vision"  . "mountain_flag")
+          ("Journal" . "book")))
+#+end_src
+
+* Whole-folder file icons
+Give every =.org= file under a folder the same icon, instead of listing them one
+by one above. Here =Current/= and =Vision/= hold time-horizon notes rather than
+topic files, so they read better with one shared icon.
+#+begin_src emacs-lisp
+  (setq ps/material-icons-folder-contents-map
         '(("Current" . "calendar_month")
           ("Vision"  . "mountain_flag")))
 #+end_src
@@ -50,10 +80,9 @@ tree's mode line.
 #+begin_src emacs-lisp
   (setq ps/file-tree-file-sets
         '(("All"  . (:include nil :exclude nil))
-          ("Work" . (:include ("/Areas/Career\\.org\\'"
-                               "/Areas/Work\\.org\\'"
+          ("Work" . (:include ("/Work/"
                                "/Current/")
                      :exclude nil))
           ("No Money" . (:include nil
-                         :exclude ("/Areas/Financial\\.org\\'")))))
+                         :exclude ("/Admin/Financial\\.org\\'")))))
 #+end_src

@@ -1,0 +1,26 @@
+#+TITLE: Sport
+
+* Running
+** TODO Rebuild base mileage after the winter break
+** TODO Find a flat 5k route near the park
+** TODO Replace worn running shoes
+** INPR Follow the easy-pace-only rule for a month
+
+* Strength
+** TODO Restart the two-day-a-week programme
+** TODO Learn a safer deadlift setup
+** TODO Add hanging work for grip
+** WAIT Book an induction at the new gym
+
+* Climbing
+** TODO Try a bouldering session
+** TODO Work on footwork drills
+** MAYB Look into an outdoor climbing weekend
+
+* Swimming
+** TODO Get back to a weekly pool session
+** TODO Fix breathing rhythm on freestyle
+
+* Notes
+- Consistency beats intensity for anything lasting longer than a month
+- Track sessions, not motivation

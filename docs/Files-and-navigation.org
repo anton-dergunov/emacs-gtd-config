@@ -15,6 +15,17 @@ in the agenda.
   or =M-x ps/file-tree-toggle=.
 - Click a file's *name* to open it; click a folder to expand/collapse it.
 
+The tree shows your whole Org base directory under a single root, so files
+sitting at the top level are visible and subfolders nest to *any depth*. Every
+folder gets an icon of its own, and you can give a particular folder its own
+icon — see [[file:Customization.org][Customization & appearance]].
+
+If you'd rather have each top-level folder as its own bold root (the older
+shape), set =ps/file-tree-root-mode= to ='subdirs= in =config.org=. Note that
+files sitting directly in the Org base directory are then not shown anywhere,
+because treemacs cannot nest one project inside another. =ps/file-tree-root-name=
+labels the single root; by default it is the directory's own name.
+
 If the Material Symbols font isn't installed, files fall back to simple
 folder/file icons — see [[file:Installation.org][Installation]] and [[file:Customization.org][Customization & appearance]].
 
@@ -69,7 +80,8 @@ open, are left exactly where they are.
 
 * Under the hood / Customize
 - The file tree (built on =treemacs=) is =lisp/ps-file-tree.el=, with its icon
-  theme in =lisp/ps-file-tree-icons.el=. Its ignore list and file sets are in
+  theme in =lisp/ps-file-tree-icons.el=. Its ignore list, root mode
+  (=ps/file-tree-root-mode=, =ps/file-tree-root-name=) and file sets are in
   =config.org= → /File Tree/ and in your =workspace.org=.
 - The icon-vs-name click behaviour is =ps/file-tree-click= /
   =ps/file-tree--click-label= in =lisp/ps-file-tree.el=.

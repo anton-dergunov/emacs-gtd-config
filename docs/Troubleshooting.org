@@ -16,8 +16,9 @@ missing optional dependency or a path that needs setting.
   restarting Emacs.
 
 * The agenda is empty
-- Check =my-org-base-directory= in =local.el= points at the right folder, and
-  that your task files are under its =Areas/= subfolder (see [[file:Planning-setup.org][Planning setup]]).
+- Check =my-org-base-directory= in =local.el= points at the right folder. Every
+  =.org= file under it is scanned, at any depth (see [[file:Planning-setup.org][Planning setup]]) — except
+  =Journal/=, =Archive/=, dotted folders, =init.org= and =workspace.org=.
 - If you've turned on *file-set filtering* (=C-c p g=), the agenda only shows the
   active set — toggle it off to see everything.
 

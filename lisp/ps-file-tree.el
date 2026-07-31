@@ -56,9 +56,11 @@ showing everything. It is also used as the fallback set by
 `ps/file-tree--ensure-valid-set' when `ps/file-tree-current-set' names a
 set that no longer exists.
 
-Set definitions should filter within existing top-level project
-directories, not target those directories themselves — switching sets
-re-renders existing projects but does not recompute the project list."
+Switching sets re-renders the existing projects but does not recompute the
+project list. With the default `ps/file-tree-root-mode' of `single' the
+whole tree is one project, so a set may target any directory in it. With
+`subdirs', a set should filter within the top-level project directories
+rather than targeting those directories themselves."
   :type '(alist :key-type string
                  :value-type (plist :key-type symbol :value-type (repeat regexp)))
   :group 'ps-file-tree)
@@ -81,6 +83,24 @@ Availability buffers (`ps/show-conflicts', `ps/org-show-availability').
 Toggle with `ps/file-tree-toggle-agenda-filter'. Persisted across restarts
 via `savehist-additional-variables', like `ps/file-tree-current-set'."
   :type 'boolean
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-root-mode 'single
+  "How the Org base directory is turned into treemacs projects.
+`single' (the default) makes the base directory itself one project, so files
+sitting directly in it are visible and subdirectories nest inside it to any
+depth. `subdirs' makes one project per immediate subdirectory instead, giving
+each a bold top-level label — but files directly in the base directory are then
+not shown anywhere. treemacs does not allow overlapping projects, so these two
+modes are mutually exclusive."
+  :type '(choice (const :tag "One project for the whole Org directory" single)
+                 (const :tag "One project per immediate subdirectory" subdirs))
+  :group 'ps-file-tree)
+
+(defcustom ps/file-tree-root-name nil
+  "Label for the single root project when `ps/file-tree-root-mode' is `single'.
+When nil, the Org base directory's own name is used."
+  :type '(choice (const :tag "The directory's own name" nil) string)
   :group 'ps-file-tree)
 
 (defcustom ps/file-tree-use-custom-icons t
@@ -357,11 +377,22 @@ Hidden via `ps/file-tree--ignored-p', sorted by name."
             (push (cons name entry) dirs)))))
     (sort dirs (lambda (a b) (string< (car a) (car b))))))
 
+(defun ps/file-tree--desired-projects (base-dir)
+  "Return the (NAME . PATH) projects the tree should show for BASE-DIR.
+Per `ps/file-tree-root-mode': one entry for BASE-DIR itself (`single'), named
+`ps/file-tree-root-name' or after the directory; or one per immediate
+subdirectory (`subdirs')."
+  (if (eq ps/file-tree-root-mode 'subdirs)
+      (ps/file-tree--list-subdirs base-dir)
+    (list (cons (or ps/file-tree-root-name
+                    (file-name-nondirectory (directory-file-name base-dir)))
+                (directory-file-name base-dir)))))
+
 (defun ps/file-tree-set-projects (base-dir)
-  "Make the workspace contain exactly one project per subdirectory of BASE-DIR.
-Removes any existing projects whose path is not one of BASE-DIR's immediate
-subdirectories, and adds projects for any that are missing."
-  (let* ((desired (ps/file-tree--list-subdirs base-dir))
+  "Make the workspace contain exactly the projects BASE-DIR should show.
+Removes any existing project that `ps/file-tree--desired-projects' does not
+list, and adds any that are missing."
+  (let* ((desired (ps/file-tree--desired-projects base-dir))
          (desired-paths (mapcar (lambda (d) (treemacs-canonical-path (cdr d))) desired))
          (existing (treemacs-workspace->projects (treemacs-current-workspace))))
     (dolist (project existing)

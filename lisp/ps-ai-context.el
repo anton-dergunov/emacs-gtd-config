@@ -29,6 +29,7 @@
 ;;; Code:
 
 (require 'subr-x)
+(require 'ps-org-files)
 
 (defvar my-org-base-directory)
 (defvar org-todo-keywords)
@@ -98,15 +99,20 @@ Skips group markers and other non-string entries."
 ACTIVE-KEYWORDS and DONE-KEYWORDS are lists of plain TODO keyword names (no
 fast-select suffix), in `org-todo-keywords' order. PRIORITY-HIGH/-LOW are the
 `org-highest-priority'/`org-lowest-priority' characters. AGENDA-SUBDIR is the
-path, relative to the Org base, recursively scanned for the agenda.
+path, relative to the Org base, recursively scanned for the agenda -- nil,
+\".\" or \"./\" mean the Org base directory itself, which is rendered as
+\"these notes\" rather than as a subdirectory name.
 TAG-NAMES is a list of tag strings, or nil if no fixed tag list is defined.
 JOURNAL-SUBDIR/JOURNAL-FORMAT are `org-journal-dir' (relative to the Org
 base) and `org-journal-file-format', or nil if no journal is configured.
 LOG-DONE mirrors `org-log-done'.
 Pure: takes no Emacs/Org state, only formats its arguments, so it is
 ERT-testable in isolation from `ps/ai-context-sync'."
-  (let ((states-str (mapconcat (lambda (k) (format "`%s`" k))
-                                (append active-keywords done-keywords) " → ")))
+  (let* ((states-str (mapconcat (lambda (k) (format "`%s`" k))
+                                 (append active-keywords done-keywords) " → "))
+         (whole-tree (member (or agenda-subdir ".") '("." "./")))
+         ;; How the scanned area is named in prose, and where "elsewhere" is.
+         (scope (if whole-tree "these notes" (format "`%s`" agenda-subdir))))
     (concat
      ps/ai-context--begin-marker "\n"
      "<!-- Auto-generated from config.org by ps/ai-context-sync. Edit config.org,\n"
@@ -126,18 +132,23 @@ ERT-testable in isolation from `ps/ai-context-sync'."
                  (mapconcat (lambda (tg) (format "`%s`" tg)) tag-names ", "))
        (concat "- **Tags:** no fixed tag list. Reuse whatever tags a file already has; don't\n"
                "  invent a scheme.\n"))
-     (format (concat "- **Where tasks live:** only `.org` files under `%s` (any depth) feed the\n"
-                      "  agenda. Files elsewhere are not scanned automatically -- put something\n"
-                      "  under `%s` if you want it to show up in the agenda.\n")
-             agenda-subdir agenda-subdir)
+     (if whole-tree
+         (concat "- **Where tasks live:** every `.org` file in these notes feeds the agenda, at\n"
+                 "  any depth. The directory layout is yours to choose -- put a task in\n"
+                 "  whichever file fits, and it will show up.\n")
+       (format (concat "- **Where tasks live:** only `.org` files under `%s` (any depth) feed the\n"
+                        "  agenda. Files elsewhere are not scanned automatically -- put something\n"
+                        "  under `%s` if you want it to show up in the agenda.\n")
+               agenda-subdir agenda-subdir))
      (if log-done
          "- **Marking something DONE** logs a `CLOSED:` timestamp automatically.\n"
        (concat "- **Marking something DONE** does not log a timestamp automatically -- don't\n"
                "  add a `CLOSED:` line or logbook entry yourself unless the file already does.\n"))
      (if journal-subdir
          (format (concat "- **Journaling:** if asked to journal something, that goes in a file under\n"
-                          "  `%s`, named like `%s` -- not in `%s`.\n")
-                 journal-subdir journal-format agenda-subdir)
+                          "  `%s`, named like `%s` -- not in %s. The journal is not\n"
+                          "  scanned for the agenda.\n")
+                 journal-subdir journal-format scope)
        "")
      "\n"
      ps/ai-context--end-marker)))
@@ -168,9 +179,11 @@ delimited region to replace."
     (let ((file (expand-file-name "AGENTS.md" my-org-base-directory)))
       (when (file-exists-p file)
         (let* ((parsed (ps/ai-context--parse-todo-keywords org-todo-keywords))
-               ;; "Areas/" mirrors the literal in `ps/agenda-files-refresh' in
-               ;; config.org -- if that ever changes, this must change too.
-               (agenda-subdir "Areas/")
+               ;; Read from the same source as `ps/agenda-files-refresh', so the
+               ;; generated block can never drift from what is actually scanned.
+               ;; "." when the scan root is the Org base directory itself.
+               (agenda-subdir (file-relative-name (ps/org-files-root)
+                                                  my-org-base-directory))
                (tag-names (or (ps/ai-context--tag-names org-tag-alist)
                                (ps/ai-context--tag-names org-tag-persistent-alist)))
                (journal-subdir (and (boundp 'org-journal-dir) org-journal-dir

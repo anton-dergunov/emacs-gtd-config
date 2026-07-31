@@ -1,5 +1,24 @@
 ;;; ps-file-tree-icons.el --- Category icons for the file tree -*- lexical-binding: t; -*-
 
+;;; Commentary:
+
+;; Builds a treemacs icon theme for the Org file tree.  Icon selection is split
+;; in two: `ps/file-tree-icons--collect' is a pure function mapping treemacs
+;; icon keys to Material Symbols glyph *names*, and the apply step turns each
+;; name into an image (a font glyph, or the same-named SVG in
+;; `ps/file-tree-icon-fallback-dir' when the font is missing) and registers it.
+;;
+;; The collected keys cover every kind of node treemacs draws:
+;;   - `root-open' / `root-closed'  -- project root labels
+;;   - `dir-open' / `dir-closed'    -- the generic directory icons
+;;   - "<dir>-open" / "<dir>-closed" -- a directory with its own mapped icon
+;;   - "<file>.org"                 -- a file
+;; Directories and files are found by walking the whole Org tree, so nesting to
+;; any depth works.
+
+;;; Code:
+
+(require 'cl-lib)
 (require 'ps-file-tree)
 (require 'ps-material-icons)
 
@@ -16,11 +35,90 @@
 ;; Material Symbols names for the structural icons (hardcoded — not part of the
 ;; user-facing category map).
 (defconst ps/file-tree-icons--folder-closed "folder"
-  "Material Symbols name for the closed-folder (project root) icon.")
+  "Material Symbols name for the closed-folder icon (project roots and dirs).")
 (defconst ps/file-tree-icons--folder-open "folder_open"
-  "Material Symbols name for the open-folder (project root) icon.")
+  "Material Symbols name for the open-folder icon (project roots and dirs).")
 (defconst ps/file-tree-icons--file "draft"
   "Material Symbols name for the generic file icon.")
+
+;;; Tree walk
+
+(defun ps/file-tree-icons--ignored-name-p (name)
+  "Return non-nil if NAME matches `ps/file-tree-ignored-files'."
+  (cl-some (lambda (rx) (string-match-p rx name)) ps/file-tree-ignored-files))
+
+(defun ps/file-tree-icons--walk (dir)
+  "Return (DIRS . FILES) for everything under DIR, recursively.
+DIRS is every subdirectory and FILES every .org file, as absolute paths.
+Names matching `ps/file-tree-ignored-files' are skipped along with their
+contents, so the walk sees exactly what the file tree displays."
+  (let ((dirs '()) (files '()))
+    (when (file-directory-p dir)
+      (dolist (entry (directory-files dir t))
+        (let ((name (file-name-nondirectory entry)))
+          (unless (or (member name '("." ".."))
+                      (ps/file-tree-icons--ignored-name-p name))
+            (if (file-directory-p entry)
+                (let ((sub (ps/file-tree-icons--walk entry)))
+                  (setq dirs (append (car sub) (cons entry dirs)))
+                  (setq files (append (cdr sub) files)))
+              (when (string-match-p "\\.org\\'" name)
+                (push entry files)))))))
+    (cons (sort dirs #'string<) (sort files #'string<))))
+
+(defun ps/file-tree-icons--folder-icon (dir base-dir map)
+  "Return MAP's icon name for DIR, or nil.
+DIR matches an entry keyed by its own name or by its path relative to
+BASE-DIR, so \"older\" matches every folder of that name and \"ML/older\"
+matches just the one."
+  (let ((name (file-name-nondirectory (directory-file-name dir)))
+        (relative (directory-file-name (file-relative-name dir base-dir))))
+    (cdr (or (assoc name map) (assoc relative map)))))
+
+;;; Icon-key collection (pure)
+
+(defun ps/file-tree-icons--collect (base-dir)
+  "Return an alist of (KEY . GLYPH-NAME) for every icon the tree should draw.
+KEY is a treemacs icon key: one of the symbols `root-open', `root-closed',
+`dir-open', `dir-closed'; a \"<dir>-open\"/\"<dir>-closed\" string for a
+directory with its own mapped icon; or a downcased file name.  Takes no
+Emacs/treemacs state beyond the icon maps and the contents of BASE-DIR, so it
+is ERT-testable in isolation."
+  (let* ((walk (ps/file-tree-icons--walk base-dir))
+         (dirs (car walk))
+         (files (cdr walk))
+         (keys '())
+         (add (lambda (key name) (push (cons key name) keys))))
+    ;; 1. Structural icons.  The root may carry its own mapped icon; every
+    ;;    other directory falls back to the generic folder glyphs.
+    (let ((root (ps/file-tree-icons--folder-icon
+                 base-dir base-dir ps/material-icons-folder-map)))
+      (funcall add 'root-open (or root ps/file-tree-icons--folder-open))
+      (funcall add 'root-closed (or root ps/file-tree-icons--folder-closed)))
+    (funcall add 'dir-open ps/file-tree-icons--folder-open)
+    (funcall add 'dir-closed ps/file-tree-icons--folder-closed)
+    ;; 2. Per-directory icons, at any depth.  Sorted paths mean a nested entry
+    ;;    is registered after (and so wins over) its parent's.
+    (dolist (dir dirs)
+      (when-let ((icon (ps/file-tree-icons--folder-icon
+                        dir base-dir ps/material-icons-folder-map)))
+        (let ((key (downcase (file-name-nondirectory (directory-file-name dir)))))
+          (funcall add (concat key "-open") icon)
+          (funcall add (concat key "-closed") icon))))
+    ;; 3. Files, weakest first: the generic glyph, then per-category icons,
+    ;;    then whole-folder contents icons.
+    (dolist (file files)
+      (funcall add (downcase (file-name-nondirectory file))
+               ps/file-tree-icons--file))
+    (dolist (entry ps/material-icons-category-map)
+      (funcall add (downcase (concat (car entry) ".org")) (cdr entry)))
+    (dolist (dir dirs)
+      (when-let ((icon (ps/file-tree-icons--folder-icon
+                        dir base-dir ps/material-icons-folder-contents-map)))
+        (dolist (file files)
+          (when (string-prefix-p (file-name-as-directory dir) file)
+            (funcall add (downcase (file-name-nondirectory file)) icon)))))
+    (nreverse keys)))
 
 ;;; Image / icon-string builders
 
@@ -57,47 +155,13 @@ Height is `ps/material-icons--pixel-height' (font-derived); `:ascent' is
   (ht-set! (treemacs-theme->gui-icons treemacs--current-theme) key (or icon ""))
   (ht-set! (treemacs-theme->tui-icons treemacs--current-theme) key ""))
 
-(defun ps/file-tree-icons--register-file (file icon)
-  "Register ICON as the file-tree icon for FILE (matched by exact name)."
-  (when icon
-    (ps/file-tree-icons--set (downcase (file-name-nondirectory file)) icon)))
-
-(defun ps/file-tree-icons--register-dir-files (dir icon)
-  "Register ICON as the file-tree icon for every .org file directly in DIR."
-  (when (and icon (file-directory-p dir))
-    (dolist (file (directory-files dir nil "\\.org\\'"))
-      (ps/file-tree-icons--register-file file icon))))
-
-(defun ps/file-tree-icons--register-root-icons (open-icon closed-icon)
-  "Set the icons shown before every top-level project root label."
-  (ps/file-tree-icons--set 'root-open open-icon)
-  (ps/file-tree-icons--set 'root-closed closed-icon))
-
-(defun ps/file-tree-icons--register-categories ()
-  "Register a glyph icon for each `(BASENAME . NAME)' in the category map."
-  (dolist (entry ps/material-icons-category-map)
-    (ps/file-tree-icons--register-file
-     (concat (car entry) ".org")
-     (ps/file-tree-icons--glyph (cdr entry)))))
-
-(defun ps/file-tree-icons--register-folders (base-dir)
-  "Register whole-folder glyph icons per `ps/material-icons-folder-map'.
-Each `(FOLDER . NAME)' icons every .org file directly in BASE-DIR/FOLDER."
-  (dolist (entry ps/material-icons-folder-map)
-    (ps/file-tree-icons--register-dir-files
-     (expand-file-name (car entry) base-dir)
-     (ps/file-tree-icons--glyph (cdr entry)))))
-
-(defun ps/file-tree-icons--register-file-fallback (base-dir)
-  "Register the generic `draft' glyph for unmapped .org files under BASE-DIR.
-Applies to direct .org files of the `Areas' subdirectory that have no entry in
-`ps/material-icons-category-map'."
-  (when-let* ((icon (ps/file-tree-icons--glyph ps/file-tree-icons--file))
-              (dir (expand-file-name "Areas" base-dir))
-              ((file-directory-p dir)))
-    (dolist (file (directory-files dir nil "\\.org\\'"))
-      (unless (assoc (file-name-base file) ps/material-icons-category-map)
-        (ps/file-tree-icons--register-file file icon)))))
+(defun ps/file-tree-icons--apply-keys (keys renderer)
+  "Register KEYS, an alist of (KEY . GLYPH-NAME), rendering each via RENDERER.
+RENDERER takes a glyph name and returns an icon string, or nil when it cannot
+draw that name — such keys are left alone so treemacs's own icon shows."
+  (dolist (entry keys)
+    (when-let ((icon (funcall renderer (cdr entry))))
+      (ps/file-tree-icons--set (car entry) icon))))
 
 (defun ps/file-tree-icons--override-tag-icons ()
   "Restyle treemacs's tag icons (org headings) to match file/dir icons.
@@ -119,44 +183,31 @@ icon that has no image (e.g. a TUI fallback string)."
                    (ps/file-tree-icons--icon-string
                     (ps/file-tree-icons--file-image file 'heuristic))))))))
 
-;;; Font-missing fallback (uses the SVGs in `ps/file-tree-icon-fallback-dir',
-;;; named after the glyphs they stand in for: folder.svg, folder_open.svg,
-;;; draft.svg — so the same constants name both the glyph and its fallback).
-
-(defun ps/file-tree-icons--apply-fallback (base-dir)
-  "Register the no-font fallback icons: folder SVGs for roots, draft for files."
-  (ps/file-tree-icons--register-root-icons
-   (ps/file-tree-icons--fallback-svg ps/file-tree-icons--folder-open)
-   (ps/file-tree-icons--fallback-svg ps/file-tree-icons--folder-closed))
-  (when-let ((file-icon (ps/file-tree-icons--fallback-svg ps/file-tree-icons--file)))
-    (dolist (sub '("Areas" "Current" "Vision"))
-      (ps/file-tree-icons--register-dir-files
-       (expand-file-name sub base-dir) file-icon))))
-
 ;;; Public entry point
 
 (defun ps/file-tree-icons-apply (base-dir)
   "Register a treemacs theme drawing file-tree icons from Material Symbols.
-Maps each `<Category>.org' under BASE-DIR to its glyph
-(`ps/material-icons-category-map'), icons the `Current'/`Vision' folders
-wholesale (`ps/material-icons-folder-map'), uses the generic `draft' glyph for
-unmapped files, and the folder glyphs for project roots. When the Material
-Symbols font is unavailable, falls back to the SVGs in
-`ps/file-tree-icon-fallback-dir'. Does nothing if treemacs isn't available."
+Walks BASE-DIR and icons every directory and .org file in it, at any depth:
+files per `ps/material-icons-category-map', directories per
+`ps/material-icons-folder-map', whole folders of files per
+`ps/material-icons-folder-contents-map', and the generic folder/file glyphs
+for everything else.  When the Material Symbols font is unavailable, the same
+icon names are drawn from the same-named SVGs in
+`ps/file-tree-icon-fallback-dir' (only the structural glyphs ship with the
+repo, so mapped icons simply keep treemacs's default there).  Does nothing if
+treemacs isn't available."
   (when (require 'treemacs nil t)
-    (treemacs-create-theme "ps-file-tree"
-      :extends "Default"
-      :config
-      (if (ps/material-icons-available-p)
-          (progn
-            (ps/file-tree-icons--register-categories)
-            (ps/file-tree-icons--register-folders base-dir)
-            (ps/file-tree-icons--register-file-fallback base-dir)
-            (ps/file-tree-icons--register-root-icons
-             (ps/file-tree-icons--glyph ps/file-tree-icons--folder-open)
-             (ps/file-tree-icons--glyph ps/file-tree-icons--folder-closed))
-            (ps/file-tree-icons--override-tag-icons))
-        (ps/file-tree-icons--apply-fallback base-dir)))
+    (let ((keys (ps/file-tree-icons--collect base-dir))
+          (font (ps/material-icons-available-p)))
+      (treemacs-create-theme "ps-file-tree"
+        :extends "Default"
+        :config
+        (progn
+          (ps/file-tree-icons--apply-keys
+           keys (if font
+                    #'ps/file-tree-icons--glyph
+                  #'ps/file-tree-icons--fallback-svg))
+          (when font (ps/file-tree-icons--override-tag-icons)))))
     (treemacs-load-theme "ps-file-tree")))
 
 (provide 'ps-file-tree-icons)

@@ -17,7 +17,7 @@ Examples
 
   # exactly 50 copies of a chosen sample
   python3 scripts/generate_org_sample.py \\
-      --source samples/realistic/Areas/Career.org \\
+      --source samples/realistic/Work/Career.org \\
       --copies 50 --output /tmp/big.org
 
   # a bit over 1 MB, flat (no added headings) to mimic an inbox of paragraphs
@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SOURCE = REPO_ROOT / "samples" / "realistic" / "Areas" / "Career.org"
+DEFAULT_SOURCE = REPO_ROOT / "samples" / "realistic" / "Work" / "Career.org"
 
 _SIZE_UNITS = {"": 1, "B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
 _HEADING_RE = re.compile(r"^(\*+)(\s)", re.MULTILINE)

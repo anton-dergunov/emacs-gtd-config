@@ -53,44 +53,44 @@ others as empty files."
   "The default \"All\" set (nil/nil) hides nothing."
   (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))))
         (ps/file-tree-current-set "All"))
-    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Secret.org"))))
+    (should-not (ps/file-tree--set-hidden-p "/base/Admin/Secret.org"))))
 
 (ert-deftest ps/file-tree--set-hidden-exclude-only ()
   "A path matching :exclude is hidden; non-matching paths are not."
   (let ((ps/file-tree-file-sets
          '(("NoSecrets" . (:include nil :exclude ("Secret")))))
         (ps/file-tree-current-set "NoSecrets"))
-    (should (ps/file-tree--set-hidden-p "/base/Areas/Secret.org"))
-    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Career.org"))))
+    (should (ps/file-tree--set-hidden-p "/base/Admin/Secret.org"))
+    (should-not (ps/file-tree--set-hidden-p "/base/Work/Career.org"))))
 
 (ert-deftest ps/file-tree--set-hidden-include-only-hides-non-matching ()
   "With :include set, a non-matching leaf path is hidden."
   (let ((ps/file-tree-file-sets
          '(("Work" . (:include ("/Work/") :exclude nil))))
         (ps/file-tree-current-set "Work"))
-    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Work/Project.org"))
-    (should (ps/file-tree--set-hidden-p "/base/Areas/Personal/Diary.org"))))
+    (should-not (ps/file-tree--set-hidden-p "/base/Work/Projects/Plan.org"))
+    (should (ps/file-tree--set-hidden-p "/base/Mind/Personal/Diary.org"))))
 
 (ert-deftest ps/file-tree--set-hidden-include-shows-dir-with-whitelisted-descendant ()
   "A directory with a whitelisted descendant remains visible for navigation."
   (let ((ps/file-tree-file-sets
-         '(("Work" . (:include ("Project\\.org") :exclude nil))))
+         '(("Work" . (:include ("Plan\\.org") :exclude nil))))
         (ps/file-tree-current-set "Work"))
-    (ps/file-tree-test--with-base-dir '("Areas/" "Areas/Work/" "Areas/Work/Project.org" "Areas/Other.org")
-      ;; "Areas" itself doesn't match, but contains a descendant that does.
-      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas" dir)))
-      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas/Work" dir)))
-      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Areas/Work/Project.org" dir)))
+    (ps/file-tree-test--with-base-dir '("Work/" "Work/Projects/" "Work/Projects/Plan.org" "Work/Other.org")
+      ;; "Work" itself doesn't match, but contains a descendant that does.
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work/Projects" dir)))
+      (should-not (ps/file-tree--set-hidden-p (expand-file-name "Work/Projects/Plan.org" dir)))
       ;; Sibling file with no matching descendant and no match itself: hidden.
-      (should (ps/file-tree--set-hidden-p (expand-file-name "Areas/Other.org" dir))))))
+      (should (ps/file-tree--set-hidden-p (expand-file-name "Work/Other.org" dir))))))
 
 (ert-deftest ps/file-tree--set-hidden-combined-include-and-exclude ()
   "Exclude wins even within an included subtree."
   (let ((ps/file-tree-file-sets
          '(("Work" . (:include ("/Work/") :exclude ("Confidential")))))
         (ps/file-tree-current-set "Work"))
-    (should-not (ps/file-tree--set-hidden-p "/base/Areas/Work/Plan.org"))
-    (should (ps/file-tree--set-hidden-p "/base/Areas/Work/Confidential.org"))))
+    (should-not (ps/file-tree--set-hidden-p "/base/Work/Projects/Plan.org"))
+    (should (ps/file-tree--set-hidden-p "/base/Work/Projects/Confidential.org"))))
 
 (ert-deftest ps/file-tree--ignored-p-set-exclude-combines-with-ignored-files ()
   "`ps/file-tree--ignored-p' hides files via either ignore-list or set exclude."
@@ -98,8 +98,8 @@ others as empty files."
         (ps/file-tree-file-sets '(("Secret" . (:include nil :exclude ("Diary")))))
         (ps/file-tree-current-set "Secret"))
     (should (ps/file-tree--ignored-p "init.org" "/base/init.org"))
-    (should (ps/file-tree--ignored-p "Diary.org" "/base/Areas/Diary.org"))
-    (should-not (ps/file-tree--ignored-p "Career.org" "/base/Areas/Career.org"))))
+    (should (ps/file-tree--ignored-p "Diary.org" "/base/Mind/Diary.org"))
+    (should-not (ps/file-tree--ignored-p "Career.org" "/base/Work/Career.org"))))
 
 ;;; -------------------------------------------------------
 ;;; ps/file-tree--ensure-valid-set / set switching
@@ -141,22 +141,22 @@ others as empty files."
 (ert-deftest ps/file-tree-filter-files-noop-when-disabled ()
   "When the toggle is off, FILES is returned unchanged regardless of set."
   (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
-                                   ("Work" . (:include ("/Areas/Work\\.org\\'")
+                                   ("Work" . (:include ("/Work/Prep\\.org\\'")
                                               :exclude nil))))
         (ps/file-tree-current-set "Work")
         (ps/file-tree-set-applies-to-agenda nil)
-        (files '("/base/Areas/Work.org" "/base/Areas/Career.org")))
+        (files '("/base/Work/Prep.org" "/base/Work/Career.org")))
     (should (equal (ps/file-tree-filter-files files) files))))
 
 (ert-deftest ps/file-tree-filter-files-removes-hidden-when-enabled ()
   "When the toggle is on, files hidden by the current set are removed."
   (let ((ps/file-tree-file-sets '(("All" . (:include nil :exclude nil))
-                                   ("Work" . (:include ("/Areas/Work\\.org\\'")
+                                   ("Work" . (:include ("/Work/Prep\\.org\\'")
                                               :exclude nil))))
         (ps/file-tree-current-set "Work")
         (ps/file-tree-set-applies-to-agenda t)
-        (files '("/base/Areas/Work.org" "/base/Areas/Career.org")))
-    (should (equal (ps/file-tree-filter-files files) '("/base/Areas/Work.org")))))
+        (files '("/base/Work/Prep.org" "/base/Work/Career.org")))
+    (should (equal (ps/file-tree-filter-files files) '("/base/Work/Prep.org")))))
 
 (ert-deftest ps/file-tree-toggle-agenda-filter-flips-variable ()
   "Toggling twice returns to the original value."
@@ -182,30 +182,61 @@ others as empty files."
 (ert-deftest ps/file-tree--list-subdirs-returns-only-visible-dirs ()
   "Only non-ignored subdirectories are returned, files are excluded."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
-    (ps/file-tree-test--with-base-dir '("Areas/" "Current/" ".git/" "notes.org")
+    (ps/file-tree-test--with-base-dir '("ML/" "Current/" ".git/" "notes.org")
       (let ((names (mapcar #'car (ps/file-tree--list-subdirs dir))))
-        (should (equal names '("Areas" "Current")))))))
+        (should (equal names '("Current" "ML")))))))
 
 (ert-deftest ps/file-tree--list-subdirs-sorted-by-name ()
   "Entries are sorted alphabetically by name."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
-    (ps/file-tree-test--with-base-dir '("Vision/" "Areas/" "Current/")
+    (ps/file-tree-test--with-base-dir '("Vision/" "ML/" "Current/")
       (let ((names (mapcar #'car (ps/file-tree--list-subdirs dir))))
-        (should (equal names '("Areas" "Current" "Vision")))))))
+        (should (equal names '("Current" "ML" "Vision")))))))
 
 (ert-deftest ps/file-tree--list-subdirs-entries-are-abs-paths ()
   "Each entry maps NAME to an absolute path of the subdirectory."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
-    (ps/file-tree-test--with-base-dir '("Areas/")
+    (ps/file-tree-test--with-base-dir '("ML/")
       (let ((entry (car (ps/file-tree--list-subdirs dir))))
-        (should (equal (car entry) "Areas"))
+        (should (equal (car entry) "ML"))
         (should (file-name-absolute-p (cdr entry)))
-        (should (string-suffix-p "Areas" (cdr entry)))))))
+        (should (string-suffix-p "ML" (cdr entry)))))))
 
 (ert-deftest ps/file-tree--list-subdirs-missing-dir ()
   "A non-existent base directory yields nil."
   (let ((ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
     (should (null (ps/file-tree--list-subdirs "/no/such/dir/at/all")))))
+
+;;; -------------------------------------------------------
+;;; ps/file-tree--desired-projects
+;;; -------------------------------------------------------
+
+(ert-deftest ps/file-tree--desired-projects-single-is-the-base-dir ()
+  "In `single' mode the whole Org directory is one project, named after it."
+  (let ((ps/file-tree-root-mode 'single)
+        (ps/file-tree-root-name nil))
+    (ps/file-tree-test--with-base-dir '("ML/" "Work/" "Inbox.org")
+      (let ((projects (ps/file-tree--desired-projects dir)))
+        (should (= (length projects) 1))
+        (should (equal (car (car projects))
+                       (file-name-nondirectory (directory-file-name dir))))
+        (should (equal (cdr (car projects)) (directory-file-name dir)))))))
+
+(ert-deftest ps/file-tree--desired-projects-single-honors-root-name ()
+  "`ps/file-tree-root-name' overrides the label of the single root."
+  (let ((ps/file-tree-root-mode 'single)
+        (ps/file-tree-root-name "Notes"))
+    (ps/file-tree-test--with-base-dir '("ML/")
+      (should (equal (car (car (ps/file-tree--desired-projects dir))) "Notes")))))
+
+(ert-deftest ps/file-tree--desired-projects-subdirs-is-one-per-subdir ()
+  "In `subdirs' mode each immediate subdirectory becomes its own project."
+  (let ((ps/file-tree-root-mode 'subdirs)
+        (ps/file-tree-root-name "Notes")
+        (ps/file-tree-ignored-files (default-value 'ps/file-tree-ignored-files)))
+    (ps/file-tree-test--with-base-dir '("ML/" "Work/" ".git/" "Inbox.org")
+      (should (equal (mapcar #'car (ps/file-tree--desired-projects dir))
+                     '("ML" "Work"))))))
 
 ;;; -------------------------------------------------------
 ;;; ps/file-tree-transform-file-name / ps/file-tree-transform-dir-name
@@ -242,7 +273,7 @@ others as empty files."
 (ert-deftest ps/file-tree-transform-dir-name-adds-spacing-only ()
   "Directory names gain leading spacing without any extension stripping."
   (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
-    (should (equal (ps/file-tree-transform-dir-name "Areas") " Areas"))
+    (should (equal (ps/file-tree-transform-dir-name "Work") " Work"))
     (should (equal (ps/file-tree-transform-dir-name "Career.org") " Career.org"))))
 
 ;;; -------------------------------------------------------

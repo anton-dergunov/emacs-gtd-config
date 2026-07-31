@@ -68,9 +68,25 @@ Consumed by both the agenda category icons and the file tree.  Left empty in
   :group 'ps-material-icons)
 
 (defcustom ps/material-icons-folder-map nil
-  "Alist mapping a folder name to a Material Symbols name for whole-folder icons.
-Each entry is (FOLDER-NAME . ICON-NAME), e.g. (\"Current\" . \"calendar_month\").
-Used by the file tree to icon every .org file directly in that folder."
+  "Alist mapping a folder to a Material Symbols name for the folder's own icon.
+Each entry is (FOLDER . ICON-NAME), e.g. (\"Current\" . \"calendar_month\"), and
+sets the icon the file tree draws before that *directory* — at any depth.
+FOLDER is matched against a directory's name or its path relative to the Org
+base, so \"older\" icons every folder of that name while \"ML/older\" icons just
+the one.  The same icon is used open and closed.  Directories with no entry get
+the generic folder glyphs.  To icon the *files inside* a folder instead, see
+`ps/material-icons-folder-contents-map'."
+  :type '(alist :key-type string :value-type string)
+  :group 'ps-material-icons)
+
+(defcustom ps/material-icons-folder-contents-map nil
+  "Alist mapping a folder to a Material Symbols name for the files inside it.
+Each entry is (FOLDER . ICON-NAME), e.g. (\"Vision\" . \"mountain_flag\"), and
+icons every .org file under that folder, at any depth, that would otherwise
+fall back to the generic file glyph.  FOLDER is matched like
+`ps/material-icons-folder-map'.  Entries here take precedence over
+`ps/material-icons-category-map', so a whole folder can be iconed uniformly
+without listing its files."
   :type '(alist :key-type string :value-type string)
   :group 'ps-material-icons)
 

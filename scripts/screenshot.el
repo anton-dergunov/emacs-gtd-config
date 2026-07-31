@@ -65,7 +65,7 @@
   (let ((fake-day (time-to-days (date-to-time fake-date))))
     (advice-add 'org-today :override (lambda () fake-day))))
 
-(defvar ps/screenshot-org-file "Areas/Career.org"
+(defvar ps/screenshot-org-file "Work/Career.org"
   "Org file (relative to `my-org-base-directory') shown in the top window.")
 
 ;; Build a deterministic two-window layout: chosen org file on top, agenda

@@ -61,7 +61,9 @@ To explore before committing to a layout, point it at the bundled example:
       (expand-file-name "samples/realistic/" user-emacs-directory))
 #+end_src
 
-See [[file:Planning-setup.org][Planning setup]] for the folder layout the agenda expects.
+Every =.org= file under that directory feeds the agenda, at any depth, so you
+are free to organize it however you like. See [[file:Planning-setup.org][Planning setup]] for a suggested
+layout and for the handful of names that are skipped.
 
 * 5. First launch
 Start Emacs. On the first run it downloads its packages into =elpa/= (this takes

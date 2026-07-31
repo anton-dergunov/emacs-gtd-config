@@ -1,4 +1,4 @@
-#+TITLE: Work
+#+TITLE: Prep
 
 * ML Infrastructure
 ** TODO Improve experiment tracking workflow
