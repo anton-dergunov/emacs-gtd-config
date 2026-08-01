@@ -116,9 +116,15 @@ sequence (kept to four characters so the agenda stays compact):
 | =MAYB=  | maybe / someday — not committed           |
 | =DONE=  | finished (drops out of the active agenda) |
 
-In practice many people lean on =INPR= plus *priorities* (below) rather than
-=NEXT= to decide what to work on — the agenda has dedicated /In progress/ and
-/High-priority/ sections for exactly this.
+Three of these states drive what you see when you open the agenda: =INPR= fills
+its /In progress/ section, =NEXT= fills /Next up/, and priority =A= (below)
+fills /High-priority/. Between them they answer "what matters", "what am I in
+the middle of" and "what do I start next" — so deciding what to work on is a
+matter of keeping those three markers honest. Each task shows up in only one of
+the three sections, so nothing is listed twice.
+
+Use =NEXT= for the few things you would genuinely pick up next, not for
+everything you intend to do eventually — that's what plain =TODO= is for.
 
 * Priorities
 Tasks can carry a priority cookie =[#A]=, =[#B]=, or =[#C]= (A is highest). The

@@ -26,7 +26,7 @@ This configuration stands on excellent free software. The main pieces:
 
 - *Org Mode* — the foundation: outlines, tasks, the agenda, capture, dates.
 - *org-super-agenda* — groups the agenda into the /Schedule/, /Due/,
-  /High-priority/, /In progress/ … sections.
+  /High-priority/, /In progress/, /Next up/ … sections.
 - *org-modern* — the modern look: timestamp pills, priority and TODO badges.
 - *org-superstar* — nicer heading bullets.
 - *org-journal* — dated journal entries.

@@ -643,8 +643,12 @@ detail to =ps/claude-debug-resize-file=; leave it off otherwise.
 =ps/ai-context-enabled= controls whether the TODO-keyword/priority/agenda-scan/
 tagging/journal facts below are kept in sync with this config's =AGENTS.md=
 (see /AI context sync/ near the end of this file for the actual call).
+=ps/ai-context-next-keyword= names the TODO keyword the agenda gathers into its
+"Next up" section, so the generated block can tell an assistant which keyword to
+use for a next action; nil omits that fact.
 #+begin_src emacs-lisp
   (setq ps/ai-context-enabled t)
+  (setq ps/ai-context-next-keyword "NEXT")
 #+end_src
 
 * Editor & UI
@@ -1049,13 +1053,22 @@ preference and stays here.
           '(("c" "Agenda"
              ((agenda "" ((org-agenda-overriding-header "")
                           (org-super-agenda-groups ps/agenda-day-super-groups)))
-              (tags-todo "+PRIORITY=\"A\""
+              ;; The three pull-sections below are mutually exclusive, so no open
+              ;; task is printed twice.  Precedence: INPR > [#A] > NEXT — hence
+              ;; the `/-INPR' and `-PRIORITY="A"' restrictions.  (A task can
+              ;; still appear both here and in the dated block above; that is
+              ;; intended — the dated block answers a different question.)
+              ;; `-PRIORITY="A"' also matches entries with no priority cookie:
+              ;; Org resolves those to the default priority.
+              (tags-todo "+PRIORITY=\"A\"/-INPR"
                          ((org-agenda-overriding-header " High-priority:")))
               (todo "INPR"
-                    ((org-agenda-overriding-header " In progress:"))))
-             ;; Command-wide: the two todo blocks inherit a flat list (nil),
-             ;; and the whole view is tagged `agenda' so the layout module knows
-             ;; NOT to draw Calendar's span-switch controls here.
+                    ((org-agenda-overriding-header " In progress:")))
+              (tags-todo "-PRIORITY=\"A\"/NEXT"
+                         ((org-agenda-overriding-header " Next up:"))))
+             ;; Command-wide: the todo blocks inherit a flat list (nil), and the
+             ;; whole view is tagged `agenda' so the layout module knows NOT to
+             ;; draw Calendar's span-switch controls here.
              ((org-super-agenda-groups nil)
               (ps/agenda-layout-view-kind 'agenda)))
             ("g" "Calendar"
@@ -1109,7 +1122,7 @@ wrapping) so the right-aligned scheduling pill always lands on screen.
 
 *** Uniform blank lines between agenda sections
 =org-agenda-block-separator= "" emits two newlines before each separate agenda
-block (=High-priority=, =In progress=), while org-super-agenda groups are
+block (=High-priority=, =In progress=, =Next up=), while org-super-agenda groups are
 single-spaced — so those two sections get an extra blank line. Collapse any run
 of more than one blank line so every section has exactly one blank line above
 it.

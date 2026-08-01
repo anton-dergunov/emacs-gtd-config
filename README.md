@@ -6,8 +6,8 @@ A minimalist Emacs configuration for planning your work and life in plain-text
 [Org Mode](https://orgmode.org/) files. The workflow is inspired by
 [Getting Things Done](https://en.wikipedia.org/wiki/Getting_Things_Done): you
 keep tasks and notes in a handful of Org files, and a clean, visual **agenda**
-shows what matters today — schedule, deadlines, high-priority and in-progress
-work.
+shows what matters today — schedule, deadlines, high-priority work, what's in
+progress, and what to pick up next.
 
 It doubles as a complete `~/.emacs.d`, so you can use it as your whole Emacs
 setup or borrow pieces for your own.
@@ -19,8 +19,8 @@ setup or borrow pieces for your own.
 ## Highlights
 
 - **A visual agenda** — your day at a glance: a real timeline, deadlines,
-  overdue items, high-priority and in-progress tasks, with category icons and
-  compact status/priority/date pills.
+  overdue items, high-priority, in-progress and next-up tasks, with category
+  icons and compact status/priority/date pills.
 - **A schedule view** — see the day as a timeline or a compact event list, with
   a live now-indicator that refreshes every minute.
 - **Planning tools** — find free slots (availability), detect scheduling

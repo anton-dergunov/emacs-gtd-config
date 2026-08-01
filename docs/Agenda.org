@@ -32,14 +32,27 @@ The agenda groups tasks into sections, in this order:
 - *Due soon* — upcoming deadlines.
 - *High-priority* — every =[#A]= task, gathered in one place.
 - *In progress* — every =INPR= task.
+- *Next up* — every =NEXT= task: the shortlist of what to pick up next.
 
-The last two sections are why you rarely need a separate "next actions" list:
-mark what's important with priority =A=, mark what you're actively doing as
-=INPR=, and the agenda surfaces both.
+Those last three sections answer the three questions you actually have when you
+sit down: /what matters/, /what am I already in the middle of/, and /what do I
+start next/. Mark what's important with priority =A=, mark what you're actively
+doing as =INPR=, mark the handful of things you'd start next as =NEXT= — the
+agenda surfaces all three, so you rarely need a separate task list.
+
+A task appears in *only one* of the three, so nothing is listed twice: in
+progress wins over high priority, which wins over next up. An =[#A]= task you've
+started shows under /In progress/ rather than /High-priority/ — its priority is
+still visible on the line. (Dated tasks can appear both in the sections at the
+top and in one of these three; that's intentional, since those sections answer a
+different question.)
+
+Keep /Next up/ short. It's a shortlist to scan, not a second inbox — if
+everything drifts to =NEXT=, the section stops telling you anything.
 
 The agenda is deliberately a /today/ view. To see scheduled tasks and deadlines
 laid out across a week, a month, a year, or an arbitrary range — without the
-high-priority and in-progress sections — use the [[file:Calendar.org][Calendar]] instead.
+high-priority, in-progress and next-up sections — use the [[file:Calendar.org][Calendar]] instead.
 
 * Reading a line
 Each task line is laid out in aligned columns so it scans cleanly:

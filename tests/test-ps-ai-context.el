@@ -52,7 +52,7 @@
                 ?A ?C
                 "." nil
                 "Journal/" "%Y-%m-%d.org"
-                nil)))
+                nil nil)))
     (should (string-prefix-p "<!-- BEGIN ps-generated -->\n" block))
     (should (string-suffix-p "<!-- END ps-generated -->" block))
     (should (string-match-p
@@ -70,7 +70,7 @@
   (let ((block (ps/ai-context--render-conventions
                 '("TODO") '("DONE") ?A ?C
                 "Areas/" nil
-                "Journal/" "%Y-%m-%d.org" nil)))
+                "Journal/" "%Y-%m-%d.org" nil nil)))
     (should (string-match-p "under `Areas/` (any depth)" block))
     (should (string-match-p "not in `Areas/`" block))
     (should-not (string-match-p "these notes" block))))
@@ -78,21 +78,34 @@
 (ert-deftest ps/ai-context-test-render-conventions-no-journal ()
   "Without a journal configured, the journaling bullet is omitted entirely."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "." nil nil nil nil)))
+                '("TODO") '("DONE") ?A ?C "." nil nil nil nil nil)))
     (should-not (string-match-p "Journaling" block))))
 
 (ert-deftest ps/ai-context-test-render-conventions-fixed-tags ()
   "A defined tag list is rendered instead of the 'no fixed tag list' line."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "." '("work" "home") nil nil nil)))
+                '("TODO") '("DONE") ?A ?C "." '("work" "home") nil nil nil nil)))
     (should (string-match-p "a fixed set is defined: `work`, `home`" block))
     (should-not (string-match-p "no fixed tag list" block))))
 
 (ert-deftest ps/ai-context-test-render-conventions-log-done ()
   "When DONE logging is on, the block says so instead of the opposite."
   (let ((block (ps/ai-context--render-conventions
-                '("TODO") '("DONE") ?A ?C "." nil nil nil t)))
+                '("TODO") '("DONE") ?A ?C "." nil nil nil t nil)))
     (should (string-match-p "logs a `CLOSED:` timestamp automatically" block))))
+
+(ert-deftest ps/ai-context-test-render-conventions-next-keyword ()
+  "The \"Next up\" fact names the configured keyword when one is set."
+  (let ((block (ps/ai-context--render-conventions
+                '("TODO" "NEXT") '("DONE") ?A ?C "." nil nil nil nil "NEXT")))
+    (should (string-match-p "a task marked `NEXT` is gathered into the" block))
+    (should (string-match-p "\"Next up\" section" block))))
+
+(ert-deftest ps/ai-context-test-render-conventions-no-next-keyword ()
+  "Without a configured keyword, the \"Next up\" fact is omitted entirely."
+  (let ((block (ps/ai-context--render-conventions
+                '("TODO" "NEXT") '("DONE") ?A ?C "." nil nil nil nil nil)))
+    (should-not (string-match-p "Next up" block))))
 
 ;;; Region replacement
 

@@ -50,6 +50,14 @@
   :type 'boolean
   :group 'ps-ai-context)
 
+(defcustom ps/ai-context-next-keyword nil
+  "TODO keyword the agenda gathers into its \"Next up\" section, or nil.
+Set from config.org, which owns the keyword names -- when non-nil, the
+generated block tells an assistant that marking a task with this keyword
+surfaces it in the agenda. nil omits that fact entirely."
+  :type '(choice (const :tag "No such section" nil) string)
+  :group 'ps-ai-context)
+
 (defconst ps/ai-context--begin-marker "<!-- BEGIN ps-generated -->"
   "Marker opening the generated conventions region in AGENTS.md.")
 
@@ -94,7 +102,7 @@ Skips group markers and other non-string entries."
                                            priority-high priority-low
                                            agenda-subdir tag-names
                                            journal-subdir journal-format
-                                           log-done)
+                                           log-done next-keyword)
   "Render the AGENTS.md generated-conventions markdown block.
 ACTIVE-KEYWORDS and DONE-KEYWORDS are lists of plain TODO keyword names (no
 fast-select suffix), in `org-todo-keywords' order. PRIORITY-HIGH/-LOW are the
@@ -106,6 +114,8 @@ TAG-NAMES is a list of tag strings, or nil if no fixed tag list is defined.
 JOURNAL-SUBDIR/JOURNAL-FORMAT are `org-journal-dir' (relative to the Org
 base) and `org-journal-file-format', or nil if no journal is configured.
 LOG-DONE mirrors `org-log-done'.
+NEXT-KEYWORD is `ps/ai-context-next-keyword' -- the keyword the agenda pulls
+into its \"Next up\" section, or nil to omit that fact.
 Pure: takes no Emacs/Org state, only formats its arguments, so it is
 ERT-testable in isolation from `ps/ai-context-sync'."
   (let* ((states-str (mapconcat (lambda (k) (format "`%s`" k))
@@ -127,6 +137,12 @@ ERT-testable in isolation from `ps/ai-context-sync'."
                       "  for what genuinely matters.\n")
              (char-to-string priority-high) (char-to-string priority-low)
              (char-to-string priority-high))
+     (if next-keyword
+         (format (concat "- **Picking what to start next:** a task marked `%s` is gathered into the\n"
+                          "  agenda's \"Next up\" section. Keep that shortlist short -- it is meant to be\n"
+                          "  scannable, not a second task list.\n")
+                 next-keyword)
+       "")
      (if tag-names
          (format "- **Tags:** a fixed set is defined: %s. Prefer these over inventing new ones.\n"
                  (mapconcat (lambda (tg) (format "`%s`" tg)) tag-names ", "))
@@ -196,7 +212,7 @@ delimited region to replace."
                        org-highest-priority org-lowest-priority
                        agenda-subdir tag-names
                        journal-subdir journal-format
-                       org-log-done))
+                       org-log-done ps/ai-context-next-keyword))
                (old-text (with-temp-buffer
                            (insert-file-contents file)
                            (buffer-string)))
