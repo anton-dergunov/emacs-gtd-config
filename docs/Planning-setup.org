@@ -49,6 +49,9 @@ The layout shipped in =samples/realistic/= is one reasonable shape:
 - =workspace.org= holds settings tied to /this/ data folder (your category
   icons, your folder icons, your file-tree sets) — see
   [[file:Customization.org][Customization & appearance]].
+- Give a file a one-line =#+SUBTITLE:= saying what it is for. Those lines are
+  collected into the index the AI assistant reads, so it knows which file a new
+  task belongs in — see [[file:AI-integration.org][AI integration]].
 
 To scan only part of the directory, or to skip more names, see the /Org files/
 block in =config.org= (=ps/org-files-root=, =ps/org-files-exclude-directories=,

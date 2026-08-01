@@ -57,6 +57,13 @@ mean you are limited to them. When the user explicitly asks, it is fine to:
 
 The rule is just the default: **when in doubt, the subject is these Org notes.**
 
-<!-- Conventions (TODO keywords, priorities, where planning files live, date formats) may
-     later be filled in automatically here from the Emacs configuration. Until then,
-     discover them from the existing headings as described above. -->
+## Generated context
+
+The task conventions actually in force (TODO keywords, priorities, tags, where tasks live,
+journal layout) and an index of what each plan file is for are generated from the Emacs
+configuration into `.claude/generated-context.md`. **Read that file** — it is the
+authoritative statement of these conventions. If it is missing, Emacs has not run yet
+against this directory; discover the conventions from the existing headings as described
+above.
+
+@.claude/generated-context.md

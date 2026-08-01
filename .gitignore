@@ -29,6 +29,9 @@
 
 !samples/
 !samples/**
+# Written by Emacs whenever the dev config loads the sample notes; regenerated
+# on every start, so there is nothing to track.
+samples/*/.claude/
 
 !.github/
 !.github/**

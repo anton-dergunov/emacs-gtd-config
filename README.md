@@ -38,7 +38,9 @@ setup or borrow pieces for your own.
   and automatic background Git sync of your Org files.
 - **An optional AI assistant** — a side-window helper (on your Claude
   subscription) that reads and edits your notes, aware of what you have selected,
-  with its changes shown as diffs; guide it with an `AGENTS.md` in your Org folder.
+  with its changes shown as diffs. Guide it with an `AGENTS.md` in your Org
+  folder; your TODO keywords and what each plan file is for are passed to it
+  automatically.
 
 ## Quick start
 

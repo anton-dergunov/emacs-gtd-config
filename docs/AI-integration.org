@@ -43,14 +43,38 @@ The assistant reads a file named =AGENTS.md= in your Org directory (with a tiny
 words like "task", "project", and "note" mean entries in /your/ Org files — so
 when you say "add a task", it edits your plans rather than inventing its own list.
 
-You can open and edit =AGENTS.md= to tune how the assistant behaves. If you keep
-your notes in your own directory (not the bundled sample), put your own
-=AGENTS.md= there.
+You can open and edit =AGENTS.md= to tune how the assistant behaves. It is yours
+alone — nothing here ever writes to it. If you keep your notes in your own
+directory (not the bundled sample), put your own =AGENTS.md= there.
 
-The block near the bottom of =AGENTS.md= (between the =ps-generated= markers) is
-auto-generated from =config.org='s settings — your TODO keywords, priorities, and
-similar facts — and is overwritten on the next reload, so edit =config.org= to
-change those; the rest of =AGENTS.md= is yours to edit freely.
+** The generated context file
+Two things the assistant needs are kept up to date for you, in a companion file
+that =AGENTS.md= points at: =.claude/generated-context.md= in your Org directory.
+
+- *The conventions in force* — your TODO keywords, priorities, tags, whether
+  finishing a task logs a timestamp, and where the journal lives. These come from
+  =config.org=, so the assistant is told what you actually use instead of guessing
+  from what it happens to read.
+- *An index of your plan files* — one line per file, taken from that file's
+  =#+SUBTITLE:=. It lets the assistant route something to the right file without
+  opening all of them. Files with no =#+SUBTITLE:= are simply left out, so writing
+  one is how you describe a file's purpose.
+
+It is rebuilt when Emacs starts, when you reload the configuration (=C-c p R=),
+and a couple of seconds after you save any plan file — so a subtitle you just
+edited, or a file you just created, shows up right away. =M-x ps/ai-context-sync=
+rebuilds it on demand. The file is rewritten only when something actually
+changed, and since it is regenerated from scratch every time, you can safely
+exclude it from version control.
+
+Don't edit it: your changes are overwritten. Change =config.org= or the relevant
+file's =#+SUBTITLE:= instead.
+
+** Under the hood
+Module: =lisp/ps-ai-context.el=. Settings block: =config.org= → /Package
+Management → AI context sync (ps-ai-context.el)/ — =ps/ai-context-enabled=,
+=ps/ai-context-file=, =ps/ai-context-next-keyword=,
+=ps/ai-context-save-debounce=.
 
 * Copying text from the assistant window
 The live session is an interactive terminal, so a normal mouse selection there
