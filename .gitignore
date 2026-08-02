@@ -20,6 +20,9 @@
 !scripts/*.sh
 !scripts/*.el
 
+!patches/
+!patches/*.patch
+
 !screenshots/
 !screenshots/**
 

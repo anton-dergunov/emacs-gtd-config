@@ -1,0 +1,70 @@
+Fix a permanent macOS UI freeze when no window is main.
+
+`ns_read_socket_1' enters [NSApp run], which returns only when the
+application-defined event posted by `ns_send_appdefined' comes back through
+-[EmacsApp sendEvent:] and triggers [self stop: self].
+
+That event is posted with `windowNumber: [[NSApp mainWindow] windowNumber]'.
+While the frame is miniaturized, or while key/main status is being handed
+over (app activation, the window tiling menu, a child frame being closed),
+[NSApp mainWindow] is nil and the window number is 0.  AppKit discards such
+an event, so [NSApp run] never returns and Emacs never gets back to its
+command loop -- it keeps queueing input it can never process.
+
+There is no recovery path: `send_appdefined' has already been cleared, so
+every later EV_TRAILER re-post is suppressed, and `timed_entry' has just
+been invalidated, so no timer can wake the loop either.  A single dropped
+event wedges Emacs permanently.
+
+Diagnosed on macOS 26.5.1 with Emacs 30.2 by attaching lldb to a hung
+process: [NSApp isRunning] == YES (so stop: never ran), [NSApp mainWindow]
+== nil, [NSApp keyWindow] == nil, send_appdefined == NO, timed_entry ==
+NULL, n_emacs_events_pending == 99 and climbing.  Re-running
+ns_send_appdefined inside the hung process changed nothing; posting a
+byte-identical event that differed only in carrying a real window number
+unfroze it instantly.
+
+Prefer the main window, then the key window, then any window with a valid
+number, so the event is always addressed to a window that exists.
+
+--- a/src/nsterm.m
++++ b/src/nsterm.m
+@@ -4686,6 +4686,7 @@
+   if (send_appdefined)
+     {
+       NSEvent *nxev;
++      NSWindow *dest;
+ 
+       /* We only need one NX_APPDEFINED event to stop NXApp from running.  */
+       send_appdefined = NO;
+@@ -4697,12 +4698,29 @@
+           [timed_entry release];
+           timed_entry = nil;
+         }
++
++      /* Address the event to a window that actually exists.  With no main
++         window -- miniaturized, or mid handover of key/main status -- the
++         window number would be 0 and AppKit would silently discard the
++         event.  That is fatal here: send_appdefined has just been cleared
++         and timed_entry invalidated, so nothing would ever end [NSApp run]
++         again, and Emacs would hang forever with its UI unresponsive.  */
++      dest = [NSApp mainWindow];
++      if (dest == nil)
++        dest = [NSApp keyWindow];
++      if (dest == nil)
++        for (NSWindow *cand in [NSApp windows])
++          if ([cand windowNumber] > 0)
++            {
++              dest = cand;
++              break;
++            }
+ 
+       nxev = [NSEvent otherEventWithType: NSEventTypeApplicationDefined
+                                 location: NSMakePoint (0, 0)
+                            modifierFlags: 0
+                                timestamp: 0
+-                            windowNumber: [[NSApp mainWindow] windowNumber]
++                            windowNumber: [dest windowNumber]
+                                  context: [NSApp context]
+                                  subtype: 0
+                                    data1: value

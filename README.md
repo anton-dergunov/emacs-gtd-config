@@ -47,7 +47,8 @@ setup or borrow pieces for your own.
 > Full, per-OS instructions are in [docs/Installation.org](docs/Installation.org).
 
 1. Install [Emacs](https://www.gnu.org/software/emacs/download.html) (29+) and
-   [ripgrep](https://github.com/BurntSushi/ripgrep) (used for searching).
+   [ripgrep](https://github.com/BurntSushi/ripgrep) (used for searching). On
+   macOS, read [the note below](#macos-build-emacs-with-the-freeze-fix) first.
 2. Clone this repo as your Emacs config directory:
    ```bash
    git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
@@ -61,6 +62,57 @@ setup or borrow pieces for your own.
 
 For the prettiest result, also install the **Material Symbols** icon font — see
 [docs/Installation.org](docs/Installation.org).
+
+### macOS: build Emacs with the freeze fix
+
+On macOS, Emacs 30 can freeze outright: the window stops accepting keyboard and
+mouse input and never recovers, so the only way out is Force Quit. Minimising
+the window while a background task is running is enough to trigger it — and this
+config's automatic Git sync counts, so it can happen several times a day.
+
+The bug is in Emacs itself, not in this configuration.
+[`patches/emacs-30-ns-appdefined-windownumber.patch`](patches/emacs-30-ns-appdefined-windownumber.patch)
+fixes it, and [emacs-plus](https://github.com/d12frosted/homebrew-emacs-plus)
+can build Emacs with it applied:
+
+```bash
+brew tap d12frosted/emacs-plus
+
+mkdir -p ~/.config/emacs-plus
+cat > ~/.config/emacs-plus/build.yml <<'YAML'
+patches:
+  - ns-appdefined-windownumber:
+      url: ~/.emacs.d/patches/emacs-30-ns-appdefined-windownumber.patch
+      sha256: 319013a5587df554f81ef07ee25d678dcc4d169349d938b4164673b71d340d58
+YAML
+
+brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
+open -n /opt/homebrew/opt/emacs-plus@30/Emacs.app
+```
+
+`build.yml` is emacs-plus's own extension point, so the patch is re-applied
+automatically every time you rebuild.
+
+To confirm the Emacs you are running actually has the fix:
+
+```bash
+lldb --batch -o "disassemble -n ns_send_appdefined" -o quit \
+  /opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs | grep keyWindow
+```
+
+One line of output means the fix is in; no output means it is not.
+
+Two things worth knowing when you rebuild later:
+
+- **Use `brew uninstall` then `brew install`, not `brew reinstall`.** If the
+  final linking step fails — which it does when symlinks from an older Emacs are
+  still in `/opt/homebrew/bin` — `brew reinstall` quietly restores the previous
+  build, so you keep running an unpatched Emacs that looks freshly installed.
+- Homebrew builds with `-Os` (optimised for size). For `-O2` instead, add
+  `cflags << "-O2"` near the top of the `cflags` list in
+  `$(brew --repository)/Library/Taps/d12frosted/homebrew-emacs-plus/Formula/emacs-plus@30.rb`.
+  Homebrew emits its own flags first, so this one wins — but `brew update`
+  silently reverts the edit.
 
 ## Documentation
 
