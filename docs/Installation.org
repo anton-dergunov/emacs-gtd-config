@@ -11,11 +11,77 @@ two-minute version, see the [[file:../README.md][README]].
 Install [[https://www.gnu.org/software/emacs/download.html][Emacs]] — version 29 or newer is recommended (this config uses
 =--init-directory= and other recent features).
 
-- *macOS:* download from [[https://emacsformacosx.com/][emacsformacosx.com]], or =brew install --cask emacs=,
-  or =brew install emacs-plus@30=.
+- *macOS:* see the next section — a stock build freezes; build a patched one
+  instead.
 - *Linux:* use your package manager, e.g. =sudo apt install emacs= or
   =sudo dnf install emacs=.
 - *Windows:* download the installer from a [[https://www.gnu.org/software/emacs/download.html][GNU mirror]].
+
+** macOS: build Emacs with the freeze fix
+On macOS, Emacs 30 can freeze outright: the window stops accepting keyboard and
+mouse input and never recovers, so the only way out is Force Quit. Minimising
+the window while a background task is running is enough to trigger it, and this
+config's automatic Git sync counts as one — so it can happen several times a
+day, and every freeze costs you the session.
+
+The bug is in Emacs itself, not in this configuration. It affects every stock
+macOS build, including [[https://emacsformacosx.com/][emacsformacosx.com]] and =brew install --cask emacs=. The
+fix is one file in this repository:
+=patches/emacs-30-ns-appdefined-windownumber.patch=.
+
+[[https://github.com/d12frosted/homebrew-emacs-plus][emacs-plus]] builds Emacs from source, so it can apply the patch for you:
+
+#+begin_src bash
+brew tap d12frosted/emacs-plus
+
+mkdir -p ~/.config/emacs-plus
+cat > ~/.config/emacs-plus/build.yml <<'YAML'
+patches:
+  - ns-appdefined-windownumber:
+      url: ~/.emacs.d/patches/emacs-30-ns-appdefined-windownumber.patch
+      sha256: 319013a5587df554f81ef07ee25d678dcc4d169349d938b4164673b71d340d58
+YAML
+
+brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
+open -n /opt/homebrew/opt/emacs-plus@30/Emacs.app
+#+end_src
+
+=build.yml= is emacs-plus's own extension point, so the patch is re-applied
+automatically every time you rebuild — you never edit the formula. Adjust the
+=url= if this repository is not at =~/.emacs.d=; a wrong path fails the build
+with "Local patch file not found", so it cannot silently do nothing. Change the
+patch file and the build stops on a checksum mismatch until you update
+=sha256=.
+
+To confirm that the Emacs you are running really has the fix:
+
+#+begin_src bash
+lldb --batch -o "disassemble -n ns_send_appdefined" -o quit \
+  /opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs | grep keyWindow
+#+end_src
+
+One line of output means the fix is in; no output means it is not.
+
+*** Two traps when you rebuild later
+- Use =brew uninstall= and then =brew install= — not =brew reinstall=. If the
+  final linking step fails, and it does whenever symlinks from an older Emacs
+  are still in =/opt/homebrew/bin=, =brew reinstall= quietly restores the
+  previous build. You are then running an unpatched Emacs that looks freshly
+  installed, which is why the check above is worth running.
+- Homebrew compiles with =-Os= (optimised for size). To get =-O2= instead, add
+  =cflags << "-O2"= near the top of the =cflags= list in the formula at
+  =$(brew --repository)/Library/Taps/d12frosted/homebrew-emacs-plus/Formula/emacs-plus@30.rb=.
+  Homebrew emits its own flags before these, so this one wins.
+  Note that =brew update= silently reverts the edit.
+
+*** What the patch does
+Emacs pumps the macOS event loop by posting itself a private "wake up" event
+and waiting for it to come back. That event is addressed to the application's
+main window, and while the window is minimised there is no main window — so the
+event is addressed to nothing, macOS discards it, and Emacs waits forever.
+Nothing retries, and the timer that could have rescued it has already been
+cancelled, so a single lost event wedges Emacs permanently. The patch addresses
+the event to a window that actually exists.
 
 * 2. Install ripgrep
 [[https://github.com/BurntSushi/ripgrep][ripgrep]] powers fast in-project search.
@@ -117,5 +183,8 @@ dictionaries, are in [[file:Customization.org][Customization & appearance]].
 * Under the hood / Customize
 - The base directory and module loading happen in =config.org= ("Bootstrap"
   section) via =local.el=.
+- The macOS freeze fix is =patches/emacs-30-ns-appdefined-windownumber.patch=;
+  its header records the full diagnosis. It is applied at build time through
+  =~/.config/emacs-plus/build.yml=, not by this configuration at runtime.
 - The dev launcher =scripts/run_emacs_dev.sh= sets all of this up automatically
   for testing — see [[file:Developing.org][Developing & extending]].
