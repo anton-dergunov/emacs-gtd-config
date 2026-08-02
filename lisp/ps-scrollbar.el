@@ -1219,6 +1219,59 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
       (apply orig args)
     (setq ps/scrollbar--drag-in-progress nil)))
 
+;; `mouse-drag-line' -- the workhorse behind `mouse-drag-vertical-line' -- sets
+;; the global `track-mouse' to `dragging' and then restores it from
+;; `set-transient-map''s on-exit function with a plain `setq', not a `let'.
+;; That `setq' runs in whatever buffer happens to be current when the drag
+;; ends, so if that buffer has a buffer-local `track-mouse' (`eat-mode' makes
+;; it one, which covers the Claude terminal pane) the restore lands in the
+;; local slot and the *global* value is left at `dragging' forever.
+;;
+;; Emacs then honours that value's documented meaning -- "the mouse cursor
+;; retains its appearance during mouse motion" -- in every buffer without a
+;; local binding, so the pointer shape freezes globally: no hand over org links
+;; or file-tree nodes, no resize cursor over dividers, until Emacs restarts.
+;; `mouse-face' highlighting and clicking keep working, which is what makes it
+;; look like a broken-links problem rather than a global one.
+;;
+;; This module turns that from a rare race into a routine one:
+;; `ps/scrollbar--drag-do-switch' deliberately calls `other-window' 200 ms into
+;; a divider drag, so drags regularly end in a different buffer than they
+;; started -- often the terminal pane.
+;;
+;; The reset cannot go in `ps/scrollbar--resize-advice''s `unwind-protect':
+;; `mouse-drag-line' returns as soon as the transient map is installed, long
+;; before the drag ends, and clearing `track-mouse' there would cut off the
+;; very motion events the drag needs.  So we re-check from `post-command-hook'
+;; and act only once the drag is demonstrably over.  Like the burst detector in
+;; `ps-claude.el', this cannot itself get stuck: it re-derives the answer from
+;; live state every time rather than tracking state of its own.
+
+(defun ps/scrollbar--track-mouse-stuck-p (global transient-map-active dragging)
+  "Non-nil if GLOBAL is a leftover pointer-freezing `track-mouse' value.
+
+GLOBAL is the global (default) value of `track-mouse'.
+TRANSIENT-MAP-ACTIVE is non-nil while a drag's transient keymap is still
+installed -- i.e. while `mouse-drag-line' is genuinely still dragging.
+DRAGGING is `ps/scrollbar--drag-in-progress', which also covers the
+NS-level divider drag that runs at C level with no transient map of ours.
+
+Only `dragging' counts as stuck.  `dropping' freezes the pointer too, but
+belongs to drag-and-drop, which runs inside a `track-mouse' let-binding
+rather than a transient map -- clearing it could clobber a live drag."
+  (and (eq global 'dragging)
+       (not transient-map-active)
+       (not dragging)))
+
+(defun ps/scrollbar--unstick-track-mouse ()
+  "Restore a globally stuck `track-mouse' left behind by a finished drag.
+Installed on `post-command-hook' by `ps/scrollbar--enable'."
+  (when (ps/scrollbar--track-mouse-stuck-p
+         (default-value 'track-mouse)
+         overriding-terminal-local-map
+         ps/scrollbar--drag-in-progress)
+    (setq-default track-mouse nil)))
+
 (defun ps/scrollbar--delete-all-frames ()
   "Delete every cached pill frame."
   (maphash (lambda (_parent child)
@@ -1247,6 +1300,7 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (add-function :after after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
+  (add-hook 'post-command-hook #'ps/scrollbar--unstick-track-mouse)
   (add-hook 'window-scroll-functions #'ps/scrollbar--on-scroll)
   (setq ps/scrollbar--last-sig nil
         ps/scrollbar--torn-down nil
@@ -1268,6 +1322,11 @@ Installed around `mouse-drag-vertical-line' by `ps/scrollbar--enable'."
   (remove-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (remove-function after-focus-change-function #'ps/scrollbar--on-focus-change)
   (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
+  ;; Not torn down by `ps/scrollbar--teardown-hooks': unlike the pill work that
+  ;; guards against, this is an `eq' on one variable, and a drag that ends just
+  ;; as focus is lost would otherwise leave the pointer frozen until focus
+  ;; returns.  Only disabling the mode removes it.
+  (remove-hook 'post-command-hook #'ps/scrollbar--unstick-track-mouse)
   (ps/scrollbar--delete-all-frames)
   (unless (eq ps/scrollbar--saved-right-fringe 'unset)
     (modify-all-frames-parameters

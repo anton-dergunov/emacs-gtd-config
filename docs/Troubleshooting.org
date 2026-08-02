@@ -55,6 +55,18 @@ what you see when an AI-assistant diff opens or closes. This config turns it
 off by setting =ediff-grab-mouse= to =nil= (see [[file:AI-integration.org][AI integration]]); set it back to
 =t= for the stock behaviour.
 
+* The mouse pointer stops changing shape
+The pointer stays an arrow everywhere: no pointing hand over links in your Org
+files or over entries in the file tree, and no resize arrows over the dividers
+between windows. Clicking and highlighting still work, so it looks like links
+have broken — but nothing is wrong with the links, and every window is affected
+at once. It starts after dragging a divider to resize windows, and once it
+starts it used to last until you restarted Emacs.
+
+This now clears itself: the pointer comes back as soon as you press a key or
+run any command. If you ever see it persist beyond that, restarting Emacs
+restores it.
+
 * Git sync did something unexpected
 - Open =C-x g= (Magit) to inspect the repository state and history.
 - Pause sync with =C-c p s= while you sort things out.

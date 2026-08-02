@@ -431,5 +431,57 @@ the next tick would treat that as a user scroll and reveal a pill."
       (should (= hidden 1))
       (should-not geom-asked))))
 
+;;; Stuck `track-mouse' after a divider drag
+
+(ert-deftest ps/scrollbar--track-mouse-stuck-after-drag ()
+  "`dragging' left over with no drag running is stuck."
+  (should (ps/scrollbar--track-mouse-stuck-p 'dragging nil nil)))
+
+(ert-deftest ps/scrollbar--track-mouse-not-stuck-during-transient-map ()
+  "A live `mouse-drag-line' still owns its transient map: leave it alone."
+  (should-not (ps/scrollbar--track-mouse-stuck-p 'dragging 'some-keymap nil)))
+
+(ert-deftest ps/scrollbar--track-mouse-not-stuck-during-ns-drag ()
+  "An NS-level divider drag has no transient map, so honour our own flag."
+  (should-not (ps/scrollbar--track-mouse-stuck-p 'dragging nil t)))
+
+(ert-deftest ps/scrollbar--track-mouse-healthy-values-untouched ()
+  "Only `dragging' is treated as stuck."
+  (should-not (ps/scrollbar--track-mouse-stuck-p nil nil nil))
+  (should-not (ps/scrollbar--track-mouse-stuck-p t nil nil))
+  ;; `dropping' freezes the pointer too, but drag-and-drop let-binds
+  ;; `track-mouse', so clearing it could clobber a live drag.
+  (should-not (ps/scrollbar--track-mouse-stuck-p 'dropping nil nil))
+  (should-not (ps/scrollbar--track-mouse-stuck-p 'drag-source nil nil)))
+
+(ert-deftest ps/scrollbar--unstick-restores-global-track-mouse ()
+  "The hook clears a stuck global without disturbing a buffer-local value.
+Reproduces the real failure: `mouse-drag-line' restores `track-mouse' with
+a plain `setq', so when a drag ends in a buffer with a local binding the
+global keeps the pointer-freezing `dragging'."
+  (let ((saved (default-value 'track-mouse)))
+    (unwind-protect
+        (with-temp-buffer
+          (setq-default track-mouse 'dragging)
+          (setq-local track-mouse t)    ; as `eat-mode' does
+          (let ((ps/scrollbar--drag-in-progress nil)
+                (overriding-terminal-local-map nil))
+            (ps/scrollbar--unstick-track-mouse))
+          (should-not (default-value 'track-mouse))
+          (should (eq track-mouse t)))  ; local binding untouched
+      (setq-default track-mouse saved))))
+
+(ert-deftest ps/scrollbar--unstick-leaves-live-drag-alone ()
+  "The hook must not cut a running drag's motion events short."
+  (let ((saved (default-value 'track-mouse)))
+    (unwind-protect
+        (progn
+          (setq-default track-mouse 'dragging)
+          (let ((ps/scrollbar--drag-in-progress t)
+                (overriding-terminal-local-map nil))
+            (ps/scrollbar--unstick-track-mouse))
+          (should (eq (default-value 'track-mouse) 'dragging)))
+      (setq-default track-mouse saved))))
+
 (provide 'test-ps-scrollbar)
 ;;; test-ps-scrollbar.el ends here
