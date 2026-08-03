@@ -2346,6 +2346,18 @@ a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
   ;; https://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Emacs-Sessions.html
   (setq desktop-load-locked-desktop t)
 
+  ;; Desktop restores the whole frame layout, so any extra frame that happened
+  ;; to be open when Emacs was last closed reappears on the next start, looking
+  ;; like a window nobody opened.  Keep the restored size and position of the
+  ;; initial frame, but drop the extra top-level frames.  Child frames (the
+  ;; scrollbar pill and friends) are left alone.
+  (add-hook 'desktop-after-read-hook
+            (lambda ()
+              (let ((keep (selected-frame)))
+                (dolist (frame (frame-list))
+                  (unless (or (eq frame keep) (frame-parent frame))
+                    (delete-frame frame t))))))
+
   ;; Desktop restores each buffer's saved minor modes *after* the mode hooks
   ;; run, so a doc buffer saved with the typo checker on comes back with it on
   ;; despite the doc-buffer exclusion.  Once the whole session is restored, turn

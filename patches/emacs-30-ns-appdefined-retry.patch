@@ -1,0 +1,80 @@
+Recover when the appdefined event that ends [NSApp run] is dropped.
+
+Companion to emacs-30-ns-appdefined-windownumber.patch, which makes the event
+carry a window number that exists.  That is necessary but not sufficient: a
+freeze reproduced on 2026-08-03 wedged an Emacs built *with* that patch, with
+two visible frames whose window numbers were both valid.
+
+`ns_read_socket_1' posts one application-defined event and then calls
+[NSApp run], which returns only when that event comes back through
+-[EmacsApp sendEvent:].  AppKit can still fail to deliver it while key/main
+status is being handed over -- app activation, a second frame taking focus, a
+frame being miniaturized.  In the observed hang the last thing logged before
+the stall was a focus change, and afterwards [NSApp mainWindow] and
+[NSApp keyWindow] were both nil and stayed nil: even activating the app and
+calling makeKeyAndOrderFront: left AppKit refusing to give either window key
+status, and -[EmacsApp sendEvent:] was never reached again.
+
+What makes that fatal is the missing recovery path, not the drop itself.  By
+the time the event is posted `send_appdefined' is already NO, so every later
+EV_TRAILER re-post is suppressed, and `timed_entry' has just been invalidated,
+so no timer can wake the loop.  One dropped event hangs Emacs forever: the UI
+keeps redrawing but never accepts input again, and only Force Quit ends it.
+
+So keep re-posting until [NSApp run] actually exits.  The timer is scheduled
+only around the ns_read_socket_1 call, which merely drains events that are
+already queued and so returns in microseconds; if it is still running half a
+second later, something has gone wrong and another event costs nothing.
+ns_select's much longer [NSApp run] waits are deliberately left alone, so idle
+Emacs is not woken up any more often than before.
+
+Diagnosed on macOS 26.5.1 with Emacs 30.2 (emacs-plus@30) by sampling and then
+attaching lldb to the hung process: main thread parked in
+ns_flush_display -> ns_read_socket_1 -> [NSApp run] -> _DPSNextEvent, all other
+threads idle, send_appdefined == NO, timed_entry == NULL, and the event queue
+empty for every mask.
+
+--- a/src/nsterm.m
++++ b/src/nsterm.m
+@@ -4804,12 +4804,41 @@
+         }
+       else
+         {
++          NSTimer *retry;
++
+           /* Run and wait for events.  We must always send one NX_APPDEFINED event
+              to ourself, otherwise [NXApp run] will never exit.  */
+           send_appdefined = YES;
+           ns_send_appdefined (-1);
++
++          /* That one event is the only thing that ends [NSApp run], and AppKit
++             does drop it: while key/main status is being handed over -- app
++             activation, a second frame taking focus, a frame being
++             miniaturized -- an application-defined event can fail to come
++             back.  By this point `send_appdefined' is NO, so every later
++             EV_TRAILER re-post is suppressed, and `timed_entry' has just been
++             invalidated, so no timer can wake the loop either.  A single
++             dropped event therefore hangs Emacs permanently, with its UI
++             drawn but dead.
+ 
++             Re-post until the loop really exits.  This branch only drains
++             events that are already queued, so it normally returns in
++             microseconds; if it is still running when the timer fires,
++             something has gone wrong and another event costs nothing.  */
++          retry = [[NSTimer scheduledTimerWithTimeInterval: 0.5
++                                                   repeats: YES
++                                                     block: ^(NSTimer *timer) {
++                if ([NSApp isRunning])
++                  {
++                    send_appdefined = YES;
++                    ns_send_appdefined (-1);
++                  }
++              }] retain];
++
+           [NSApp run];
++
++          [retry invalidate];
++          [retry release];
+         }
+ 
+       nevents = n_emacs_events_pending;

@@ -70,10 +70,17 @@ mouse input and never recovers, so the only way out is Force Quit. Minimising
 the window while a background task is running is enough to trigger it — and this
 config's automatic Git sync counts, so it can happen several times a day.
 
-The bug is in Emacs itself, not in this configuration.
-[`patches/emacs-30-ns-appdefined-windownumber.patch`](patches/emacs-30-ns-appdefined-windownumber.patch)
-fixes it, and [emacs-plus](https://github.com/d12frosted/homebrew-emacs-plus)
-can build Emacs with it applied:
+The bug is in Emacs itself, not in this configuration. Two patches fix it, and
+[emacs-plus](https://github.com/d12frosted/homebrew-emacs-plus) can build Emacs
+with both applied. You need **both** — the first one alone still leaves a
+window in which Emacs can freeze:
+
+- [`patches/emacs-30-ns-appdefined-windownumber.patch`](patches/emacs-30-ns-appdefined-windownumber.patch)
+  stops Emacs from addressing its own wake-up event to a window that does not
+  exist.
+- [`patches/emacs-30-ns-appdefined-retry.patch`](patches/emacs-30-ns-appdefined-retry.patch)
+  makes Emacs retry that wake-up, so a single lost one no longer hangs it
+  permanently.
 
 ```bash
 brew tap d12frosted/emacs-plus
@@ -84,23 +91,27 @@ patches:
   - ns-appdefined-windownumber:
       url: ~/.emacs.d/patches/emacs-30-ns-appdefined-windownumber.patch
       sha256: 319013a5587df554f81ef07ee25d678dcc4d169349d938b4164673b71d340d58
+  - ns-appdefined-retry:
+      url: ~/.emacs.d/patches/emacs-30-ns-appdefined-retry.patch
+      sha256: 48c4577d5e49a74a40effe217cdd392bd30f6b5ca7139ef5e10cfa2c53a4c0fe
 YAML
 
 brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
 open -n /opt/homebrew/opt/emacs-plus@30/Emacs.app
 ```
 
-`build.yml` is emacs-plus's own extension point, so the patch is re-applied
+`build.yml` is emacs-plus's own extension point, so the patches are re-applied
 automatically every time you rebuild.
 
-To confirm the Emacs you are running actually has the fix:
+To confirm the Emacs you are running actually has both fixes:
 
 ```bash
-lldb --batch -o "disassemble -n ns_send_appdefined" -o quit \
-  /opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs | grep keyWindow
+EMACS=/opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs
+lldb --batch -o "disassemble -n ns_send_appdefined" -o quit "$EMACS" | grep -c keyWindow
+lldb --batch -o "disassemble -n ns_read_socket_1"  -o quit "$EMACS" | grep -c scheduledTimer
 ```
 
-One line of output means the fix is in; no output means it is not.
+Each command should print a non-zero count; `0` means that fix is not in.
 
 Two things worth knowing when you rebuild later:
 

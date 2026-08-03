@@ -26,10 +26,17 @@ day, and every freeze costs you the session.
 
 The bug is in Emacs itself, not in this configuration. It affects every stock
 macOS build, including [[https://emacsformacosx.com/][emacsformacosx.com]] and =brew install --cask emacs=. The
-fix is one file in this repository:
-=patches/emacs-30-ns-appdefined-windownumber.patch=.
+fix is two files in this repository, and you need both — the first on its own
+still leaves a window in which Emacs can freeze:
 
-[[https://github.com/d12frosted/homebrew-emacs-plus][emacs-plus]] builds Emacs from source, so it can apply the patch for you:
+- =patches/emacs-30-ns-appdefined-windownumber.patch= stops Emacs from
+  addressing its own wake-up event to a window that does not exist.
+- =patches/emacs-30-ns-appdefined-retry.patch= makes Emacs retry that wake-up,
+  so a single lost one no longer hangs it permanently. Losing one turns out to
+  be possible even when the window is valid — for instance while a second frame
+  is taking focus.
+
+[[https://github.com/d12frosted/homebrew-emacs-plus][emacs-plus]] builds Emacs from source, so it can apply the patches for you:
 
 #+begin_src bash
 brew tap d12frosted/emacs-plus
@@ -40,27 +47,31 @@ patches:
   - ns-appdefined-windownumber:
       url: ~/.emacs.d/patches/emacs-30-ns-appdefined-windownumber.patch
       sha256: 319013a5587df554f81ef07ee25d678dcc4d169349d938b4164673b71d340d58
+  - ns-appdefined-retry:
+      url: ~/.emacs.d/patches/emacs-30-ns-appdefined-retry.patch
+      sha256: 48c4577d5e49a74a40effe217cdd392bd30f6b5ca7139ef5e10cfa2c53a4c0fe
 YAML
 
 brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
 open -n /opt/homebrew/opt/emacs-plus@30/Emacs.app
 #+end_src
 
-=build.yml= is emacs-plus's own extension point, so the patch is re-applied
-automatically every time you rebuild — you never edit the formula. Adjust the
+=build.yml= is emacs-plus's own extension point, so the patches are re-applied
+automatically every time you rebuild — you never edit the formula. Adjust each
 =url= if this repository is not at =~/.emacs.d=; a wrong path fails the build
-with "Local patch file not found", so it cannot silently do nothing. Change the
-patch file and the build stops on a checksum mismatch until you update
+with "Local patch file not found", so it cannot silently do nothing. Change a
+patch file and the build stops on a checksum mismatch until you update its
 =sha256=.
 
-To confirm that the Emacs you are running really has the fix:
+To confirm that the Emacs you are running really has both fixes:
 
 #+begin_src bash
-lldb --batch -o "disassemble -n ns_send_appdefined" -o quit \
-  /opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs | grep keyWindow
+EMACS=/opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs
+lldb --batch -o "disassemble -n ns_send_appdefined" -o quit "$EMACS" | grep -c keyWindow
+lldb --batch -o "disassemble -n ns_read_socket_1"  -o quit "$EMACS" | grep -c scheduledTimer
 #+end_src
 
-One line of output means the fix is in; no output means it is not.
+Each command should print a non-zero count. A =0= means that fix is not in.
 
 *** Two traps when you rebuild later
 - Use =brew uninstall= and then =brew install= — not =brew reinstall=. If the
@@ -183,8 +194,9 @@ dictionaries, are in [[file:Customization.org][Customization & appearance]].
 * Under the hood / Customize
 - The base directory and module loading happen in =config.org= ("Bootstrap"
   section) via =local.el=.
-- The macOS freeze fix is =patches/emacs-30-ns-appdefined-windownumber.patch=;
-  its header records the full diagnosis. It is applied at build time through
+- The macOS freeze fix is =patches/emacs-30-ns-appdefined-windownumber.patch=
+  plus =patches/emacs-30-ns-appdefined-retry.patch=; their headers record the
+  full diagnosis. They are applied at build time through
   =~/.config/emacs-plus/build.yml=, not by this configuration at runtime.
 - The dev launcher =scripts/run_emacs_dev.sh= sets all of this up automatically
   for testing — see [[file:Developing.org][Developing & extending]].

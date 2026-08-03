@@ -37,7 +37,12 @@ You rarely need to press save:
 
 * Sessions
 Your set of open files and windows is saved when you quit and restored next
-time, so you pick up where you left off.
+time, so you pick up where you left off. The main window comes back at the size
+and position you left it.
+
+Only that one window is restored. If you had extra Emacs windows open (=C-x 5 2=
+and the like), they are not reopened — otherwise a window you had long forgotten
+about would reappear on the next start, showing a file you never asked for.
 
 * Backups
 Emacs keeps versioned backups and auto-save files in dedicated directories
