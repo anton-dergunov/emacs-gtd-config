@@ -29,10 +29,18 @@ EMACS_BIN=/path/to/emacs ./scripts/run_emacs_dev.sh
 
 ** Trying other Emacs builds
 #+begin_src bash
-./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app (default)
-./scripts/run_emacs_dev.sh --emacs plus     # emacs-plus@30 (Homebrew)
+./scripts/run_emacs_dev.sh --emacs plus     # emacs-plus@30, Homebrew (default)
+./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app
 ./scripts/run_emacs_dev.sh --emacs latest   # latest emacsformacosx.com build
 #+end_src
+
+=plus= is the default so development runs on the same build the config is used
+with day to day. It also avoids a startup warning that =/Applications/Emacs.app=
+prints on macOS — it ships its own copy of the =glib= libraries inside the
+bundle, and when Homebrew's copies are loaded as well, macOS reports a duplicate
+class ("=GNotificationCenterDelegate= is implemented in both..."). The warning is
+harmless, but the duplicate libraries it names are not something you want in the
+picture while debugging.
 
 ** Sandboxed runs
 Pass =--sandbox= to copy the repo (without =.git=) to a temp dir under =/tmp= and

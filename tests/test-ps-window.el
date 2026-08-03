@@ -179,5 +179,51 @@ the window manipulation is skipped."
             (should (= (with-current-buffer other-buf (point-max)) other-size))))
       (mapc #'kill-buffer (list agenda-buf other-buf)))))
 
+(ert-deftest ps/window--split-if-alone-advice-noop-while-inhibited ()
+  "Regression test: with `ps/window-inhibit-split' bound (an agenda redo is
+in progress) the view is rebuilt in the window it already occupies -- no
+second window appears.  The wrapped function still runs."
+  (let ((buf-a (generate-new-buffer "a"))
+        (split-width-threshold 0)
+        (split-height-threshold 0)
+        (called nil))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf-a)
+          (let ((ps/window-inhibit-split t))
+            (ps/window--split-if-alone-advice (lambda (&rest _) (setq called t))))
+          (should called)
+          (should (= (length (ps/window--content-windows)) 1)))
+      (kill-buffer buf-a))))
+
+(ert-deftest ps/window--inhibit-split-advice-binds-the-flag ()
+  "The redo wrapper binds `ps/window-inhibit-split' for the wrapped call only."
+  (let (seen)
+    (should-not ps/window-inhibit-split)
+    (ps/window--inhibit-split-advice
+     (lambda (&rest _) (setq seen ps/window-inhibit-split)))
+    (should seen)
+    (should-not ps/window-inhibit-split)))
+
+(ert-deftest ps/window--split-if-alone-advice-noop-inside-a-block-agenda ()
+  "Regression test: the `todo'/`tags-todo' blocks of a block agenda are run
+through `org-todo-list', which is advised to split when alone.  While
+`org-agenda-multi' is set the series is mid-assembly, so those blocks must
+not each split off another window."
+  (let ((buf-a (generate-new-buffer "a"))
+        (split-width-threshold 0)
+        (split-height-threshold 0)
+        (called nil))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf-a)
+          (let ((org-agenda-multi t))
+            (ps/window--split-if-alone-advice (lambda (&rest _) (setq called t))))
+          (should called)
+          (should (= (length (ps/window--content-windows)) 1)))
+      (kill-buffer buf-a))))
+
 (provide 'test-ps-window)
 ;;; test-ps-window.el ends here

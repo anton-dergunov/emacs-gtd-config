@@ -21,6 +21,10 @@ missing optional dependency or a path that needs setting.
   =Journal/=, =Archive/=, dotted folders, =init.org= and =workspace.org=.
 - If you've turned on *file-set filtering* (=C-c p g=), the agenda only shows the
   active set — toggle it off to see everything.
+- If it went empty part-way through a session, check =custom.el= in your config
+  folder for a saved =org-agenda-files= line and delete it. The agenda list is
+  computed from your Org folder on every build, so a value saved there is stale
+  by definition; older versions could end up saving one. Restart afterwards.
 
 * Icons look like boxes or are missing
 - The *Material Symbols Outlined* font isn't installed, or the wrong variant is.

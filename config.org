@@ -975,6 +975,28 @@ filter if `ps/file-tree-set-applies-to-agenda' is enabled."
     (setq org-agenda-files
           (ps/file-tree-filter-files (ps/org-files-all))))
   (ps/agenda-files-refresh)
+
+  ;; The list is derived from disk, never edited by hand -- so drop anything a
+  ;; previous session persisted through Customize. Org writes there whenever a
+  ;; file is added with `C-c [' or dropped by answering the "non-existent
+  ;; agenda file" prompt below, and a saved list then silently outlives the
+  ;; folder layout it was captured from.
+  (put 'org-agenda-files 'saved-value nil)
+
+  ;; Rescan before every agenda build, so files created, renamed, moved or
+  ;; deleted during the session are picked up without a restart. Without this
+  ;; the list is a snapshot of startup: reorganizing the Org folder leaves the
+  ;; agenda pointing at paths that no longer exist.
+  (with-eval-after-load 'org-agenda
+    (advice-add 'org-agenda-prepare :before
+                (lambda (&rest _) (ps/agenda-files-refresh))
+                '((name . ps/agenda-files-rescan))))
+
+  ;; Belt and braces: if a file does vanish mid-build anyway, skip it silently
+  ;; instead of stopping the agenda on a "Non-existent agenda file ... [R]emove
+  ;; from list or [A]bort?" prompt for each one. Answering `R' there is
+  ;; destructive -- it rewrites the (computed) list and saves it to custom.el.
+  (setq org-agenda-skip-unavailable-files t)
 #+end_src
 
 *** Agenda misc tweaks
@@ -1806,6 +1828,11 @@ in place while choosing; it is restored after the agenda is built either way."
       ;; (set to `current-window') no longer reorganizes the frame for them.
       (advice-add 'org-agenda :around #'ps/window--split-if-alone-advice)
       (advice-add 'org-todo-list :around #'ps/window--split-if-alone-advice)
+
+      ;; ...but a *refresh* rebuilds a view that is already on screen, so the
+      ;; same convenience there would add a redundant second window on every
+      ;; redo.  Rebuild in place instead.
+      (advice-add 'org-agenda-redo :around #'ps/window--inhibit-split-advice)
 
       ;; Show the agenda dispatcher (` *Agenda Commands*') as a bottom strip
       ;; without collapsing the frame.  Org's `org-display-buffer-split' calls

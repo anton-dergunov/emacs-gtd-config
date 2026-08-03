@@ -53,6 +53,10 @@ The layout shipped in =samples/realistic/= is one reasonable shape:
   collected into the index the AI assistant reads, so it knows which file a new
   task belongs in — see [[file:AI-integration.org][AI integration]].
 
+The directory is rescanned every time an agenda is built, so files you add,
+rename, move or delete show up (or disappear) on the next refresh — no restart
+needed, and no prompt about files that are no longer where they were.
+
 To scan only part of the directory, or to skip more names, see the /Org files/
 block in =config.org= (=ps/org-files-root=, =ps/org-files-exclude-directories=,
 =ps/org-files-exclude-files=).

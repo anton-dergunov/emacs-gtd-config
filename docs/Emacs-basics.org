@@ -69,6 +69,12 @@ you see several at once.
 | =C-x 0= | close the current window                      |
 | =C-x o= | move focus to the other window                |
 | =C-x b= | switch buffer                                 |
+| =C-x k= | close the current buffer                      |
+
+To close *everything* at once — useful after reorganizing your Org folder, when
+buffers are still pointing at the old paths — run =M-x desktop-clear=. It closes
+every buffer and empties the saved session, so the next restart doesn't bring
+the old ones back.
 
 This config adds =C-x |= (also =C-c p |=) to flip an existing split between
 horizontal and vertical — handy when the agenda and a file end up stacked the

@@ -4,9 +4,13 @@
 # On first run, packages are downloaded into elpa/ inside this repo.
 # local.el in the repo root points org files at samples/realistic/.
 #
-# Pass --emacs <variant> to pick which Emacs build to run (default: default):
-#   default - /Applications/Emacs.app (override with EMACS_BIN)
-#   plus    - emacs-plus@30 (Homebrew formula)
+# Pass --emacs <variant> to pick which Emacs build to run (default: plus):
+#   plus    - emacs-plus@30 (Homebrew formula) -- the build this config is
+#             used with day to day, so it is what development should test
+#   default - /Applications/Emacs.app (override with EMACS_BIN). Note this
+#             build ships its own copy of glib inside the bundle, which clashes
+#             with Homebrew's when both end up loaded ("Class
+#             GNotificationCenterDelegate is implemented in both ...").
 #   latest  - official latest build from emacsformacosx.com,
 #             installed to ~/Applications/Emacs-latest
 #
@@ -19,7 +23,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-EMACS_VARIANT="default"
+EMACS_VARIANT="plus"
 SANDBOX=false
 
 while [[ $# -gt 0 ]]; do
@@ -43,7 +47,13 @@ case "$EMACS_VARIANT" in
     EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
     ;;
   plus)
-    EMACS_BIN="$(brew --prefix)/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs"
+    EMACS_BIN="${EMACS_BIN:-$(brew --prefix)/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs}"
+    if [ ! -x "$EMACS_BIN" ]; then
+      echo "emacs-plus@30 not found at $EMACS_BIN" >&2
+      echo "Install it with:  brew install emacs-plus@30" >&2
+      echo "Or run another build:  $0 --emacs default" >&2
+      exit 1
+    fi
     ;;
   latest)
     EMACS_BIN="$HOME/Applications/Emacs-latest/Emacs.app/Contents/MacOS/Emacs"
