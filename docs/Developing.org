@@ -30,13 +30,20 @@ EMACS_BIN=/path/to/emacs ./scripts/run_emacs_dev.sh
 ** Trying other Emacs builds
 #+begin_src bash
 ./scripts/run_emacs_dev.sh --emacs plus     # emacs-plus@30, Homebrew (default)
-./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app
+./scripts/run_emacs_dev.sh --emacs default  # /Applications/Emacs.app, if installed
 ./scripts/run_emacs_dev.sh --emacs latest   # latest emacsformacosx.com build
 #+end_src
 
 =plus= is the default so development runs on the same build the config is used
-with day to day. It also avoids a startup warning that =/Applications/Emacs.app=
-prints on macOS — it ships its own copy of the =glib= libraries inside the
+with day to day, and it is the only one carrying the macOS freeze fix (see
+[[file:Installation.org][Installation]]). The other two are stock builds that still freeze, so treat them
+as one-off comparisons rather than something to work in.
+
+=default= expects a =/Applications/Emacs.app=, which this setup deliberately
+does not keep — having one there also shadows the patched build for the =emacs=
+command, since Homebrew's =emacs= is a wrapper script that prefers
+=/Applications/Emacs.app= over its own. That build additionally prints a startup
+warning on macOS: it ships its own copy of the =glib= libraries inside the
 bundle, and when Homebrew's copies are loaded as well, macOS reports a duplicate
 class ("=GNotificationCenterDelegate= is implemented in both..."). The warning is
 harmless, but the duplicate libraries it names are not something you want in the
@@ -63,7 +70,9 @@ PYTHONPATH=. pytest tests/test_emoji_matcher.py
 *Elisp* (modules in =lisp/=, tests in =tests/test-*.el=, using ERT):
 
 #+begin_src bash
-EMACS_BIN="/Applications/Emacs.app/Contents/MacOS/Emacs" ./scripts/org_test.sh
+./scripts/org_test.sh
+# or against a specific build:
+EMACS_BIN="$(brew --prefix)/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs" ./scripts/org_test.sh
 #+end_src
 
 #+begin_quote

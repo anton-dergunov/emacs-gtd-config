@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-EMACS_BIN="${EMACS_BIN:-/Applications/Emacs.app/Contents/MacOS/Emacs}"
+EMACS_BIN="${EMACS_BIN:-$(command -v emacs || echo emacs)}"
 
 exec "$EMACS_BIN" -Q --batch \
   -L "$REPO_DIR/lisp" \
