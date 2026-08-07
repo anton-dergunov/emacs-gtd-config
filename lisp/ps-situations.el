@@ -363,6 +363,35 @@ runs no finalize hook, so the stashed value is what survives it."
     (setq-local ps/situations-current-key
                 (and (boundp 'ps/situations-current) ps/situations-current))))
 
+(defun ps/situations--space-header ()
+  "Give a Situation view a real blank line under its header line.
+
+Org leaves an empty line after the Calendar's block header, but a tag search
+runs straight into its first match — so without this the plate sits flush
+against the list.  Inserting an actual newline is deliberate: overlay strings
+were tried at both ends of the header line (`after-string' on this line,
+`before-string' on the next) and neither is displayed here, and a real line
+also survives a resize re-layout, which runs no finalize hook.
+
+Runs before `ps/agenda-layout--apply' rewrites the header into the plate, so
+the plate ends up spaced exactly as the Calendar's control row is.  The newline
+is inserted with no text properties on purpose: inheriting the header's
+`org-agenda-structural-header' would make the layout and fold passes read the
+blank line as a second header."
+  (when (and ps/situations-current-key (derived-mode-p 'org-agenda-mode))
+    (let ((inhibit-read-only t))
+      (save-excursion
+        (goto-char (point-min))
+        (let ((found nil))
+          (while (and (not found) (not (eobp)))
+            (if (org-get-at-bol 'org-agenda-structural-header)
+                (setq found t)
+              (forward-line 1)))
+          (when found
+            (forward-line 1)
+            (unless (or (eobp) (looking-at-p "^$"))
+              (insert "\n"))))))))
+
 (defun ps/situations--item-count ()
   "Return the number of real agenda item lines in the current buffer."
   (let ((n 0))
@@ -433,6 +462,9 @@ file's Commentary."
   "Install the situation view's agenda hooks."
   ;; Ahead of `ps/mode-line--agenda-finalize' (-90), which reads the stash.
   (add-hook 'org-agenda-finalize-hook #'ps/situations--stash -95)
+  ;; After the stash (it needs the key), before the layout pass turns the header
+  ;; line into the plate.
+  (add-hook 'org-agenda-finalize-hook #'ps/situations--space-header -80)
   ;; After the layout pass, so the control row exists before we measure.
   (add-hook 'org-agenda-finalize-hook #'ps/situations--empty-notice 90))
 

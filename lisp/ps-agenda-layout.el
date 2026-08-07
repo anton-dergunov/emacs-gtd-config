@@ -1034,34 +1034,21 @@ control row and day sections; this is the Agenda day header.)"
     (put-text-property bol (point) 'ps/date-face face)))
 
 (defun ps/agenda-layout--reformat-control-row (bol eol label show-today
-                                                   &optional right nav face gap prefix)
+                                                   &optional right nav face prefix)
   "Turn the line [BOL, EOL) into a top control row showing LABEL.
 SHOW-TODAY, RIGHT, NAV and PREFIX are passed to
 `ps/agenda-layout--centered-controls'; FACE styles LABEL (default
 `ps/agenda-layout-control-label').
 
-GAP adds one blank line beneath the row.  Only the Situation views ask for it:
-after the Calendar's block header Org already leaves a real empty line, while a
-tag search runs straight into its first match.
-
-The gap is a `before-string' on the line *below*, not an `after-string' on this
-one — the same form the file tree uses for the strip above each top-level
-section (`ps/file-tree--gap-overlay').  An `after-string' on an empty overlay
-sitting at this line's newline is not drawn.  It carries an inert keymap so a
-stray click on the blank does nothing, rather than falling through to the
-nearest control-row button."
+The blank line under the row is *not* drawn here.  Org already leaves a real
+empty line after the Calendar's block header, and `ps/situations--space-header'
+inserts the same real line for a tag search, which runs straight into its first
+match otherwise.  Overlay strings were tried for this and are not displayed at
+either end of the header line."
   (ps/agenda-layout--replace-line
    bol eol
    (ps/agenda-layout--centered-controls
-    label (or face 'ps/agenda-layout-control-label) show-today right nav prefix))
-  (when gap
-    (save-excursion
-      (forward-line 1)
-      (let ((ov (make-overlay (point) (point)))
-            (m (make-sparse-keymap)))
-        (define-key m [mouse-1] #'ignore)
-        (overlay-put ov 'ps/agenda-layout t)
-        (overlay-put ov 'before-string (propertize "\n" 'keymap m))))))
+    label (or face 'ps/agenda-layout-control-label) show-today right nav prefix)))
 
 (defun ps/agenda-layout--reformat-day-section (bol eol)
   "Turn a Calendar day header [BOL, EOL) into a left-aligned grey day section.
@@ -1151,7 +1138,7 @@ not in scope during a resize.")
                        (ps/situations-plate-label)
                      "Situation")
                    nil (ps/agenda-layout--situation-row) nil
-                   'ps/agenda-layout-situation-label t
+                   'ps/agenda-layout-situation-label
                    (and (fboundp 'ps/situations-plate-icon)
                         (ps/situations-plate-icon)))
                 (ps/agenda-layout--reformat-control-row
