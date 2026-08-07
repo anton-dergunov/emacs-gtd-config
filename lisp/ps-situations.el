@@ -336,18 +336,22 @@ keyboard it completes over the situation names."
 
 (defun ps/situations-plate-label (&optional key)
   "Return the plate label for situation KEY (default: this buffer's).
-The Material Symbols icon, when the situation declares one and the frame can
-show images, is prefixed as a one-character image."
+The name alone — the icon is returned separately by
+`ps/situations-plate-icon', so that the *name* is what gets centred on the
+plate rather than the name-plus-icon pair."
+  (let ((s (ps/situations-find (or key ps/situations-current-key))))
+    (if s (ps/situations--name s) "Situation")))
+
+(defun ps/situations-plate-icon (&optional key)
+  "Return situation KEY's icon as a one-character image string, or nil.
+Nil when the situation declares no `:icon', the frame cannot show images, or
+the Material Symbols font is unavailable."
   (let* ((s (ps/situations-find (or key ps/situations-current-key)))
-         (name (and s (ps/situations--name s)))
          (icon (and s (plist-get s :icon)))
          (img (and icon (display-graphic-p)
                    (fboundp 'ps/material-icons-image)
                    (ps/material-icons-image icon))))
-    (cond
-     ((null name) "Situation")
-     (img (concat (propertize " " 'display img) " " name))
-     (t name))))
+    (and img (propertize " " 'display img))))
 
 (defun ps/situations--stash ()
   "Record which situation built this agenda buffer.

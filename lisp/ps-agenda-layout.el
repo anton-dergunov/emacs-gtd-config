@@ -68,6 +68,7 @@ the query; the Agenda view (`agenda') does neither.
 (declare-function ps/material-icons-available-p "ps-material-icons" ())
 (declare-function ps/agenda-emoji-lookup "ps-agenda-emoji" (title))
 (declare-function ps/situations-plate-label "ps-situations" (&optional key))
+(declare-function ps/situations-plate-icon "ps-situations" (&optional key))
 (declare-function ps/situations-switch "ps-situations" (&optional event))
 (declare-function org-agenda-earlier "org-agenda" (arg))
 (declare-function org-agenda-later "org-agenda" (arg))
@@ -957,13 +958,20 @@ the row, and the same list is one click away in the mode line."
     (ps/agenda-layout--text-button "Situations ▾" #'ps/situations-switch
                                    "Switch to another situation…")))
 
-(defun ps/agenda-layout--centered-controls (label face show-today &optional right nav)
+(defun ps/agenda-layout--centered-controls (label face show-today
+                                                  &optional right nav prefix)
   "Display string for a control row: LABEL (in FACE), centred, hugged by buttons.
 
 NAV draws the date navigation — prev/next chevrons flanking the label, plus the
 go-to-today button when SHOW-TODAY is non-nil.  A refresh button always follows
 the label.  RIGHT, when given, is a control string right-aligned at the content
 edge (the Calendar's span switcher, the Situations switcher).
+
+PREFIX is a decoration placed just left of LABEL (a Situation's icon) and is
+deliberately *excluded* from the centring: it is LABEL that should read as
+centred, and folding the icon into the measured width pushes the words off
+centre by its own width.  Used only where NAV is nil, since the chevrons
+occupy the same space.
 
 Date navigation is meaningful only in a dated view: the Situation views pass
 NAV nil, since stepping \"a period\" back from a tag search means nothing."
@@ -987,6 +995,10 @@ NAV nil, since stepping \"a period\" back from a tag search means nothing."
         (ps/agenda-layout--space-to (max 0 (- tstart 2)))
         (ps/agenda-layout--date-button "chevron_left" "‹"
                                        #'ps/agenda-layout-date-prev "Previous period")))
+     (when (and prefix (not nav))
+       (concat
+        (ps/agenda-layout--space-to (max 0 (- tstart (1+ (string-width prefix)))))
+        prefix))
      (ps/agenda-layout--space-to tstart)
      (propertize label 'face face 'help-echo label)
      (when nav
@@ -1022,28 +1034,34 @@ control row and day sections; this is the Agenda day header.)"
     (put-text-property bol (point) 'ps/date-face face)))
 
 (defun ps/agenda-layout--reformat-control-row (bol eol label show-today
-                                                   &optional right nav face blanks)
+                                                   &optional right nav face gap prefix)
   "Turn the line [BOL, EOL) into a top control row showing LABEL.
-SHOW-TODAY, RIGHT and NAV are passed to `ps/agenda-layout--centered-controls';
-FACE styles LABEL (default `ps/agenda-layout-control-label').
+SHOW-TODAY, RIGHT, NAV and PREFIX are passed to
+`ps/agenda-layout--centered-controls'; FACE styles LABEL (default
+`ps/agenda-layout-control-label').
 
-BLANKS blank lines are added beneath the row (default 1) as an overlay, so no
-buffer text is inserted.  The count is a parameter because the two views start
-from different buffer text: after the Calendar's block header Org leaves a real
-empty line, while a tag search runs straight into its first match — so a
-Situation view needs one more to reach the same spacing."
+GAP adds one blank line beneath the row.  Only the Situation views ask for it:
+after the Calendar's block header Org already leaves a real empty line, while a
+tag search runs straight into its first match.
+
+The gap is a `before-string' on the line *below*, not an `after-string' on this
+one — the same form the file tree uses for the strip above each top-level
+section (`ps/file-tree--gap-overlay').  An `after-string' on an empty overlay
+sitting at this line's newline is not drawn.  It carries an inert keymap so a
+stray click on the blank does nothing, rather than falling through to the
+nearest control-row button."
   (ps/agenda-layout--replace-line
    bol eol
    (ps/agenda-layout--centered-controls
-    label (or face 'ps/agenda-layout-control-label) show-today right nav))
-  ;; The blank line carries an inert keymap so a stray click on it does nothing
-  ;; (rather than falling through to the nearest control-row button).
-  (let ((ov (make-overlay (point) (point)))
-        (blank (let ((m (make-sparse-keymap)))
-                 (define-key m [mouse-1] #'ignore)
-                 (propertize (make-string (or blanks 1) ?\n) 'keymap m))))
-    (overlay-put ov 'ps/agenda-layout t)
-    (overlay-put ov 'after-string blank)))
+    label (or face 'ps/agenda-layout-control-label) show-today right nav prefix))
+  (when gap
+    (save-excursion
+      (forward-line 1)
+      (let ((ov (make-overlay (point) (point)))
+            (m (make-sparse-keymap)))
+        (define-key m [mouse-1] #'ignore)
+        (overlay-put ov 'ps/agenda-layout t)
+        (overlay-put ov 'before-string (propertize "\n" 'keymap m))))))
 
 (defun ps/agenda-layout--reformat-day-section (bol eol)
   "Turn a Calendar day header [BOL, EOL) into a left-aligned grey day section.
@@ -1133,7 +1151,9 @@ not in scope during a resize.")
                        (ps/situations-plate-label)
                      "Situation")
                    nil (ps/agenda-layout--situation-row) nil
-                   'ps/agenda-layout-situation-label 2)
+                   'ps/agenda-layout-situation-label t
+                   (and (fboundp 'ps/situations-plate-icon)
+                        (ps/situations-plate-icon)))
                 (ps/agenda-layout--reformat-control-row
                  bol eol
                  (ps/agenda-layout--span-header-label cal-start cal-span)
