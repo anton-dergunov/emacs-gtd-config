@@ -1041,7 +1041,7 @@ SHOW-TODAY, RIGHT, NAV and PREFIX are passed to
 `ps/agenda-layout-control-label').
 
 The blank line under the row is *not* drawn here.  Org already leaves a real
-empty line after the Calendar's block header, and `ps/situations--space-header'
+empty line after the Calendar's block header, and `ps/situations--tidy-header'
 inserts the same real line for a tag search, which runs straight into its first
 match otherwise.  Overlay strings were tried for this and are not displayed at
 either end of the header line."

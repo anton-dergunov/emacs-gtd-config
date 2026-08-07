@@ -363,21 +363,29 @@ runs no finalize hook, so the stashed value is what survives it."
     (setq-local ps/situations-current-key
                 (and (boundp 'ps/situations-current) ps/situations-current))))
 
-(defun ps/situations--space-header ()
-  "Give a Situation view a real blank line under its header line.
+(defun ps/situations--tidy-header ()
+  "Repair the header line of a Situation view before the plate is drawn on it.
 
-Org leaves an empty line after the Calendar's block header, but a tag search
-runs straight into its first match — so without this the plate sits flush
-against the list.  Inserting an actual newline is deliberate: overlay strings
-were tried at both ends of the header line (`after-string' on this line,
-`before-string' on the next) and neither is displayed here, and a real line
-also survives a resize re-layout, which runs no finalize hook.
+Two fixes, both for things `org-tags-view' leaves behind, and both done here
+because `ps/agenda-layout--apply' turns this line into the plate immediately
+afterwards:
 
-Runs before `ps/agenda-layout--apply' rewrites the header into the plate, so
-the plate ends up spaced exactly as the Calendar's control row is.  The newline
-is inserted with no text properties on purpose: inheriting the header's
-`org-agenda-structural-header' would make the layout and fold passes read the
-blank line as a second header."
+1. Strip the stray face off the line's trailing newline.  Inside a block series
+   `org-agenda-multi' is non-nil, so `org-tags-view' skips the \"Press C-u r to
+   search again\" line — but it still runs the `add-text-properties' meant for
+   it, over a now-reversed range that Emacs normalises onto the preceding
+   character.  `org-agenda-structure-secondary' therefore lands on the newline,
+   which draws as a one-character coloured box past the end of the plate.
+
+2. Add a real blank line beneath.  Org leaves one after the Calendar's block
+   header, but a tag search runs straight into its first match, so without this
+   the plate sits flush against the list.  A real newline, not an overlay
+   string: those are not displayed at either end of this line (`after-string'
+   here, `before-string' on the next were both tried), and a real line also
+   survives a resize re-layout, which runs no finalize hook.  It is inserted
+   with no text properties on purpose — inheriting the header's
+   `org-agenda-structural-header' would make the layout and fold passes read
+   the blank line as a second header."
   (when (and ps/situations-current-key (derived-mode-p 'org-agenda-mode))
     (let ((inhibit-read-only t))
       (save-excursion
@@ -388,6 +396,9 @@ blank line as a second header."
                 (setq found t)
               (forward-line 1)))
           (when found
+            (let ((eol (line-end-position)))
+              (when (< eol (point-max))
+                (remove-text-properties eol (1+ eol) '(face nil))))
             (forward-line 1)
             (unless (or (eobp) (looking-at-p "^$"))
               (insert "\n"))))))))
@@ -464,7 +475,7 @@ file's Commentary."
   (add-hook 'org-agenda-finalize-hook #'ps/situations--stash -95)
   ;; After the stash (it needs the key), before the layout pass turns the header
   ;; line into the plate.
-  (add-hook 'org-agenda-finalize-hook #'ps/situations--space-header -80)
+  (add-hook 'org-agenda-finalize-hook #'ps/situations--tidy-header -80)
   ;; After the layout pass, so the control row exists before we measure.
   (add-hook 'org-agenda-finalize-hook #'ps/situations--empty-notice 90))
 
