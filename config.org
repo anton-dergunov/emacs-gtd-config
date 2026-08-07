@@ -2293,25 +2293,21 @@ calendar boundary containing the start day (e.g. the whole current week)."
     ;; Help
     (define-key m (kbd "h") #'ps/help-open-doc))            ; h → Help / docs index
 
+  ;; The Plan & Review submenu is `ps/mode-line-view-menu-items' (lisp/ps-mode-line.el)
+  ;; plus this menu's own "Full Agenda…" entry at the end. That list is the single
+  ;; definition of the planning views, so this menu and the mode-line view switcher
+  ;; can never drift apart; `:filter' also means the Situations submenu inside it is
+  ;; regenerated from `ps/situations' on every open.
+  (defun ps/productivity--plan-review-filter (&optional _items)
+    "Build the Plan & Review submenu from the shared view list."
+    (append (ps/mode-line-view-menu-items)
+            (list "---"
+                  ["Full Agenda…" org-agenda :keys "C-c a"])))
+
   (easy-menu-define ps/productivity-menu global-map
     "Productivity tools menu (Org planning, links, sync, etc.)."
     '("Productivity"
-      ("Plan & Review"
-       ["Agenda"              ps/show-agenda           :keys "C-c p a"]
-       ("Calendar"
-        ["Open (Day)"         ps/show-calendar         :keys "C-c p c c"]
-        ["Day"                ps/show-calendar-day     :keys "C-c p c d"]
-        ["Week"               ps/show-calendar-week    :keys "C-c p c w"]
-        ["Month"              ps/show-calendar-month   :keys "C-c p c m"]
-        ["Year"               ps/show-calendar-year    :keys "C-c p c y"])
-       ;; Generated from `ps/situations' on every menu open (`:filter'), so a
-       ;; situation added to workspace.org shows up after C-c p w — no
-       ;; hardcoded copy of the list here.
-       ("Situations" :filter ps/situations--menu-filter)
-       ["Tasks"               ps/show-tasks            :keys "C-c p n   /   F9"]
-       ["Full Agenda…"        org-agenda               :keys "C-c a"]
-       ["Show Availability"   ps/org-show-availability :keys "C-c p v"]
-       ["Check Conflicts"     ps/show-conflicts        :keys "C-c p x"])
+      ("Plan & Review" :filter ps/productivity--plan-review-filter)
       ("Schedule View"
        ["Timeline" (ps/schedule-view-set-style 'timeline)
         :style radio :selected (eq ps/schedule-view-style 'timeline)]

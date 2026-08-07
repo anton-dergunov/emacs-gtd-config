@@ -185,11 +185,6 @@ this is what a plain `push' per entry got wrong."
 ;;; situations — menus
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/situations--menu-items-carry-the-key ()
-  (should (equal (ps/situations--menu-items ps/situations-test--two)
-                 '(("A spare minute (a queue)" situation . "m")
-                   ("On foot" situation . "f")))))
-
 (ert-deftest ps/situations--menu-vectors-bind-show-situation ()
   (let ((v (car (ps/situations--menu-vectors ps/situations-test--two))))
     (should (equal (aref v 0) "A spare minute (a queue)"))

@@ -69,9 +69,10 @@ At the top sits a *plate* naming the situation, with its icon. To its right:
 There are no back/forward arrows here — unlike the Calendar, a situation is not a
 period of time, so there is nothing to step through.
 
-The mode line shows =Situation · <name>=, and clicking it opens the same view
-switcher used everywhere else — with all your situations listed under the fixed
-Agenda / Calendar / Tasks entries.
+The mode line shows =Situation · <name>=, and clicking it opens the view
+switcher — the same menu, with the same entries in the same order, as
+Productivity → Plan & Review. Your situations sit in its /Situations/ submenu,
+so you can move between any two views from one click.
 
 If nothing matches, the view says so rather than showing an empty page. That is
 useful information: an empty /To download/ means you are ready to lose signal.

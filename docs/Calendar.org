@@ -58,8 +58,9 @@ timeline, the now-indicator, and the scheduled / due / overdue sections belong t
 the [[file:Agenda.org][Agenda]]; the Calendar deliberately leaves them out. The mode line names the
 current view and span, e.g. =Calendar · Week=, and that title doubles as a
 *view switcher*: click it to jump straight to the [[file:Agenda.org][Agenda]],
-[[file:Tasks-view.org][Tasks]], [[file:Planning-tools.org][Availability or
-Conflicts]], or another Calendar span. Whichever you pick takes over the
+[[file:Tasks-view.org][Tasks]], a [[file:Situations.org][situation]],
+[[file:Planning-tools.org][Availability or Conflicts]], or another Calendar
+span. Whichever you pick takes over the
 window you're in, leaving any other open window untouched.
 
 * Switching the span

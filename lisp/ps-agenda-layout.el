@@ -247,6 +247,13 @@ tunable face: left-aligned, bold, normal size."
   "Face for the span label in the Calendar control row (e.g. \"18–24 May 2026\")."
   :group 'ps-agenda-layout)
 
+(defface ps/agenda-layout-situation-label
+  '((t :inherit ps/agenda-layout-control-label :weight bold))
+  "Face for the situation name on a Situation view's plate.
+Bold, unlike the Calendar's date label: it is the only thing naming the view,
+and the list beneath it carries no section headers to anchor the eye."
+  :group 'ps-agenda-layout)
+
 (defface ps/agenda-layout-span-button
   '((t :inherit default :box (:line-width (1 . -1))))
   "Face for the Calendar span-switch buttons (D W M Y / Range…).
@@ -1014,21 +1021,27 @@ control row and day sections; this is the Agenda day header.)"
     (put-text-property bol (point) 'ps/date-text text)
     (put-text-property bol (point) 'ps/date-face face)))
 
-(defun ps/agenda-layout--reformat-control-row (bol eol label show-today &optional right nav)
+(defun ps/agenda-layout--reformat-control-row (bol eol label show-today
+                                                   &optional right nav face blanks)
   "Turn the line [BOL, EOL) into a top control row showing LABEL.
-SHOW-TODAY, RIGHT and NAV are passed to `ps/agenda-layout--centered-controls'.
-Adds one blank line beneath the row \(an overlay, so no buffer text is
-inserted) — the header spacing shared by the Calendar and Situation views."
+SHOW-TODAY, RIGHT and NAV are passed to `ps/agenda-layout--centered-controls';
+FACE styles LABEL (default `ps/agenda-layout-control-label').
+
+BLANKS blank lines are added beneath the row (default 1) as an overlay, so no
+buffer text is inserted.  The count is a parameter because the two views start
+from different buffer text: after the Calendar's block header Org leaves a real
+empty line, while a tag search runs straight into its first match — so a
+Situation view needs one more to reach the same spacing."
   (ps/agenda-layout--replace-line
    bol eol
    (ps/agenda-layout--centered-controls
-    label 'ps/agenda-layout-control-label show-today right nav))
+    label (or face 'ps/agenda-layout-control-label) show-today right nav))
   ;; The blank line carries an inert keymap so a stray click on it does nothing
   ;; (rather than falling through to the nearest control-row button).
   (let ((ov (make-overlay (point) (point)))
         (blank (let ((m (make-sparse-keymap)))
                  (define-key m [mouse-1] #'ignore)
-                 (propertize "\n" 'keymap m))))
+                 (propertize (make-string (or blanks 1) ?\n) 'keymap m))))
     (overlay-put ov 'ps/agenda-layout t)
     (overlay-put ov 'after-string blank)))
 
@@ -1119,7 +1132,8 @@ not in scope during a resize.")
                    (if (fboundp 'ps/situations-plate-label)
                        (ps/situations-plate-label)
                      "Situation")
-                   nil (ps/agenda-layout--situation-row) nil)
+                   nil (ps/agenda-layout--situation-row) nil
+                   'ps/agenda-layout-situation-label 2)
                 (ps/agenda-layout--reformat-control-row
                  bol eol
                  (ps/agenda-layout--span-header-label cal-start cal-span)

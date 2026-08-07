@@ -42,8 +42,10 @@
 (declare-function ps/show-conflicts "ps-conflicts" ())
 (declare-function ps/org-show-availability "ps-availability" ())
 (declare-function ps/show-situation "ps-situations" (key))
-(declare-function ps/situations--menu-items "ps-situations" (&optional situations))
+(declare-function ps/situations--menu-filter "ps-situations" (&optional items))
 (declare-function ps/situations--name "ps-situations" (situation))
+(declare-function ps/show-calendar "config" (&optional span))
+(declare-function easy-menu-create-menu "easymenu" (menu-name menu-items))
 (declare-function ps/situations-find "ps-situations" (key))
 ;; Set by `ps/situations--stash' on every agenda build; nil outside a Situation view.
 (defvar ps/situations-current-key)
@@ -234,42 +236,43 @@ Set by `ps/conflicts--agenda-check' (lisp/ps-conflicts.el); cleared by
 `ps/mode-line--agenda-finalize' on every non-Agenda rebuild so a stale count
 never leaks into the Calendar or Tasks mode line.")
 
-(defconst ps/mode-line--view-items
-  '(("Agenda" . ps/show-agenda)
-    ("Calendar: Day" . ps/show-calendar-day)
-    ("Calendar: Week" . ps/show-calendar-week)
-    ("Calendar: Month" . ps/show-calendar-month)
-    ("Calendar: Year" . ps/show-calendar-year)
-    ("Tasks" . ps/show-tasks)
-    ("Availability" . ps/org-show-availability)
-    ("Conflicts" . ps/show-conflicts))
-  "Planning views offered by the mode-line view switcher.
-An alist of (LABEL . COMMAND), shown as a flat popup menu by
-`ps/mode-line--view-click' — the same combo-box interaction as the file
-tree's file-set selector (see `ps/file-tree--modeline-click').  Reachable
-from any of the views' own mode lines (Agenda/Calendar/Tasks and the
-Availability/Conflicts buffers).")
+(defun ps/mode-line-view-menu-items ()
+  "Return the planning views as an easymenu item list.
 
-(defun ps/mode-line--view-menu ()
-  "Return the planning-views popup menu for `x-popup-menu'.
-The fixed views come first; when situations are configured they follow as a
-second pane, generated from `ps/situations' so the menu can never drift from
-the declaration (see `lisp/ps-situations.el')."
-  (let ((situations (and (fboundp 'ps/situations--menu-items)
-                         (ps/situations--menu-items))))
-    (append (list "View" (cons "Views" ps/mode-line--view-items))
-            (when situations (list (cons "Situations" situations))))))
+The single definition of the view menu, shared by two places so they cannot
+drift apart: the mode-line view switcher pops it up verbatim
+\(`ps/mode-line--view-click'), and config.org's Productivity → Plan & Review
+submenu is built from it, adding only its own \"Full Agenda…\" entry.  Both
+therefore show the same entries, nested the same way, in the same order.
+
+The Situations submenu is generated on open from `ps/situations' (see
+`ps/situations--menu-filter'), and omitted when that module is absent."
+  (append
+   (list ["Agenda" ps/show-agenda :keys "C-c p a"]
+         (list "Calendar"
+               ["Open (Day)" ps/show-calendar       :keys "C-c p c c"]
+               ["Day"        ps/show-calendar-day   :keys "C-c p c d"]
+               ["Week"       ps/show-calendar-week  :keys "C-c p c w"]
+               ["Month"      ps/show-calendar-month :keys "C-c p c m"]
+               ["Year"       ps/show-calendar-year  :keys "C-c p c y"]))
+   (when (fboundp 'ps/situations--menu-filter)
+     (list (list "Situations" :filter #'ps/situations--menu-filter)))
+   (list ["Tasks"        ps/show-tasks            :keys "C-c p n   /   F9"]
+         ["Availability" ps/org-show-availability :keys "C-c p v"]
+         ["Conflicts"    ps/show-conflicts        :keys "C-c p x"])))
 
 (defun ps/mode-line--view-click (event)
   "Show a popup menu of planning views and switch to the one EVENT selects.
-A choice is either a command symbol or, for a situation, a (situation . KEY)
-cons — see `ps/situations--menu-items'."
+
+Built as a real menu keymap rather than an alist of panes, so the popup can
+carry the nested Calendar and Situations submenus and match the Productivity
+menu exactly."
   (interactive "e")
-  (let ((choice (x-popup-menu event (ps/mode-line--view-menu))))
-    (cond
-     ((and (consp choice) (eq (car choice) 'situation))
-      (ps/show-situation (cdr choice)))
-     (choice (call-interactively choice)))))
+  (require 'easymenu)
+  (let* ((menu (easy-menu-create-menu "View" (ps/mode-line-view-menu-items)))
+         (choice (x-popup-menu event menu))
+         (cmd (and choice (lookup-key menu (apply #'vector choice)))))
+    (when (commandp cmd) (call-interactively cmd))))
 
 (defun ps/mode-line--view-title (label)
   "Return a clickable \"LABEL ▾\" mode-line segment.

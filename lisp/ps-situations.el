@@ -273,13 +273,6 @@ by config.org keep the top of the dispatcher."
                existing)
    (ps/situations--custom-commands situations)))
 
-(defun ps/situations--menu-items (&optional situations)
-  "Return ((DESCRIPTION . (situation . KEY)) ...) for a popup menu."
-  (mapcar (lambda (s)
-            (cons (ps/situations--description s)
-                  (cons 'situation (plist-get s :key))))
-          (or situations (ps/situations-all))))
-
 (defun ps/situations--menu-vectors (&optional situations)
   "Return easymenu vectors, one per situation."
   (mapcar (lambda (s)
@@ -322,10 +315,18 @@ keyboard it completes over the situation names."
   (let ((all (ps/situations-all)))
     (unless all (user-error "No situations defined (see `ps/situations')"))
     (if (and event (not (integerp event)) (fboundp 'x-popup-menu))
+        ;; A flat pane is right here: this is the in-buffer switcher, offering
+        ;; only situations (the mode line's menu is the one that also carries
+        ;; the other views, and is built as a nested keymap).
         (let ((choice (x-popup-menu
-                       event (list "Situations"
-                                   (cons "Situations" (ps/situations--menu-items all))))))
-          (when (consp choice) (ps/show-situation (cdr choice))))
+                       event
+                       (list "Situations"
+                             (cons "Situations"
+                                   (mapcar (lambda (s)
+                                             (cons (ps/situations--description s)
+                                                   (plist-get s :key)))
+                                           all))))))
+          (when (stringp choice) (ps/show-situation choice)))
       (ps/show-situation (plist-get (ps/situations--read) :key)))))
 
 ;;; Agenda-view integration

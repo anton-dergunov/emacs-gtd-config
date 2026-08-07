@@ -327,9 +327,11 @@ change recomputes and updates the window-parameter cache."
       (should called))))
 
 (ert-deftest ps/mode-line--view-click-calls-chosen-view ()
-  "Selecting a popup entry calls its command."
+  "Selecting a popup entry runs the command the menu keymap binds it to."
   (let ((called nil))
     (cl-letf (((symbol-function 'x-popup-menu)
+               (lambda (&rest _) '(menu-bar tasks)))
+              ((symbol-function 'lookup-key)
                (lambda (&rest _) #'ps/show-tasks))
               ((symbol-function 'ps/show-tasks)
                (lambda () (interactive) (setq called t))))
@@ -341,14 +343,30 @@ change recomputes and updates the window-parameter cache."
   (cl-letf (((symbol-function 'x-popup-menu) (lambda (&rest _) nil)))
     (should-not (ps/mode-line--view-click 'fake-event))))
 
-(ert-deftest ps/mode-line--view-items-includes-all-five-views ()
-  "Availability and Conflicts are reachable from the switcher, alongside
-Agenda/Calendar/Tasks."
-  (let ((labels (mapcar #'car ps/mode-line--view-items)))
-    (should (member "Availability" labels))
-    (should (member "Conflicts" labels))
-    (should (member "Agenda" labels))
-    (should (member "Tasks" labels))))
+(ert-deftest ps/mode-line-view-menu-items-lists-every-view ()
+  "The shared list carries all the views, with Calendar nested as a submenu."
+  (let* ((items (ps/mode-line-view-menu-items))
+         (labels (mapcar (lambda (i) (if (vectorp i) (aref i 0) (car i))) items)))
+    (should (equal labels
+                   '("Agenda" "Calendar" "Situations"
+                     "Tasks" "Availability" "Conflicts")))
+    ;; Calendar is a real submenu, not a flattened "Calendar: Week" entry.
+    (let ((cal (seq-find (lambda (i) (equal (car-safe i) "Calendar")) items)))
+      (should (listp cal))
+      (should (equal (mapcar (lambda (v) (aref v 0)) (cdr cal))
+                     '("Open (Day)" "Day" "Week" "Month" "Year"))))
+    ;; Situations is generated on open, so the menu can never go stale.
+    (let ((sit (seq-find (lambda (i) (equal (car-safe i) "Situations")) items)))
+      (should (eq (nth 1 sit) :filter)))))
+
+(ert-deftest ps/mode-line-view-menu-items-omits-situations-when-unavailable ()
+  "Without the situations module the submenu is simply absent, not broken."
+  ;; A nil function cell reads as unbound, and `cl-letf' restores the original.
+  (cl-letf (((symbol-function 'ps/situations--menu-filter) nil))
+    (should-not (fboundp 'ps/situations--menu-filter))
+    (let ((labels (mapcar (lambda (i) (if (vectorp i) (aref i 0) (car i)))
+                          (ps/mode-line-view-menu-items))))
+      (should-not (member "Situations" labels)))))
 
 ;;; -------------------------------------------------------
 ;;; ps/mode-line--view-title / ps/mode-line--simple-view-render

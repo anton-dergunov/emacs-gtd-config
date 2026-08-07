@@ -122,8 +122,10 @@ planning view readable — not a cosmetic theme choice. Its colors follow whatev
 In any of the five planning-view buffers — Agenda, [[file:Calendar.org][Calendar]],
 [[file:Tasks-view.org][Tasks]], [[file:Planning-tools.org][Availability]], or
 [[file:Planning-tools.org][Conflicts]] — the leading title (e.g. =Agenda ▾=) is
-also a *view switcher*: click it to pop up a menu and jump straight to any of
-the other four — the same click-a-label-for-a-menu interaction as the
+also a *view switcher*: click it to pop up a menu and jump straight to any
+other view, [[file:Situations.org][situations]] included — it mirrors
+Productivity → Plan & Review exactly, and it is the same
+click-a-label-for-a-menu interaction as the
 [[file:Files-and-navigation.org][file tree]]'s file-set selector. Whichever
 view you switch to takes over the window you're in, leaving any other open
 window untouched (splitting first only if that window is the only one open).
