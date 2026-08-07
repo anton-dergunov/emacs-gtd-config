@@ -365,11 +365,13 @@ Leaves NAME unchanged if it doesn't end in \".org\" or is exactly \".org\"."
   (propertize " " 'display (list 'space :width ps/file-tree-name-spacing)))
 
 (defun ps/file-tree-transform-file-name (name)
-  "Transform NAME for display: strip \".org\" and add leading spacing.
+  "Transform NAME for display: strip \".org\", replace \"_\" with a space,
+and add leading spacing.
 Suitable for `treemacs-file-name-transformer'. Does not affect the
 underlying path used to open the file."
   (concat (ps/file-tree--spacer)
-          (ps/file-tree--strip-org-extension name)))
+          (replace-regexp-in-string
+           "_" " " (ps/file-tree--strip-org-extension name))))
 
 (defun ps/file-tree-transform-dir-name (name)
   "Transform NAME for display: add leading spacing.

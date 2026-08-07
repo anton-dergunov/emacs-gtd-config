@@ -390,6 +390,12 @@ with no way back."
     (should (equal (ps/file-tree-transform-file-name "Career.ORG") " Career"))
     (should (equal (ps/file-tree-transform-file-name "Career.Org") " Career"))))
 
+(ert-deftest ps/file-tree-transform-file-name-replaces-underscores-with-spaces ()
+  "Underscores in the stripped name are displayed as spaces."
+  (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
+    (should (equal (ps/file-tree-transform-file-name "Deep_Learning.org") " Deep Learning"))
+    (should (equal (ps/file-tree-transform-file-name "Generative_AI.org") " Generative AI"))))
+
 (ert-deftest ps/file-tree-transform-file-name-leaves-non-org-files-alone ()
   "Files not ending in .org keep their extension, just gain leading spacing."
   (let ((ps/file-tree-name-spacing (default-value 'ps/file-tree-name-spacing)))
