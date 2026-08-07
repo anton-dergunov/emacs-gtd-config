@@ -36,6 +36,12 @@ still leaves a window in which Emacs can freeze:
   be possible even when the window is valid — for instance while a second frame
   is taking focus.
 
+A third patch is optional and purely cosmetic:
+
+- =patches/emacs-30-ns-resize-title.patch= keeps the window title alone while
+  you drag a window edge. Without it the title bar reads =*Org Agenda* — (124 ×
+  57)= for as long as the drag lasts.
+
 [[https://github.com/d12frosted/homebrew-emacs-plus][emacs-plus]] builds Emacs from source, so it can apply the patches for you:
 
 #+begin_src bash
@@ -50,6 +56,9 @@ patches:
   - ns-appdefined-retry:
       url: ~/.emacs.d/patches/emacs-30-ns-appdefined-retry.patch
       sha256: 48c4577d5e49a74a40effe217cdd392bd30f6b5ca7139ef5e10cfa2c53a4c0fe
+  - ns-resize-title:
+      url: ~/.emacs.d/patches/emacs-30-ns-resize-title.patch
+      sha256: c37fc4260551c3f380d0a81603cf5302fd6611d3822dc0f2893002197f48e873
 YAML
 
 brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
@@ -63,7 +72,7 @@ with "Local patch file not found", so it cannot silently do nothing. Change a
 patch file and the build stops on a checksum mismatch until you update its
 =sha256=.
 
-To confirm that the Emacs you are running really has both fixes:
+To confirm that the Emacs you are running really has both freeze fixes:
 
 #+begin_src bash
 EMACS=/opt/homebrew/opt/emacs-plus@30/Emacs.app/Contents/MacOS/Emacs
@@ -71,7 +80,12 @@ lldb --batch -o "disassemble -n ns_send_appdefined" -o quit "$EMACS" | grep -c k
 lldb --batch -o "disassemble -n ns_read_socket_1"  -o quit "$EMACS" | grep -c scheduledTimer
 #+end_src
 
-Each command should print a non-zero count. A =0= means that fix is not in.
+Each command should print a non-zero count. A =0= means that fix is not in. The
+title-bar patch is the other way round — this one should print =0=:
+
+#+begin_src bash
+lldb --batch -o "disassemble -n '-[EmacsView windowWillResize:toSize:]'" -o quit "$EMACS" | grep -c setTitle
+#+end_src
 
 *** Two traps when you rebuild later
 - Use =brew uninstall= and then =brew install= — not =brew reinstall=. If the
@@ -85,14 +99,21 @@ Each command should print a non-zero count. A =0= means that fix is not in.
   Homebrew emits its own flags before these, so this one wins.
   Note that =brew update= silently reverts the edit.
 
-*** What the patch does
+*** What the patches do
 Emacs pumps the macOS event loop by posting itself a private "wake up" event
 and waiting for it to come back. That event is addressed to the application's
 main window, and while the window is minimised there is no main window — so the
 event is addressed to nothing, macOS discards it, and Emacs waits forever.
 Nothing retries, and the timer that could have rescued it has already been
-cancelled, so a single lost event wedges Emacs permanently. The patch addresses
-the event to a window that actually exists.
+cancelled, so a single lost event wedges Emacs permanently. The first two
+patches address the event to a window that actually exists, and keep re-sending
+it until the loop really wakes up.
+
+The third removes an old habit of Emacs's macOS port: while a window is being
+resized it overwrites the title bar with the frame's size in characters, and
+puts the real title back when you let go. It was there because window managers
+under GNUstep do this themselves; macOS ones do not, and the size is not worth
+a title that changes under the pointer.
 
 * 2. Install ripgrep
 [[https://github.com/BurntSushi/ripgrep][ripgrep]] powers fast in-project search.

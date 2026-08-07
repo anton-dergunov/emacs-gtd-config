@@ -157,6 +157,20 @@ directory below a project root fell through to treemacs's own dir icon."
         (should (equal (ps/file-tree-icons-test--icon keys "test.org")
                        ps/file-tree-icons--file))))))
 
+(ert-deftest ps/file-tree-icons--collect-registers-the-org-extension ()
+  "The \"org\" extension key carries the generic file glyph.
+Regression: only per-filename keys were registered, so a file created after
+the walk -- or one already deleted -- fell through to treemacs's own icon."
+  (ps/file-tree-icons-test--with-tree '("Inbox.org")
+    (let ((ps/material-icons-folder-map nil)
+          (ps/material-icons-folder-contents-map nil)
+          (ps/material-icons-category-map '(("Inbox" . "inbox"))))
+      (let ((keys (ps/file-tree-icons--collect dir)))
+        (should (equal (ps/file-tree-icons-test--icon keys "org")
+                       ps/file-tree-icons--file))
+        ;; A mapped file still wins over the extension key.
+        (should (equal (ps/file-tree-icons-test--icon keys "inbox.org") "inbox"))))))
+
 (ert-deftest ps/file-tree-icons--collect-folder-contents-beats-category ()
   "`folder-contents-map' icons every file under a folder, overriding categories."
   (ps/file-tree-icons-test--with-tree '("Vision/2026.org" "Vision/old/2024.org"

@@ -1,0 +1,61 @@
+Stop macOS from replacing the frame title with the frame size while resizing.
+
+While a window edge is being dragged, -[EmacsView windowWillResize:toSize:]
+saves the NSWindow title and puts the text-grid dimensions in its place, so
+the title bar reads "*Org Agenda*  —  (124 × 57)" until the drag ends and
+-[EmacsView viewDidEndLiveResize] restores what was there before.
+
+This is unconditional: it is not driven by `frame-title-format' or by any
+other Lisp variable, and re-setting the title from Lisp cannot win, because
+Emacs only pushes a title to AppKit when the *computed* string changes while
+this code overwrites the NSWindow title on every step of the resize.  Under
+the GNUstep port the window manager shows the size itself, which is where the
+behaviour comes from; macOS window managers do not, and a title that changes
+under the pointer is more distracting than the size is useful.
+
+Remove the block.  `old_title' is then never set, which leaves
+viewDidEndLiveResize's restore a no-op while it still clears
+`maximizing_resize', so nothing else in the resize path changes.
+
+--- a/src/nsterm.m
++++ b/src/nsterm.m
+@@ -7834,39 +7834,6 @@
+                                            frameSize.height - extra);
+   if (rows < MINHEIGHT)
+     rows = MINHEIGHT;
+-#ifdef NS_IMPL_COCOA
+-  {
+-    /* This sets window title to have size in it; the wm does this under GS.  */
+-    NSRect r = [[self window] frame];
+-    if (r.size.height == frameSize.height && r.size.width == frameSize.width)
+-      {
+-        if (old_title != 0)
+-          {
+-            xfree (old_title);
+-            old_title = 0;
+-          }
+-      }
+-    else if (fs_state == FULLSCREEN_NONE && ! maximizing_resize
+-             && [[self window] title] != NULL)
+-      {
+-        char *size_title;
+-        NSWindow *window = [self window];
+-        if (old_title == 0)
+-          {
+-            char *t = strdup ([[[self window] title] UTF8String]);
+-            char *pos = strstr (t, "  —  ");
+-            if (pos)
+-              *pos = '\0';
+-            old_title = t;
+-          }
+-        size_title = xmalloc (strlen (old_title) + 40);
+-	esprintf (size_title, "%s  —  (%d × %d)", old_title, cols, rows);
+-        [window setTitle: [NSString stringWithUTF8String: size_title]];
+-        [window display];
+-        xfree (size_title);
+-      }
+-  }
+-#endif /* NS_IMPL_COCOA */
+ 
+   NSTRACE_MSG ("cols: %d  rows: %d", cols, rows);
+ 

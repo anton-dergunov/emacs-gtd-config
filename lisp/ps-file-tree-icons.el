@@ -13,6 +13,8 @@
 ;;   - `dir-open' / `dir-closed'    -- the generic directory icons
 ;;   - "<dir>-open" / "<dir>-closed" -- a directory with its own mapped icon
 ;;   - "<file>.org"                 -- a file
+;;   - "org"                        -- the extension key every other .org node
+;;                                     falls back to
 ;; Directories and files are found by walking the whole Org tree, so nesting to
 ;; any depth works.
 
@@ -105,8 +107,15 @@ is ERT-testable in isolation."
         (let ((key (downcase (file-name-nondirectory (directory-file-name dir)))))
           (funcall add (concat key "-open") icon)
           (funcall add (concat key "-closed") icon))))
-    ;; 3. Files, weakest first: the generic glyph, then per-category icons,
-    ;;    then whole-folder contents icons.
+    ;; 3. Files, weakest first: the extension key, the generic glyph, then
+    ;;    per-category icons, then whole-folder contents icons.
+    ;;    treemacs resolves a file icon as filename -> extension -> its own
+    ;;    fallback, so the extension key is what every .org node without a
+    ;;    filename key of its own lands on: one created or renamed after this
+    ;;    walk, or one whose file is already gone.  Without it treemacs draws
+    ;;    its own `org' image, which matches neither our icon height/ascent nor
+    ;;    the icon-to-label spacer.
+    (funcall add "org" ps/file-tree-icons--file)
     (dolist (file files)
       (funcall add (downcase (file-name-nondirectory file))
                ps/file-tree-icons--file))

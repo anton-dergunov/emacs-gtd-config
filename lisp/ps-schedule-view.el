@@ -315,9 +315,12 @@ to the title text (preserving the theme's scheduled-task colour)."
                                  ps/schedule-view-extra-margin-cols
                                  (if overlap-str right-cols 0)
                                  (string-width tag-str)))))
+         ;; Emphasis is rendered before truncating, so the width the columns
+         ;; are laid out with is the width that is actually drawn.
+         (shown (ps/emphasis-render (or title "")))
          (title-text (if ps/agenda-layout-truncate
-                         (ps/agenda-layout--truncate (or title "") avail)
-                       (or title "")))
+                         (ps/agenda-layout--truncate shown avail)
+                       shown))
          (parts (list (ps/agenda-layout--render-category cols))))
     (push (ps/agenda-layout--space-to (plist-get cols :state)) parts)
     (when state (push (ps/agenda-layout--state-text state) parts))
@@ -330,9 +333,16 @@ to the title text (preserving the theme's scheduled-task colour)."
               emoji)
             parts))
     (push (ps/agenda-layout--space-to title-col) parts)
-    (push (propertize title-text
-                      'face (or title-face 'default)
-                      'help-echo (or title title-text)) parts)
+    ;; `add-face-text-property' rather than `propertize ... 'face': the latter
+    ;; would replace the per-span emphasis faces instead of layering with them.
+    ;; TITLE-FACE goes on as the *base* (appended, so lower priority), which is
+    ;; what lets it colour the title while an emphasised span keeps its own
+    ;; weight/slant.
+    (let ((s (copy-sequence title-text)))
+      (put-text-property 0 (length s) 'help-echo (or title title-text) s)
+      (when title-face
+        (add-face-text-property 0 (length s) title-face t s))
+      (push s parts))
     (when (> (length tag-str) 0) (push tag-str parts))
     (when overlap-str
       (push (ps/agenda-layout--space-before-right

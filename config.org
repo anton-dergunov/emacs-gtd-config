@@ -105,6 +105,8 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-mode-line)
   (require 'ps-heading-stars)
   (require 'ps-scrollbar)
+  (require 'ps-emphasis)
+  (require 'ps-tags)
 
   ;; Two open files with the same name are told apart by their folder, and the
   ;; mode line / frame title reformat that into "Personal/Inbox".  Pinned rather
@@ -115,6 +117,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
   (ps/mode-line-setup)
+
+  ;; Place headline tags per `ps/tags-alignment' in every Org buffer.
+  (ps/tags-setup)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -415,6 +420,18 @@ Solarized keeps the original light gray; other themes derive a dim colour from t
 active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 #+begin_src emacs-lisp
   (setq ps/done-fade-color (if ps/color-theme-solarized-p "gray75" 'auto))
+#+end_src
+
+** Headline tags (ps-tags.el)
+=ps/tags-alignment= is =inline= (tags one space after the headline text) or
+=right= (Org's classic right-aligned column, ending at =ps/tags-column=).
+=right= only reads well in a window at least that wide — beyond it the padding
+wraps and splits the tag. Org writes the padding into the file, so after a
+switch run =C-u M-x org-align-tags= once per file to re-align what is already
+there.
+#+begin_src emacs-lisp
+  (setq ps/tags-alignment 'inline
+        ps/tags-column    -77)
 #+end_src
 
 ** Git sync (ps-git-sync.el)

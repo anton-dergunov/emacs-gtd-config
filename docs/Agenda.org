@@ -67,6 +67,10 @@ Each task line is laid out in aligned columns so it scans cleanly:
 =SCHEDULED= and =DEADLINE= labels are shown as small icons rather than words, to
 keep lines short. Finished (=DONE=) tasks are faded so they recede.
 
+Markup you wrote in a task's heading — =*bold*=, =/italic/=, =code=, =~verbatim~=
+and the rest — is rendered in the agenda the same way it is in the file: the
+text is styled and the markers themselves are not shown.
+
 * The schedule view
 The *Schedule* section renders the day as a time axis with a left-hand time
 column (=HH:MM-HH:MM ┆=). Two styles are available from *Productivity →
@@ -140,6 +144,7 @@ view; switching to Calendar or Tasks clears it.
   modules =lisp/ps-agenda-layout.el=, =ps-agenda-icons.el=,
   =ps-schedule-icons.el=, =ps-agenda-emoji.el=, and =ps-agenda-fold.el=; their
   settings live in the matching =config.org= blocks.
+- Org markup in task text is rendered by =lisp/ps-emphasis.el= (no settings).
 - The schedule view is =lisp/ps-schedule-view.el=; defaults
   (=ps/schedule-view-style=, =ps/schedule-view-auto-refresh=) are in =config.org=
   → /Schedule view/.

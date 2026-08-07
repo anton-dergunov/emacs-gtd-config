@@ -28,6 +28,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'ps-emphasis)
 
 (defvar ps/schedule-view-override nil
   "When non-nil, `ps-schedule-view' is handling the Schedule section.
@@ -605,9 +606,13 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
                                  ps/agenda-layout-right-margin-cols
                                  (if right-str right-cols 0)
                                  (string-width tag-str)))))
+         ;; Emphasis is rendered before truncating: the markers are gone by
+         ;; then, so the width the columns are laid out with is the width that
+         ;; is actually drawn.
+         (shown (ps/emphasis-render (or title "")))
          (title-text (if ps/agenda-layout-truncate
-                         (ps/agenda-layout--truncate (or title "") avail)
-                       (or title "")))
+                         (ps/agenda-layout--truncate shown avail)
+                       shown))
          (parts (list (ps/agenda-layout--render-category cols))))
     (push (ps/agenda-layout--space-to (plist-get cols :state)) parts)
     (when state
@@ -622,13 +627,16 @@ COLS is the column plist; SCHEDULE-COMPACT is non-nil for compact Schedule rows.
               emoji)
             parts))
     (push (ps/agenda-layout--space-to title-col) parts)
-    (push (propertize title-text
-                      'help-echo (or title title-text)
-                      ;; Overdue red is meaningful only in the Agenda; the
-                      ;; Calendar shows every item in the normal foreground.
-                      'face (and (not (ps/agenda-layout--calendarp))
-                                 (eq reldate-tint 'overdue) 'org-warning))
-          parts)
+    ;; `add-face-text-property' rather than `propertize ... 'face': the latter
+    ;; would replace the per-span emphasis faces instead of layering on top of
+    ;; them.  Overdue red is meaningful only in the Agenda; the Calendar shows
+    ;; every item in the normal foreground.
+    (let ((s (copy-sequence title-text)))
+      (put-text-property 0 (length s) 'help-echo (or title title-text) s)
+      (when (and (not (ps/agenda-layout--calendarp))
+                 (eq reldate-tint 'overdue))
+        (add-face-text-property 0 (length s) 'org-warning nil s))
+      (push s parts))
     (when (> (length tag-str) 0) (push tag-str parts))
     (when right-str
       (push (ps/agenda-layout--space-before-right

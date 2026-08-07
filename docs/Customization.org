@@ -151,6 +151,10 @@ Folder keys match a folder's name at any depth, or its path relative to the Org
 base — so ="older"= icons every folder of that name, while ="ML/older"= icons
 just the one. Category icons work the same wherever the file sits.
 
+The mappings are read when the tree is built, so a file you create later in the
+session shows the generic file icon rather than its category one until you run
+=M-x ps/reload-workspace-config=.
+
 See =samples/realistic/workspace.org= for a complete example. To fine-tune
 size/alignment, adjust =ps/material-icons-height-scale= and
 =ps/file-tree-icon-ascent= in =config.org= → /Settings/.
@@ -209,6 +213,26 @@ next heading; the fancy bullet appears once the heading is complete (after the
 space). Typing an unterminated =*= in a heading's text likewise leaves the next
 heading's bullet intact until you close it.
 
+* Where headline tags sit
+Tags sit one space after the headline text, so a heading reads as one line:
+
+#+begin_example
+** TODO Write the proposal :work:writing:
+#+end_example
+
+Org's own default instead pads every tagged headline out to a fixed column so
+the tags form a right-hand margin. That looks tidy in a wide window, but as
+soon as the window is narrower than the column the padding runs off the edge,
+the line wraps, and the tag ends up stranded on a line of its own. Set
+=ps/tags-alignment= to =right= in =config.org= → /Settings → Headline tags/ if you
+prefer the column anyway, and =ps/tags-column= to choose it (=-77= is Org's
+default: negative means the tags /end/ at that column).
+
+Org stores the gap as real spaces in the file, not as a display effect, so
+after switching you will still see the old spacing in files written under the
+previous setting. Press =C-u M-x org-align-tags= once in such a file to
+re-space every headline in it.
+
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a
 subtle wavy line *only when none of your configured languages recognise it*, so
@@ -248,3 +272,7 @@ The design rationale is in =design-docs/typo-checker.md=.
   /File Tree/.
 - Typo checker: =lisp/ps-typo.el=; settings in =config.org= → /Typo / spell
   checking/.
+- Headline tag placement: =lisp/ps-tags.el=; settings in =config.org= →
+  /Headline tags/ (=ps/tags-alignment=, =ps/tags-column=).
+- Org markup in agenda lines: =lisp/ps-emphasis.el=, used by
+  =ps-agenda-layout.el= and =ps-schedule-view.el= (no settings).

@@ -82,6 +82,12 @@ window in which Emacs can freeze:
   makes Emacs retry that wake-up, so a single lost one no longer hangs it
   permanently.
 
+A third patch is optional and purely cosmetic:
+
+- [`patches/emacs-30-ns-resize-title.patch`](patches/emacs-30-ns-resize-title.patch)
+  keeps the window title alone while you drag a window edge, instead of
+  replacing it with the frame's size for the duration of the drag.
+
 ```bash
 brew tap d12frosted/emacs-plus
 
@@ -94,6 +100,9 @@ patches:
   - ns-appdefined-retry:
       url: ~/.emacs.d/patches/emacs-30-ns-appdefined-retry.patch
       sha256: 48c4577d5e49a74a40effe217cdd392bd30f6b5ca7139ef5e10cfa2c53a4c0fe
+  - ns-resize-title:
+      url: ~/.emacs.d/patches/emacs-30-ns-resize-title.patch
+      sha256: c37fc4260551c3f380d0a81603cf5302fd6611d3822dc0f2893002197f48e873
 YAML
 
 brew install --build-from-source d12frosted/emacs-plus/emacs-plus@30
