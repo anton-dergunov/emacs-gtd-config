@@ -118,7 +118,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
   (ps/mode-line-setup)
 
-  ;; Place headline tags per `ps/tags-alignment' in every Org buffer.
+  ;; Keep a headline's tag pills together when the line wraps.
   (ps/tags-setup)
 #+end_src
 
@@ -420,18 +420,6 @@ Solarized keeps the original light gray; other themes derive a dim colour from t
 active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 #+begin_src emacs-lisp
   (setq ps/done-fade-color (if ps/color-theme-solarized-p "gray75" 'auto))
-#+end_src
-
-** Headline tags (ps-tags.el)
-=ps/tags-alignment= is =inline= (tags one space after the headline text) or
-=right= (Org's classic right-aligned column, ending at =ps/tags-column=).
-=right= only reads well in a window at least that wide — beyond it the padding
-wraps and splits the tag. Org writes the padding into the file, so after a
-switch run =C-u M-x org-align-tags= once per file to re-align what is already
-there.
-#+begin_src emacs-lisp
-  (setq ps/tags-alignment 'inline
-        ps/tags-column    -77)
 #+end_src
 
 ** Git sync (ps-git-sync.el)
@@ -1281,6 +1269,12 @@ statically hidden and is excluded below.
   ;; on here so editing buffers render clean except right at point.
   (setq org-hide-emphasis-markers t
         org-pretty-entities       t)
+
+  ;; Never re-space a tagged headline behind our back.  Org's default pads
+  ;; every tagged headline out to column 77 -- rewriting the file on plain
+  ;; typing, tag edits and promotion/demotion alike.  Off, tags stay exactly
+  ;; where they are typed, and that is exactly how they are displayed.
+  (setq org-auto-align-tags nil)
 
   ;; Flicker fix for editing inside a link.  While the cursor is in a link,
   ;; org-appear reveals its raw syntax; but the typo checker re-marks the edited

@@ -214,24 +214,25 @@ space). Typing an unterminated =*= in a heading's text likewise leaves the next
 heading's bullet intact until you close it.
 
 * Where headline tags sit
-Tags sit one space after the headline text, so a heading reads as one line:
+Tags appear exactly where you typed them. Whatever spacing stands between the
+headline text and the first =:= in the file is the spacing you see — one space,
+or five, or a whole column of them:
 
 #+begin_example
 ** TODO Write the proposal :work:writing:
 #+end_example
 
-Org's own default instead pads every tagged headline out to a fixed column so
-the tags form a right-hand margin. That looks tidy in a wide window, but as
-soon as the window is narrower than the column the padding runs off the edge,
-the line wraps, and the tag ends up stranded on a line of its own. Set
-=ps/tags-alignment= to =right= in =config.org= → /Settings → Headline tags/ if you
-prefer the column anyway, and =ps/tags-column= to choose it (=-77= is Org's
-default: negative means the tags /end/ at that column).
+Nothing re-spaces a headline behind your back. Org's own default is to pad every
+tagged headline out to a fixed column, rewriting the line as you type on it, as
+you set tags, and as you promote or demote it; that is switched off here, so
+your files keep the spacing you gave them.
 
-Org stores the gap as real spaces in the file, not as a display effect, so
-after switching you will still see the old spacing in files written under the
-previous setting. Press =C-u M-x org-align-tags= once in such a file to
-re-space every headline in it.
+When a headline is too long for the window, the tags move to the next line
+*together* — the group is never split, and no stray coloured fragment is left
+behind at the right edge.
+
+One side effect of how that is done: a literal no-break space typed into an Org
+file is no longer highlighted the way Emacs highlights it elsewhere.
 
 * Typo / spell checking
 Org buffers get a quiet, multilingual typo checker. A word is underlined with a
@@ -272,7 +273,8 @@ The design rationale is in =design-docs/typo-checker.md=.
   /File Tree/.
 - Typo checker: =lisp/ps-typo.el=; settings in =config.org= → /Typo / spell
   checking/.
-- Headline tag placement: =lisp/ps-tags.el=; settings in =config.org= →
-  /Headline tags/ (=ps/tags-alignment=, =ps/tags-column=).
+- Headline tags kept whole when a line wraps: =lisp/ps-tags.el= (no settings);
+  Org's own re-spacing is switched off in =config.org= → /Org Mode → Appearance/
+  (=org-auto-align-tags=).
 - Org markup in agenda lines: =lisp/ps-emphasis.el=, used by
   =ps-agenda-layout.el= and =ps-schedule-view.el= (no settings).

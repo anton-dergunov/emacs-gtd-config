@@ -4,33 +4,59 @@
 (add-to-list 'load-path "lisp")
 (require 'ps-tags)
 
-(ert-deftest ps/tags--settings-inline-adds-no-padding ()
-  "`inline' puts tags at column 0 and turns auto-alignment off.
-Column 0 is what keeps the tag pill from ever being pushed past the window
-edge and split by the visual-line wrap."
-  (should (equal (ps/tags--settings 'inline -77) '(0 . nil))))
+(ert-deftest ps/tags--nobreak-string-replaces-padding-spaces ()
+  "The pill padding org-modern puts in its display strings loses its spaces.
+A plain space there is a `word-wrap' break opportunity, which is what
+strands an empty coloured box at the right edge when a headline wraps."
+  (should (equal (ps/tags--nobreak-string " m")
+                 (string ps/tags--nobreak-space ?m)))
+  (should (equal (ps/tags--nobreak-string "l ")
+                 (string ?l ps/tags--nobreak-space))))
 
-(ert-deftest ps/tags--settings-right-keeps-the-column ()
-  "`right' passes the configured column through and re-enables auto-alignment."
-  (should (equal (ps/tags--settings 'right -77) '(-77 . t)))
-  (should (equal (ps/tags--settings 'right 60) '(60 . t))))
+(ert-deftest ps/tags--nobreak-string-keeps-text-properties ()
+  "org-modern stores a `cursor' property inside those display strings."
+  (let* ((original (propertize " m" 'cursor t))
+         (fixed (ps/tags--nobreak-string original)))
+    (should (eq (get-text-property 0 'cursor fixed) t))
+    (should (eq (get-text-property 1 'cursor fixed) t))))
 
-(ert-deftest ps/tags--settings-unknown-degrades-to-inline ()
-  "An unrecognised alignment falls back to the layout that cannot overflow."
-  (should (equal (ps/tags--settings 'sideways -77) '(0 . nil)))
-  (should (equal (ps/tags--settings nil -77) '(0 . nil))))
+(ert-deftest ps/tags--nobreak-string-leaves-space-free-strings-alone ()
+  "Nothing to fix means the very same object comes back, so refontifying
+an already-fixed pill does no work and allocates nothing."
+  (let ((original "ml"))
+    (should (eq (ps/tags--nobreak-string original) original)))
+  (let ((already (string ps/tags--nobreak-space ?m)))
+    (should (eq (ps/tags--nobreak-string already) already))))
 
-(ert-deftest ps/tags-apply-sets-the-variables-buffer-locally ()
-  "`ps/tags-apply' only ever touches the current buffer."
+(ert-deftest ps/tags--nobreak-string-does-not-mutate-its-argument ()
+  "The display strings belong to org-modern; rewrite a copy."
+  (let ((original " m"))
+    (ps/tags--nobreak-string original)
+    (should (equal original " m"))))
+
+(ert-deftest ps/tags--unbreak-region-rewrites-only-display-strings ()
+  "Only string-valued `display' properties are touched; other values and
+plain text are left as they are."
   (with-temp-buffer
-    (let ((ps/tags-alignment 'right)
-          (ps/tags-column -60))
-      (ps/tags-apply)
-      (should (local-variable-p 'org-tags-column))
-      (should (local-variable-p 'org-auto-align-tags))
-      (should (equal org-tags-column -60))
-      (should (equal org-auto-align-tags t))))
+    (insert ":ml:")
+    (put-text-property 2 3 'display " m")
+    (put-text-property 3 4 'display '(space :width 2))
+    (ps/tags--unbreak-region (point-min) (point-max))
+    (should (equal (get-text-property 2 'display)
+                   (string ps/tags--nobreak-space ?m)))
+    (should (equal (get-text-property 3 'display) '(space :width 2)))
+    (should-not (get-text-property 1 'display))))
+
+(ert-deftest ps/tags--pill-p-recognises-both-face-shapes ()
+  "org-modern sets the face as a bare symbol, or as a list when
+`org-modern-tag-faces' applies."
   (with-temp-buffer
-    (should-not (local-variable-p 'org-tags-column))))
+    (insert "abc")
+    (put-text-property 1 2 'face 'org-modern-tag)
+    (put-text-property 2 3 'face '(bold org-modern-tag))
+    (put-text-property 3 4 'face 'org-level-1)
+    (should (ps/tags--pill-p 1))
+    (should (ps/tags--pill-p 2))
+    (should-not (ps/tags--pill-p 3))))
 
 ;;; test-ps-tags.el ends here
