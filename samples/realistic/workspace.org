@@ -82,6 +82,73 @@ topic files, so they read better with one shared icon.
           ("Vision"  . "mountain_flag")))
 #+end_src
 
+* Context tags
+The fixed tag set. A tag is a promise that the task works with *less than a
+desk* — less screen, less attention, less time or less energy. A task that needs
+a desk gets no tags, which is the right answer for the large majority of them.
+
+=:key= is the character that selects the tag in the =C-c C-q= picker (=?a= is
+Emacs Lisp character syntax for the character =a=). =:kind= groups the tags:
+entries keep the order written here and the picker breaks a line wherever the
+kind changes. =:means= is what the tag promises — it is also what an AI
+assistant editing these notes is told the tag is for, so it is worth writing
+carefully.
+
+Note if you sync to Orgzly: it matches tags by *substring* (=t.bee= finds
+=beeblebrox=), so no tag may be a substring of another. =M-x
+ps/context-tags-lint= checks the whole set for you.
+#+begin_src emacs-lisp
+  (setq ps/context-tags
+        '(;; Affordances — "this survives with less than a desk"
+          (:name "audio"    :key ?a :kind "affordance"
+           :means "Works with ears only — walking, cardio, chores.")
+          (:name "think"    :key ?t :kind "affordance"
+           :means "Needs no device at all. Pure thinking: gym sets, waiting.")
+          (:name "phone"    :key ?p :kind "affordance"
+           :means "Legible and operable on a small screen, one hand.")
+          (:name "video"    :key ?v :kind "affordance"
+           :means "Watchable hands-free, fine detail not required.")
+          (:name "easy"     :key ?e :kind "affordance"
+           :means "Demands near-zero willpower and is still worth doing.")
+          (:name "fun"      :key ?f :kind "affordance"
+           :means "Genuinely enjoyable, not merely virtuous.")
+          (:name "micro"    :key ?m :kind "affordance"
+           :means "Self-contained in a minute or two.")
+          ;; Restriction — only ever prunes inside an already-positive query
+          (:name "online"   :key ?o :kind "restriction"
+           :means "Does NOT work without a connection.")
+          ;; Lifecycle — self-clearing; delete the tag once done
+          (:name "download" :key ?d :kind "lifecycle"
+           :means "A fetch step is outstanding. Remove the tag once fetched.")))
+#+end_src
+
+* Situations
+Saved searches named by circumstance, so each one states its own entry
+condition: you look at your hands rather than remembering which label the gym
+got. Open one from =Productivity → Plan & Review → Situations=, with =C-c p S=
+followed by its =:key=, or from the switcher in the view's mode line.
+
+=:icon= is a Material Symbols name drawn on the plate at the top of the view.
+=:query= is an Org tag-match string — note that Org's syntax has *no
+parentheses*, and =|= separates whole clauses, so a mixed query must be
+distributed by hand: /(phone or video) and not online/ is written
+=phone-online|video-online=.
+#+begin_src emacs-lisp
+  (setq ps/situations
+        '((:key "m" :name "A spare minute" :hint "gym sets, a queue, waiting"
+           :icon "hourglass_top" :query "think|micro")
+          (:key "f" :name "On foot" :hint "walking, hiking, chores"
+           :icon "directions_walk" :query "audio|think")
+          (:key "s" :name "Screen in hand" :hint "pomodoro break, commute, sofa"
+           :icon "smartphone" :query "phone|video")
+          (:key "o" :name "Screen in hand, offline" :hint "a plane, the Tube"
+           :icon "airplanemode_active" :query "phone-online|video-online")
+          (:key "b" :name "Low battery" :hint "evening, just woken, a bad day"
+           :icon "battery_low" :query "easy+fun")
+          (:key "d" :name "To download" :hint "before losing signal"
+           :icon "download" :query "download")))
+#+end_src
+
 * File sets
 Named filters for the file tree. =:include= / =:exclude= are lists of regexps
 matched as substrings of each file's absolute path. Switch sets from the file

@@ -10,8 +10,8 @@
 
 * Time Management
 ** TODO Track focused work sessions
-** TODO Reduce context switching
-** TODO Batch shallow tasks
+** TODO Reduce context switching  :think:
+** TODO Batch shallow tasks  :think:micro:
 ** TODO Experiment with calendar blocking
 ** TODO Create realistic daily plans
 

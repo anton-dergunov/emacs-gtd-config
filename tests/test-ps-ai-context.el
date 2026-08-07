@@ -106,6 +106,78 @@
                 '("TODO" "NEXT") '("DONE") ?A ?C "." nil nil nil nil nil)))
     (should-not (string-match-p "Next up" block))))
 
+(ert-deftest ps/ai-context-test-render-conventions-tags-detailed ()
+  "With context tags declared, the bullet points at the table instead of
+listing bare names."
+  (let ((block (ps/ai-context--render-conventions
+                '("TODO") '("DONE") ?A ?C "." '("audio") nil nil nil nil t)))
+    (should (string-match-p "fixed set of context tags is defined" block))
+    (should (string-match-p "\"Context\n  tags\" below" block))
+    (should-not (string-match-p "a fixed set is defined: `audio`" block))))
+
+;;; Context-tag / situation tables (the single-source-of-truth section)
+
+(defconst ps/ai-context-test--tags
+  '((:name "audio" :key ?a :kind "affordance" :means "Works with ears only.")
+    (:name "online" :key ?o :kind "restriction" :means "Needs a connection.")))
+
+(defconst ps/ai-context-test--situations
+  '((:key "f" :name "On foot" :hint "walking, chores" :query "audio|think")
+    (:key "o" :name "Offline" :query "phone-online")))
+
+(ert-deftest ps/ai-context-test-tag-section-empty-without-tags ()
+  "No context tags means nothing to explain -- situations alone render nothing."
+  (should (equal (ps/ai-context--render-tag-section nil nil) ""))
+  (should (equal (ps/ai-context--render-tag-section nil ps/ai-context-test--situations)
+                 "")))
+
+(ert-deftest ps/ai-context-test-tag-section-renders-the-tag-table ()
+  (let ((s (ps/ai-context--render-tag-section ps/ai-context-test--tags nil)))
+    (should (string-match-p "^## Context tags$" s))
+    (should (string-match-p "| Tag | Kind | Means |" s))
+    (should (string-match-p "| `audio` | affordance | Works with ears only. |" s))
+    (should (string-match-p "| `online` | restriction | Needs a connection. |" s))
+    ;; The standing discipline travels with the table.
+    (should (string-match-p "less than a desk" s))
+    (should (string-match-p "unless explicitly asked to" s))
+    ;; No situations given: no second table.
+    (should-not (string-match-p "Fires when" s))))
+
+(ert-deftest ps/ai-context-test-tag-section-renders-the-situation-table ()
+  (let ((s (ps/ai-context--render-tag-section ps/ai-context-test--tags
+                                              ps/ai-context-test--situations)))
+    (should (string-match-p "| Situation | Matches | Fires when |" s))
+    ;; The query's `|' is escaped so it cannot split the row.
+    (should (string-search "| On foot | `audio\\|think` | walking, chores |" s))
+    ;; A situation with no hint still renders a (blank) cell.
+    (should (string-search "| Offline | `phone-online` |  |" s))))
+
+(ert-deftest ps/ai-context-test-md-cell-escapes-pipes ()
+  "A tag-match query is full of `|' -- unescaped it would split the row."
+  (should (equal (ps/ai-context--md-cell "a|b") "a\\|b"))
+  (should (equal (ps/ai-context--md-cell nil) "")))
+
+(ert-deftest ps/ai-context-test-document-includes-the-tag-section ()
+  "The section sits between the conventions and the file index."
+  (let* ((doc (ps/ai-context--render-document
+               '("TODO") '("DONE") ?A ?C "." '("audio")
+               nil nil nil nil nil
+               ps/ai-context-test--tags ps/ai-context-test--situations))
+         (conv (string-match "## Current conventions" doc))
+         (tags (string-match "## Context tags" doc)))
+    (should conv)
+    (should tags)
+    (should (< conv tags))
+    (should (string-match-p "fixed set of context tags is defined" doc))))
+
+(ert-deftest ps/ai-context-test-document-without-context-tags-is-unchanged ()
+  "Omitting the new arguments keeps the previous output exactly."
+  (should (equal (ps/ai-context--render-document
+                  '("TODO") '("DONE") ?A ?C "." '("work") nil nil nil nil nil)
+                 (ps/ai-context--render-document
+                  '("TODO") '("DONE") ?A ?C "." '("work") nil nil nil nil nil
+                  nil nil))))
+
 ;;; #+SUBTITLE: extraction
 
 (ert-deftest ps/ai-context-test-subtitle-plain ()

@@ -36,12 +36,15 @@
 so the two modules don't reformat the same lines.")
 
 (defvar ps/agenda-layout-view-kind nil
-  "Which agenda view built the current buffer: `agenda', `calendar', or nil.
-Let-bound by the agenda custom commands (see `org-agenda-custom-commands' in
-config.org).  The Calendar view (`calendar') draws span-switch controls in its
-date header and surfaces times for timed items in multi-day spans; the Agenda
-view (`agenda') does neither.  `ps/agenda-layout--apply' copies this into the
-buffer-local `ps/agenda-layout--view-kind' so it survives a resize re-layout.")
+  "Which agenda view built the current buffer: `agenda', `calendar', `situation',
+or nil.  Let-bound by the agenda custom commands (see
+`org-agenda-custom-commands' in config.org, and `ps/situations--custom-commands'
+for the generated situation ones).  The Calendar view (`calendar') draws
+span-switch controls in its date header and surfaces times for timed items in
+multi-day spans; a Situation view (`situation') draws an undated plate naming
+the query; the Agenda view (`agenda') does neither.
+`ps/agenda-layout--apply' copies this into the buffer-local
+`ps/agenda-layout--view-kind' so it survives a resize re-layout.")
 
 (defvar-local ps/agenda-layout--view-kind nil
   "Buffer-local copy of `ps/agenda-layout-view-kind' for the *Org Agenda* buffer.")
@@ -49,6 +52,10 @@ buffer-local `ps/agenda-layout--view-kind' so it survives a resize re-layout.")
 (defun ps/agenda-layout--calendarp ()
   "Non-nil when the current agenda buffer is a Calendar view."
   (eq ps/agenda-layout--view-kind 'calendar))
+
+(defun ps/agenda-layout--situationp ()
+  "Non-nil when the current agenda buffer is a Situation view."
+  (eq ps/agenda-layout--view-kind 'situation))
 
 ;; org / org-agenda are loaded by the time the finalize hook runs.
 (declare-function org-get-at-bol "org" (property))
@@ -60,6 +67,8 @@ buffer-local `ps/agenda-layout--view-kind' so it survives a resize re-layout.")
 (declare-function ps/material-icons-image "ps-material-icons" (name &optional ascent height))
 (declare-function ps/material-icons-available-p "ps-material-icons" ())
 (declare-function ps/agenda-emoji-lookup "ps-agenda-emoji" (title))
+(declare-function ps/situations-plate-label "ps-situations" (&optional key))
+(declare-function ps/situations-switch "ps-situations" (&optional event))
 (declare-function org-agenda-earlier "org-agenda" (arg))
 (declare-function org-agenda-later "org-agenda" (arg))
 (declare-function org-agenda-redo "org-agenda" (&optional all))
@@ -933,11 +942,24 @@ The control matching the currently displayed span is filled."
      (ps/agenda-layout--text-button "Range…" #'ps/agenda-layout-span-range
                                     "Show an arbitrary date range…" (eq cur 'custom)))))
 
-(defun ps/agenda-layout--centered-controls (label face show-today)
+(defun ps/agenda-layout--situation-row ()
+  "Return the Situation view's switcher control, or nil when unavailable.
+A single dropdown button: with seven-odd situations a button each would crowd
+the row, and the same list is one click away in the mode line."
+  (when (fboundp 'ps/situations-switch)
+    (ps/agenda-layout--text-button "Situations ▾" #'ps/situations-switch
+                                   "Switch to another situation…")))
+
+(defun ps/agenda-layout--centered-controls (label face show-today &optional right nav)
   "Display string for a control row: LABEL (in FACE), centred, hugged by buttons.
-Go-to-today is shown when SHOW-TODAY is non-nil; prev/next chevrons and refresh
-flank the label; in a Calendar view the span switcher (D W M Y / N… / ±) is
-right-aligned at the content edge."
+
+NAV draws the date navigation — prev/next chevrons flanking the label, plus the
+go-to-today button when SHOW-TODAY is non-nil.  A refresh button always follows
+the label.  RIGHT, when given, is a control string right-aligned at the content
+edge (the Calendar's span switcher, the Situations switcher).
+
+Date navigation is meaningful only in a dated view: the Situation views pass
+NAV nil, since stepping \"a period\" back from a tag search means nothing."
   (let* ((tw (string-width label))
          (win (ps/agenda-layout--window-cols))
          ;; Centre within the content area [left-margin, win - right-margin].
@@ -946,30 +968,33 @@ right-aligned at the content edge."
                          (/ (- (- win ps/agenda-layout-left-margin-cols
                                   ps/agenda-layout-right-margin-cols)
                                tw)
-                            2))))
-         (span-row (and (ps/agenda-layout--calendarp) (ps/agenda-layout--span-row))))
+                            2)))))
     (concat
-     (when show-today
+     (when (and nav show-today)
        (concat
         (ps/agenda-layout--space-to (max 0 (- tstart 4)))
         (ps/agenda-layout--date-button "today" "⊙"
                                        #'ps/agenda-layout-date-today "Go to today")))
-     (ps/agenda-layout--space-to (max 0 (- tstart 2)))
-     (ps/agenda-layout--date-button "chevron_left" "‹"
-                                    #'ps/agenda-layout-date-prev "Previous period")
+     (when nav
+       (concat
+        (ps/agenda-layout--space-to (max 0 (- tstart 2)))
+        (ps/agenda-layout--date-button "chevron_left" "‹"
+                                       #'ps/agenda-layout-date-prev "Previous period")))
      (ps/agenda-layout--space-to tstart)
      (propertize label 'face face 'help-echo label)
-     (ps/agenda-layout--space-to (+ tstart tw 1))
-     (ps/agenda-layout--date-button "chevron_right" "›"
-                                    #'ps/agenda-layout-date-next "Next period")
-     (ps/agenda-layout--space-to (+ tstart tw 4))
+     (when nav
+       (concat
+        (ps/agenda-layout--space-to (+ tstart tw 1))
+        (ps/agenda-layout--date-button "chevron_right" "›"
+                                       #'ps/agenda-layout-date-next "Next period")))
+     (ps/agenda-layout--space-to (+ tstart tw (if nav 4 2)))
      (ps/agenda-layout--date-button "refresh" "⟳"
                                     #'ps/agenda-layout-date-refresh "Reload agenda")
-     (when span-row
+     (when right
        (concat
         (ps/agenda-layout--space-before-right
-         span-row ps/agenda-layout-right-margin-cols)
-        span-row)))))
+         right ps/agenda-layout-right-margin-cols)
+        right)))))
 
 (defun ps/agenda-layout--reformat-date-header (bol eol &optional _controls)
   "Rewrite the Agenda's date-header line [BOL, EOL) as a centred control row.
@@ -985,18 +1010,19 @@ control row and day sections; this is the Agenda day header.)"
     (ps/agenda-layout--replace-line
      bol eol
      (ps/agenda-layout--centered-controls
-      dotted face (not (ps/agenda-layout--date-is-today-p bol))))
+      dotted face (not (ps/agenda-layout--date-is-today-p bol)) nil t))
     (put-text-property bol (point) 'ps/date-text text)
     (put-text-property bol (point) 'ps/date-face face)))
 
-(defun ps/agenda-layout--reformat-control-row (bol eol label show-today)
-  "Turn the line [BOL, EOL) into the Calendar control row showing LABEL.
-SHOW-TODAY controls the go-to-today button.  Adds one blank line beneath the row
-\(an overlay, so no buffer text is inserted) — the Calendar's header spacing."
+(defun ps/agenda-layout--reformat-control-row (bol eol label show-today &optional right nav)
+  "Turn the line [BOL, EOL) into a top control row showing LABEL.
+SHOW-TODAY, RIGHT and NAV are passed to `ps/agenda-layout--centered-controls'.
+Adds one blank line beneath the row \(an overlay, so no buffer text is
+inserted) — the header spacing shared by the Calendar and Situation views."
   (ps/agenda-layout--replace-line
    bol eol
    (ps/agenda-layout--centered-controls
-    label 'ps/agenda-layout-control-label show-today))
+    label 'ps/agenda-layout-control-label show-today right nav))
   ;; The blank line carries an inert keymap so a stray click on it does nothing
   ;; (rather than falling through to the nearest control-row button).
   (let ((ov (make-overlay (point) (point)))
@@ -1060,6 +1086,7 @@ not in scope during a resize.")
            (cols (ps/agenda-layout--columns))
            (style ps/agenda-layout-schedule-style)
            (calendarp (ps/agenda-layout--calendarp))
+           (situationp (ps/agenda-layout--situationp))
            (cal-start (and calendarp (ps/agenda-layout--current-start)))
            (cal-span  (and calendarp (ps/agenda-layout--current-span)))
            (cal-ndays (and calendarp (ps/agenda-layout--current-ndays)))
@@ -1078,15 +1105,25 @@ not in scope during a resize.")
           (let ((bol (line-beginning-position))
                 (eol (line-end-position)))
             (cond
-             ;; Calendar: the first block (structural) header becomes the top
-             ;; control row, labelled with the whole span (day / week range / …).
-             ((and calendarp (not control-done)
+             ;; Calendar / Situation: the first block (structural) header becomes
+             ;; the top control row — labelled with the whole span (day / week
+             ;; range / …) or with the situation's name.  Both views deliberately
+             ;; leave `org-agenda-overriding-header' unset so Org emits this line
+             ;; for us to rewrite.
+             ((and (or calendarp situationp) (not control-done)
                    (ps/agenda-layout--header-p)
                    (not (org-get-at-bol 'org-agenda-date-header)))
-              (ps/agenda-layout--reformat-control-row
-               bol eol
-               (ps/agenda-layout--span-header-label cal-start cal-span)
-               show-today)
+              (if situationp
+                  (ps/agenda-layout--reformat-control-row
+                   bol eol
+                   (if (fboundp 'ps/situations-plate-label)
+                       (ps/situations-plate-label)
+                     "Situation")
+                   nil (ps/agenda-layout--situation-row) nil)
+                (ps/agenda-layout--reformat-control-row
+                 bol eol
+                 (ps/agenda-layout--span-header-label cal-start cal-span)
+                 show-today (ps/agenda-layout--span-row) t))
               (setq control-done t))
              ;; Date headers.
              ((org-get-at-bol 'org-agenda-date-header)

@@ -82,7 +82,8 @@ Reading it piece by piece:
   headline as a task rather than a plain heading.
 - =[#A]= — an optional *priority* cookie (A, B, or C).
 - =Write the proposal= — the task *text*.
-- =:work:writing:= — optional *tags*, handy for filtering.
+- =:work:writing:= — optional *tags*, handy for filtering. You can also declare a
+  fixed tag vocabulary and saved searches over it — see [[file:Situations.org][Situations]].
 - =DEADLINE:= / =SCHEDULED:= — an optional *planning line* carrying dates (see
   /Scheduling and deadlines/ below).
 - =:PROPERTIES:= … =:END:= — an optional *drawer* for metadata such as an effort

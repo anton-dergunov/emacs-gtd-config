@@ -20,7 +20,7 @@ Need to optimize for:
 ** TODO [#B] Create yearly career review template
 DEADLINE: <2026-06-01 Mon>
 
-** INPR Map current strengths and weaknesses          :reflection:
+** INPR Map current strengths and weaknesses          :reflection:think:
 Started: [2026-05-12 Tue]
 Strengths:
 - debugging complex systems

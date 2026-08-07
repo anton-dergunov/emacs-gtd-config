@@ -20,8 +20,13 @@ option.
 | =C-c p c y=      | =ps/show-calendar-year=    | Calendar at a year        |
 | =C-c p A=        | =org-agenda=               | full agenda dispatcher    |
 | =C-c p n= / =F9= | =ps/show-tasks=            | open the Tasks view       |
+| =C-c p S= /key/  | =ps/show-situation=        | open a situation          |
+| =C-c p S ?=      | =ps/situations-switch=     | pick a situation by name  |
 | =C-c p v=        | =ps/org-show-availability= | availability (free slots) |
 | =C-c p x=        | =ps/show-conflicts=        | conflict check            |
+
+The key after =C-c p S= is the situation's own =:key= — the set is yours, so see
+[[file:Situations.org][Situations]] and your =workspace.org= for which letters are live.
 
 * Capture & notes
 | Key       | Command                 | Action            |

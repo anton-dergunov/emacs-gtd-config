@@ -55,6 +55,11 @@ that =AGENTS.md= points at: =.claude/generated-context.md= in your Org directory
   finishing a task logs a timestamp, and where the journal lives. These come from
   =config.org=, so the assistant is told what you actually use instead of guessing
   from what it happens to read.
+- *Your context tags and situations* — when you declare them (see
+  [[file:Situations.org][Situations]]), two tables: what each tag promises, and which saved search each
+  one feeds. Generated from the same declaration the tag picker and the menus
+  use, so it cannot drift — and it means you never have to describe your tags a
+  second time in =AGENTS.md=.
 - *An index of your plan files* — one line per file, taken from that file's
   =#+SUBTITLE:=. It lets the assistant route something to the right file without
   opening all of them. Files with no =#+SUBTITLE:= are simply left out, so writing

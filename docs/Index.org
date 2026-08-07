@@ -32,6 +32,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
 - [[file:Calendar.org][The Calendar]] — a pure date/time view of scheduled tasks and deadlines over a
   day, week, month, year, or any range you pick.
 - [[file:Tasks-view.org][The Tasks view]] — a flat, filterable list of everything still open.
+- [[file:Situations.org][Situations]] — saved searches named by circumstance ("a spare minute", "on
+  foot"), so a gap in the day has an answer ready.
 - [[file:Planning-tools.org][Planning tools]] — find free slots, detect scheduling conflicts, and shift
   timestamps between timezones.
 

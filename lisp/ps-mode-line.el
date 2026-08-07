@@ -41,6 +41,12 @@
 (declare-function ps/show-tasks "config" ())
 (declare-function ps/show-conflicts "ps-conflicts" ())
 (declare-function ps/org-show-availability "ps-availability" ())
+(declare-function ps/show-situation "ps-situations" (key))
+(declare-function ps/situations--menu-items "ps-situations" (&optional situations))
+(declare-function ps/situations--name "ps-situations" (situation))
+(declare-function ps/situations-find "ps-situations" (key))
+;; Set by `ps/situations--stash' on every agenda build; nil outside a Situation view.
+(defvar ps/situations-current-key)
 ;; Defined by ps-agenda-emoji (a defcustom); set buffer-locally per agenda view.
 (defvar ps/agenda-emoji-enabled)
 ;; Set by org-agenda before `org-agenda-finalize'; identifies the built view.
@@ -244,12 +250,26 @@ tree's file-set selector (see `ps/file-tree--modeline-click').  Reachable
 from any of the views' own mode lines (Agenda/Calendar/Tasks and the
 Availability/Conflicts buffers).")
 
+(defun ps/mode-line--view-menu ()
+  "Return the planning-views popup menu for `x-popup-menu'.
+The fixed views come first; when situations are configured they follow as a
+second pane, generated from `ps/situations' so the menu can never drift from
+the declaration (see `lisp/ps-situations.el')."
+  (let ((situations (and (fboundp 'ps/situations--menu-items)
+                         (ps/situations--menu-items))))
+    (append (list "View" (cons "Views" ps/mode-line--view-items))
+            (when situations (list (cons "Situations" situations))))))
+
 (defun ps/mode-line--view-click (event)
-  "Show a popup menu of planning views and switch to the one EVENT selects."
+  "Show a popup menu of planning views and switch to the one EVENT selects.
+A choice is either a command symbol or, for a situation, a (situation . KEY)
+cons — see `ps/situations--menu-items'."
   (interactive "e")
-  (let* ((menu (list "View" (cons "Views" ps/mode-line--view-items)))
-         (choice (x-popup-menu event menu)))
-    (when choice (call-interactively choice))))
+  (let ((choice (x-popup-menu event (ps/mode-line--view-menu))))
+    (cond
+     ((and (consp choice) (eq (car choice) 'situation))
+      (ps/show-situation (cdr choice)))
+     (choice (call-interactively choice)))))
 
 (defun ps/mode-line--view-title (label)
   "Return a clickable \"LABEL ▾\" mode-line segment.
@@ -307,6 +327,13 @@ warning face."
     ((and (pred integerp) n) (if (= n 1) "Day" (format "%d days" n)))
     (_ "Day")))
 
+(defun ps/mode-line--situation-label (key)
+  "Return the display name of situation KEY, falling back to KEY itself."
+  (or (and (fboundp 'ps/situations-find)
+           (let ((s (ps/situations-find key)))
+             (and s (ps/situations--name s))))
+      key))
+
 (defun ps/mode-line--agenda-finalize ()
   "Apply per-view mode line/chrome to the agenda buffer on every build.
 Runs from `org-agenda-finalize-hook' at a negative depth, before the
@@ -314,13 +341,17 @@ emoji/layout hooks, so the emoji toggle takes effect for this render.
 
 The view is derived intrinsically: `org-agenda-redo-command' is `org-todo-list'
 for the Tasks view; the Calendar custom command let-binds
-`ps/agenda-layout-view-kind' to `calendar' (in scope here, during finalize);
-otherwise it is the Agenda.  Robust regardless of how the build was triggered
-\(wrapper, dispatcher, `g'/redo, a date-stamp click)."
+`ps/agenda-layout-view-kind' to `calendar' (in scope here, during finalize); a
+generated situation command binds it to `situation' and records which one in
+`ps/situations-current-key' (stashed just before this hook); otherwise it is the
+Agenda.  Robust regardless of how the build was triggered \(wrapper, dispatcher,
+`g'/redo, a date-stamp click)."
   (when (derived-mode-p 'org-agenda-mode)
     (let* ((tasks (eq (car-safe org-agenda-redo-command) 'org-todo-list))
            (calendar (and (boundp 'ps/agenda-layout-view-kind)
-                          (eq ps/agenda-layout-view-kind 'calendar))))
+                          (eq ps/agenda-layout-view-kind 'calendar)))
+           (situation (and (boundp 'ps/situations-current-key)
+                           ps/situations-current-key)))
       (setq-local ps/mode-line--agenda-title
                   (cond (tasks "Tasks")
                         (calendar
@@ -329,11 +360,14 @@ otherwise it is the Agenda.  Robust regardless of how the build was triggered
                                  (ps/mode-line--span-label
                                   (and (boundp 'org-agenda-current-span)
                                        org-agenda-current-span))))
+                        (situation
+                         (concat "Situation" ps/mode-line-separator
+                                 (ps/mode-line--situation-label situation)))
                         (t "Agenda")))
       (setq-local ps/mode-line--agenda-show-position tasks)
       ;; The conflict count is Agenda-only (see `ps/conflicts--agenda-schedule-check');
       ;; clear it on every other view so a stale count never leaks into Calendar/Tasks.
-      (when (or tasks calendar)
+      (when (or tasks calendar situation)
         (setq-local ps/mode-line--agenda-conflict-count nil))
       ;; Disable the semantic-emoji decoration in the (long) Tasks view.
       (setq-local ps/agenda-emoji-enabled (not tasks))

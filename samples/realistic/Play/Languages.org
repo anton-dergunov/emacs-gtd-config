@@ -3,10 +3,10 @@
 #+TITLE: Languages
 
 * Spanish
-** TODO Practice listening daily
-** TODO Review common verb conjugations
-** TODO Build vocabulary deck
-** TODO Watch beginner podcasts
+** TODO Practice listening daily  :audio:easy:
+** TODO Review common verb conjugations  :phone:micro:
+** TODO Build vocabulary deck  :phone:easy:fun:
+** TODO Watch beginner podcasts  :video:online:
 ** TODO Read simple news articles
 ** TODO Practice shadowing exercises
 

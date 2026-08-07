@@ -3,7 +3,7 @@
 * Daily
 ** INPR Morning planning block before opening email
 ** TODO Shut the laptop at a fixed time
-** TODO Ten minutes of reading before bed
+** TODO Ten minutes of reading before bed  :easy:fun:
 ** TODO One short walk between deep-work blocks
 
 * Weekly
@@ -12,7 +12,7 @@
 ** TODO Plan the week's focus on Sunday evening
 
 * Tracking
-** TODO Decide what is actually worth tracking
+** TODO Decide what is actually worth tracking  :think:
 ** TODO Try a paper habit sheet for a month
 ** MAYB Compare habit-tracking apps
 

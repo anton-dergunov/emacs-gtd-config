@@ -1,0 +1,170 @@
+#+TITLE: Situations
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+Free time arrives unannounced and in awkward shapes — a minute between gym sets,
+a pomodoro break, a cardio machine, a walk, a plane with no signal. In those
+moments the problem is rarely that there is nothing worth doing; it is the
+context switch. Whatever surfaces first wins, and what surfaces first is usually
+the phone's default app.
+
+A *situation* is a saved search that answers /what is worth doing right now, with
+what I have in my hands/ — faster than a habit can. Where the [[file:Agenda.org][Agenda]] answers
+/what should I focus on/ and the [[file:Calendar.org][Calendar]] answers /what is happening this week/,
+a situation answers /what fits the next ten minutes/.
+
+* The idea in one rule
+Situations are built on *context tags*, and there is one rule that keeps the
+scheme usable:
+
+#+begin_quote
+A tag is a promise that the task works with *less than a desk*. If a task needs a
+desk, it gets no tags. When unsure, do not tag.
+#+end_quote
+
+Tags are /affordances/ — each says the task survives with less screen, less
+attention, less time or less energy than normal work. They are never
+descriptions of what a task needs /more/ of: a tag meaning "requires deep focus"
+applies to almost everything, so it carries no information.
+
+The practical consequence is that *most of your tasks should carry no tags at
+all*, and that is correct. Tagging is a deliberate pass, not something to do
+while writing a task.
+
+Situations are deliberately *not* tags. A situation is a bundle of capabilities,
+so tagging situations directly would mean re-tagging everything whenever a new
+one appears. The tags describe requirements; the situations are queries over
+them — a new situation costs one line and no re-tagging.
+
+* Opening a situation
+Choose one from *Productivity → Plan & Review → Situations*, or press =C-c p S=
+followed by the situation's own key. With the example set below:
+
+| Key         | Opens                                          |
+|-------------+------------------------------------------------|
+| =C-c p S m= | A spare minute — gym sets, a queue, waiting    |
+| =C-c p S f= | On foot — walking, hiking, chores              |
+| =C-c p S s= | Screen in hand — pomodoro break, commute, sofa |
+| =C-c p S o= | Screen in hand, offline — a plane, the Tube    |
+| =C-c p S b= | Low battery — evening, just woken, a bad day   |
+| =C-c p S d= | To download — before losing signal             |
+| =C-c p S ?= | pick from a list by name                       |
+
+The same searches are also in the agenda dispatcher, under =C-c a s=.
+
+* How it reads
+A situation view is a flat list of the open tasks that match — no date sections
+and no grouping, because in the moment you want the shortest possible list to
+scan. Each line uses the same layout as the Agenda: category icon, state and
+priority pills, the title, and its tags.
+
+At the top sits a *plate* naming the situation, with its icon. To its right:
+
+- =⟳= reloads the view.
+- =Situations ▾= opens the full list, so you can move to a different one without
+  leaving the buffer.
+
+There are no back/forward arrows here — unlike the Calendar, a situation is not a
+period of time, so there is nothing to step through.
+
+The mode line shows =Situation · <name>=, and clicking it opens the same view
+switcher used everywhere else — with all your situations listed under the fixed
+Agenda / Calendar / Tasks entries.
+
+If nothing matches, the view says so rather than showing an empty page. That is
+useful information: an empty /To download/ means you are ready to lose signal.
+
+* Defining your own
+Both the tags and the situations are declared *once*, in the =workspace.org= file
+in your Org folder (open it with =C-c p W=). Everything else is derived from
+those two declarations — the tag picker, the agenda commands, the menu, the
+keys, the mode-line switcher, and the notes your AI assistant reads. Reload with
+=C-c p w= and every one of them updates.
+
+** The tags
+#+begin_src emacs-lisp
+  (setq ps/context-tags
+        '((:name "audio" :key ?a :kind "affordance"
+           :means "Works with ears only — walking, cardio, chores.")
+          (:name "think" :key ?t :kind "affordance"
+           :means "Needs no device at all. Pure thinking: gym sets, waiting.")
+          (:name "online" :key ?o :kind "restriction"
+           :means "Does NOT work without a connection.")
+          (:name "download" :key ?d :kind "lifecycle"
+           :means "A fetch step is outstanding. Remove the tag once fetched.")))
+#+end_src
+
+- =:name= is the tag as it appears in your files.
+- =:key= is the character that toggles it in the tag picker. =?a= is Emacs Lisp
+  for /the character a/ — so pressing =a= toggles =audio=.
+- =:kind= groups the tags. Entries keep the order you write, and the picker
+  starts a new line wherever the kind changes.
+- =:means= is the promise the tag makes. Write it carefully: it is also what an
+  AI assistant editing your notes is told the tag is for.
+
+To tag a task, put the cursor on its heading and press =C-c C-q=, then the
+tag's key. One keypress applies it and closes the picker.
+
+Watch out for one naming constraint if you sync to a mobile app: Orgzly matches
+tags by /substring/, so no tag may be a substring of another.
+=M-x ps/context-tags-lint= checks the whole set for you.
+
+** The situations
+#+begin_src emacs-lisp
+  (setq ps/situations
+        '((:key "m" :name "A spare minute" :hint "gym sets, a queue, waiting"
+           :icon "hourglass_top" :query "think|micro")
+          (:key "f" :name "On foot" :hint "walking, hiking, chores"
+           :icon "directions_walk" :query "audio|think")
+          (:key "o" :name "Screen in hand, offline" :hint "a plane, the Tube"
+           :icon "airplanemode_active" :query "phone-online|video-online")))
+#+end_src
+
+- =:key= is the character used under =C-c p S= and after =C-c a s=.
+- =:name= titles the view; =:hint= names the circumstance and shows in menus and
+  tooltips.
+- =:icon= is a [[https://fonts.google.com/icons][Material Symbols]] name, drawn on the plate.
+- =:query= is an Org tag-match string.
+
+Name situations by *circumstance*, not by faculty or place — "On foot" rather
+than "Audio tasks". Then each one states its own entry condition: you look at
+your hands rather than remembering which label the gym got.
+
+** Writing queries
+=:query= uses Org's tag-match syntax:
+
+- =audio|think= — either tag (=|= is /or/).
+- =easy+fun= — both tags (=+= is /and/).
+- =phone-online= — has =phone=, does /not/ have =online= (=-= is /and not/).
+
+The one trap: *Org's match syntax has no parentheses*, and =|= separates whole
+clauses. So /(phone or video) and not online/ cannot be written as typed — you
+distribute it by hand:
+
+#+begin_src emacs-lisp
+  :query "phone-online|video-online"
+#+end_src
+
+Situation views only ever show tasks that are still open, so you never need to
+exclude =DONE= yourself.
+
+* What your AI assistant sees
+If you use the [[file:AI-integration.org][Claude Code integration]], your tag and situation declarations are
+written into the generated context file your assistant reads, as two tables: what
+each tag promises, and which situation query each one feeds. That is generated
+from the same declaration the rest of the system uses, so it can never drift —
+and it means you do not have to describe your tags a second time in =AGENTS.md=.
+
+* Under the hood / Customize
+Logic lives in =lisp/ps-situations.el=. Settings are in =config.org= under
+=Settings → Situations=: =ps/context-tags=, =ps/situations= and
+=ps/situations-key-prefix=. Real declarations belong in your =workspace.org=
+(=C-c p W=), which overrides those defaults;
+=samples/realistic/workspace.org= in the repo is a complete worked example.
+
+Note that claiming a dispatcher prefix shadows the agenda dispatcher's built-in
+key of the same name. With the default =s= that is /Search for keywords/, still
+available as =M-x org-search-view=. Change =ps/situations-key-prefix= if you
+would rather keep it.

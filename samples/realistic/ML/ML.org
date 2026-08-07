@@ -6,11 +6,11 @@
 ** TODO Compare transformer inference optimizations
 ** TODO Experiment with grouped-query attention
 ** TODO Build tiny transformer from scratch in PyTorch
-** TODO Learn more about KV cache management
-** TODO Understand speculative decoding
-** TODO Compare tokenizer approaches
+** TODO Learn more about KV cache management  :think:
+** TODO Understand speculative decoding  :think:
+** TODO Compare tokenizer approaches  :think:micro:
 ** TODO Benchmark quantized models locally
-** TODO Read about retrieval-augmented generation
+** TODO Read about retrieval-augmented generation  :download:
 ** TODO Compare dense vs sparse retrieval
 ** TODO Evaluate reranking models
 ** TODO Learn how modern embedding models are trained

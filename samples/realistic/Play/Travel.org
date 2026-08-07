@@ -1,7 +1,7 @@
 5#+TITLE: Travel
 
 * Travel Ideas
-** TODO Research train travel across Europe
+** TODO Research train travel across Europe  :phone:online:
 ** TODO Plan photography-focused city trip
 ** TODO Explore hiking destinations with good public transport
 
@@ -17,7 +17,7 @@
 
 * Travel Workflow
 ** TODO Create reusable itinerary template
-** TODO Improve offline map workflow
+** TODO Improve offline map workflow  :download:
 ** TODO Organize travel documents digitally
 
 * Language Learning

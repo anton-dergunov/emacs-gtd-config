@@ -47,6 +47,8 @@
 (defvar org-lowest-priority)
 (defvar org-log-done)
 (defvar org-tag-alist)
+(declare-function ps/context-tags-all "ps-situations" ())
+(declare-function ps/situations-all "ps-situations" ())
 (defvar org-tag-persistent-alist)
 (defvar org-journal-dir)
 (defvar org-journal-file-format)
@@ -199,7 +201,8 @@ Pure: formats its argument and reads no Emacs/Org state."
                                            priority-high priority-low
                                            agenda-subdir tag-names
                                            journal-subdir journal-format
-                                           log-done next-keyword)
+                                           log-done next-keyword
+                                           &optional tags-detailed)
   "Render the generated conventions section as markdown.
 ACTIVE-KEYWORDS and DONE-KEYWORDS are lists of plain TODO keyword names (no
 fast-select suffix), in `org-todo-keywords' order. PRIORITY-HIGH/-LOW are the
@@ -213,6 +216,10 @@ base) and `org-journal-file-format', or nil if no journal is configured.
 LOG-DONE mirrors `org-log-done'.
 NEXT-KEYWORD is `ps/ai-context-next-keyword' -- the keyword the agenda pulls
 into its \"Next up\" section, or nil to omit that fact.
+TAGS-DETAILED, when non-nil, says a \"Context tags\" section follows with the
+per-tag meanings and the situation queries (see
+`ps/ai-context--render-tag-section'), so the bullet points there instead of
+listing bare names.
 Pure: takes no Emacs/Org state, only formats its arguments, so it is
 ERT-testable in isolation from `ps/ai-context-sync'."
   (let* ((states-str (mapconcat (lambda (k) (format "`%s`" k))
@@ -236,11 +243,17 @@ ERT-testable in isolation from `ps/ai-context-sync'."
                           "  scannable, not a second task list.\n")
                  next-keyword)
        "")
-     (if tag-names
-         (format "- **Tags:** a fixed set is defined: %s. Prefer these over inventing new ones.\n"
-                 (mapconcat (lambda (tg) (format "`%s`" tg)) tag-names ", "))
+     (cond
+      (tags-detailed
+       (concat "- **Tags:** a fixed set of context tags is defined. What each one promises,\n"
+               "  and the situation queries built on them, are tabulated under \"Context\n"
+               "  tags\" below. Prefer these over inventing new ones.\n"))
+      (tag-names
+       (format "- **Tags:** a fixed set is defined: %s. Prefer these over inventing new ones.\n"
+               (mapconcat (lambda (tg) (format "`%s`" tg)) tag-names ", ")))
+      (t
        (concat "- **Tags:** no fixed tag list. Reuse whatever tags a file already has; don't\n"
-               "  invent a scheme.\n"))
+               "  invent a scheme.\n")))
      (if whole-tree
          (concat "- **Where tasks live:** every `.org` file in these notes feeds the agenda, at\n"
                  "  any depth. The directory layout is yours to choose -- put a task in\n"
@@ -260,15 +273,69 @@ ERT-testable in isolation from `ps/ai-context-sync'."
                  journal-subdir journal-format scope)
        ""))))
 
+(defun ps/ai-context--md-cell (s)
+  "Return S safe to put in a markdown table cell (a literal | would split it)."
+  (replace-regexp-in-string "|" "\\\\|" (or s "")))
+
+(defun ps/ai-context--render-tag-section (context-tags situations)
+  "Render the \"Context tags\" section from CONTEXT-TAGS and SITUATIONS.
+
+CONTEXT-TAGS and SITUATIONS are canonical plists as produced by
+`ps/context-tags-all' and `ps/situations-all'. Returns \"\" when there are no
+context tags -- the tags are what the section is about, and a situation
+without them has nothing to explain.
+
+This is the single-source-of-truth half of the tag vocabulary: the same
+declaration that builds `org-tag-alist' and the agenda commands is what an
+assistant reads here, so the meanings cannot drift from the config. Pure."
+  (if (null context-tags)
+      ""
+    (concat
+     "\n## Context tags\n"
+     "\n"
+     "A tag is a promise that the task works with **less than a desk** -- less screen,\n"
+     "less attention, less time or less energy. A task that needs a desk gets no tags,\n"
+     "which is the right answer for the large majority of them. **Do not add context\n"
+     "tags to a task unless explicitly asked to.**\n"
+     "\n"
+     "| Tag | Kind | Means |\n"
+     "|---|---|---|\n"
+     (mapconcat
+      (lambda (tg)
+        (format "| `%s` | %s | %s |\n"
+                (ps/ai-context--md-cell (plist-get tg :name))
+                (ps/ai-context--md-cell (or (plist-get tg :kind) ""))
+                (ps/ai-context--md-cell (or (plist-get tg :means) ""))))
+      context-tags "")
+     (if (null situations)
+         ""
+       (concat
+        "\n"
+        "Situations are not tags: a situation is a bundle of capabilities, so the tags\n"
+        "describe requirements and the situations are saved queries over them. Tagging a\n"
+        "task is what puts it in front of the user in the matching moment.\n"
+        "\n"
+        "| Situation | Matches | Fires when |\n"
+        "|---|---|---|\n"
+        (mapconcat
+         (lambda (s)
+           (format "| %s | `%s` | %s |\n"
+                   (ps/ai-context--md-cell (or (plist-get s :name) (plist-get s :key)))
+                   (ps/ai-context--md-cell (plist-get s :query))
+                   (ps/ai-context--md-cell (or (plist-get s :hint) ""))))
+         situations ""))))))
+
 (defun ps/ai-context--render-document (active-keywords done-keywords
                                         priority-high priority-low
                                         agenda-subdir tag-names
                                         journal-subdir journal-format
-                                        log-done next-keyword entries)
+                                        log-done next-keyword entries
+                                        &optional context-tags situations)
   "Render the whole generated context file.
 The arguments up to NEXT-KEYWORD are passed straight to
-`ps/ai-context--render-conventions'; ENTRIES goes to
-`ps/ai-context--render-file-index'. Pure, like both of them."
+`ps/ai-context--render-conventions'; CONTEXT-TAGS and SITUATIONS go to
+`ps/ai-context--render-tag-section'; ENTRIES goes to
+`ps/ai-context--render-file-index'. Pure, like all three."
   (concat
    "<!-- Generated by Emacs (ps/ai-context-sync) from config.org and these notes.\n"
    "     Do not edit: it is rewritten on every Emacs start. Change config.org, or a\n"
@@ -277,7 +344,8 @@ The arguments up to NEXT-KEYWORD are passed straight to
    (ps/ai-context--render-conventions
     active-keywords done-keywords priority-high priority-low
     agenda-subdir tag-names journal-subdir journal-format
-    log-done next-keyword)
+    log-done next-keyword (and context-tags t))
+   (ps/ai-context--render-tag-section context-tags situations)
    (ps/ai-context--render-file-index entries)))
 
 ;;;###autoload
@@ -312,7 +380,9 @@ mtime untouched. Does nothing if `ps/ai-context-enabled' is nil or
                       agenda-subdir tag-names
                       journal-subdir journal-format
                       org-log-done ps/ai-context-next-keyword
-                      (ps/ai-context--collect-entries)))
+                      (ps/ai-context--collect-entries)
+                      (and (fboundp 'ps/context-tags-all) (ps/context-tags-all))
+                      (and (fboundp 'ps/situations-all) (ps/situations-all))))
            (old-text (and (file-exists-p file)
                           (with-temp-buffer
                             (insert-file-contents file)

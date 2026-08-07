@@ -91,6 +91,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-agenda-layout)
   (require 'ps-schedule-view)
   (require 'ps-agenda-fold)
+  (require 'ps-situations)
   (require 'ps-schedule-icons)
   (require 'ps-blank-lines)
   (require 'ps-availability)
@@ -534,6 +535,48 @@ List the section headers that should start collapsed when the agenda opens.
   (setq ps/agenda-fold-default-collapsed nil)  ; e.g. '("In progress:")
 #+end_src
 
+** Situations (ps-situations.el)
+Two declarations that answer "what is worth doing right now, with what I have in
+my hands". =ps/context-tags= is the fixed tag vocabulary — each tag an
+*affordance*, a promise that the task survives with less than a desk — and
+=ps/situations= holds saved tag searches named by the circumstance they fire in.
+
+Everything else is derived from those two: =org-tag-alist= and its
+fast-selection keys, the agenda commands behind =C-c a s=, the =C-c p S=
+bindings, the Productivity → Situations menu, the mode-line switcher, and the
+tag/situation tables written into =.claude/generated-context.md= for an AI
+assistant. Add a situation in one line and every one of those follows.
+
+Both are empty here on purpose: the tags you use are a property of *your*
+notes, so real declarations belong in your =workspace.org=, next to the icon
+maps. =samples/realistic/workspace.org= has a worked example. With
+=ps/context-tags= left empty, =org-tag-alist= is not touched and tags stay
+free-form.
+#+begin_src emacs-lisp
+  (setq ps/context-tags nil)
+  ;; ;; Example — the left side is the tag, ?a is the character that selects it
+  ;; ;; in the C-c C-q tag picker, and entries are grouped by :kind:
+  ;; (setq ps/context-tags
+  ;;       '((:name "audio" :key ?a :kind "affordance"
+  ;;          :means "Works with ears only — walking, cardio, chores.")
+  ;;         (:name "think" :key ?t :kind "affordance"
+  ;;          :means "Needs no device at all.")
+  ;;         (:name "online" :key ?o :kind "restriction"
+  ;;          :means "Does not work without a connection.")))
+
+  (setq ps/situations nil)
+  ;; ;; Example — :key follows the C-c a s prefix and C-c p S:
+  ;; (setq ps/situations
+  ;;       '((:key "m" :name "A spare minute" :hint "gym sets, a queue, waiting"
+  ;;          :icon "hourglass_top" :query "think|micro")
+  ;;         (:key "f" :name "On foot" :hint "walking, hiking, chores"
+  ;;          :icon "directions_walk" :query "audio|think")))
+
+  ;; Dispatcher prefix these commands own. Claiming "s" shadows the agenda
+  ;; dispatcher's built-in "Search for keywords" (still on M-x org-search-view).
+  (setq ps/situations-key-prefix "s")
+#+end_src
+
 ** Typo / spell checking (ps-typo.el)
 A quiet, multilingual typo checker for Org buffers. A word is underlined only
 when *no* configured language recognises it, so terms valid in any of your
@@ -602,10 +645,13 @@ loads it, then deletes it. Silently does nothing when the file is absent."
     (find-file (ps/workspace-config-file)))
 
   (defun ps/reload-workspace-config ()
-    "Reload workspace.org and re-apply icons and file sets."
+    "Reload workspace.org and re-apply icons, file sets and situations."
     (interactive)
     (ps/load-workspace-config)
     (ps/icons-reapply)
+    ;; Re-derive org-tag-alist, the agenda commands and the C-c p S keymap from
+    ;; the (possibly edited) ps/context-tags and ps/situations.
+    (when (fboundp 'ps/situations-apply) (ps/situations-apply))
     (when (fboundp 'ps/agenda-files-refresh) (ps/agenda-files-refresh))
     (message "Workspace config reloaded"))
 
@@ -1138,6 +1184,28 @@ preference and stays here.
 
     :config
     (org-super-agenda-mode))
+#+end_src
+
+*** Situations
+Saved tag searches named by circumstance ("A spare minute", "On foot"), declared
+as data in =ps/situations= — see =* Settings / Situations= above. Logic lives in
+=lisp/ps-situations.el=; this call derives =org-tag-alist= from
+=ps/context-tags=, registers one agenda command per situation and builds the
+=C-c p S= keymap.
+
+It has to sit *here*, after the =org-super-agenda= block, and not in
+=workspace.org=: that block's =setq org-agenda-custom-commands= runs on the
+=org-agenda= load event, and =eval-after-load= forms run in registration order.
+Anything registering earlier — =workspace.org= is loaded some 500 lines above —
+has its entries silently replaced by that =setq=, which is why =C-c a s m= used
+to land in Org's built-in keyword search instead.
+#+begin_src emacs-lisp
+  (ps/situations-apply)
+  (ps/situations-setup)
+
+  ;; One keypress per tag in the C-c C-q picker, with no popup window — this is
+  ;; what makes the :key characters in `ps/context-tags' worth declaring.
+  (setq org-fast-tag-selection-single-key 'expert)
 #+end_src
 
 *** Aligned layout, emoji, folding, conflict check
@@ -2191,6 +2259,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "c") ps/calendar-keymap)            ; c → Calendar (sub-keymap)
     (define-key m (kbd "A") #'org-agenda)                   ; A → full chooser
     (define-key m (kbd "n") #'ps/show-tasks)                ; n → Tasks (all open)
+    (define-key m (kbd "S") ps/situations-keymap)           ; S → Situations (sub-keymap)
     (define-key m (kbd "v") #'ps/org-show-availability)     ; v → aVailability
     (define-key m (kbd "x") #'ps/show-conflicts)            ; x → conflicts/clashes
     ;; Capture & notes
@@ -2235,6 +2304,10 @@ calendar boundary containing the start day (e.g. the whole current week)."
         ["Week"               ps/show-calendar-week    :keys "C-c p c w"]
         ["Month"              ps/show-calendar-month   :keys "C-c p c m"]
         ["Year"               ps/show-calendar-year    :keys "C-c p c y"])
+       ;; Generated from `ps/situations' on every menu open (`:filter'), so a
+       ;; situation added to workspace.org shows up after C-c p w — no
+       ;; hardcoded copy of the list here.
+       ("Situations" :filter ps/situations--menu-filter)
        ["Tasks"               ps/show-tasks            :keys "C-c p n   /   F9"]
        ["Full Agenda…"        org-agenda               :keys "C-c a"]
        ["Show Availability"   ps/org-show-availability :keys "C-c p v"]
@@ -2301,6 +2374,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
        "---"
        ["Keybinding Cheat Sheet" (ps/help-open-doc "Keybindings.org") t]
        ["The Agenda"            (ps/help-open-doc "Agenda.org") t]
+       ["Situations"            (ps/help-open-doc "Situations.org") t]
        ["Planning Setup"        (ps/help-open-doc "Planning-setup.org") t]
        "---"
        ["About this configuration" (ps/help-open-doc "About.org") t])))

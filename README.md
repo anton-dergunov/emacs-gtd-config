@@ -23,6 +23,9 @@ setup or borrow pieces for your own.
   icons and compact status/priority/date pills.
 - **A schedule view** — see the day as a timeline or a compact event list, with
   a live now-indicator that refreshes every minute.
+- **Situations** — saved searches named by circumstance ("a spare minute", "on
+  foot", "screen in hand, offline"), so an awkward gap in the day has an answer
+  ready instead of turning into a scroll.
 - **Planning tools** — find free slots (availability), detect scheduling
   conflicts, and shift timestamps between timezones.
 - **A file tree with icons** — browse your Org areas, switch between named file
@@ -146,6 +149,8 @@ Jump straight to:
 - [Planning setup](docs/Planning-setup.org) — your Org files, task states, and
   the keys for editing tasks
 - [The Agenda](docs/Agenda.org) — the heart of the system
+- [Situations](docs/Situations.org) — context tags and the saved searches over
+  them
 - [Customization & appearance](docs/Customization.org) — themes, fonts, icons,
   and settings
 - [AI integration (Claude Code)](docs/AI-integration.org) — the optional
