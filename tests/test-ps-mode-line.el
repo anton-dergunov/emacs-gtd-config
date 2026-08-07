@@ -3,7 +3,7 @@
 (require 'ert)
 (require 'cl-lib)
 (add-to-list 'load-path "lisp")
-(require 'ps-file-tree)   ; provides ps/file-tree--strip-org-extension
+(require 'ps-file-tree)   ; provides ps/file-tree--normalize-display-name
 (require 'ps-claude)      ; provides ps/claude--session-buffer-p
 (require 'ps-mode-line)
 (require 'org)
@@ -22,6 +22,12 @@
   (with-temp-buffer
     (rename-buffer "scratch" t)
     (should (equal (ps/mode-line--buffer-name) "scratch"))))
+
+(ert-deftest ps/mode-line--buffer-name-replaces-underscores ()
+  (with-temp-buffer
+    (rename-buffer "Deep_Learning.org" t)
+    (should (equal (ps/mode-line--buffer-name) "Deep Learning"))
+    (should (equal (ps/mode-line--frame-title) "Deep Learning"))))
 
 (ert-deftest ps/mode-line--frame-title-labels-claude-session ()
   (with-temp-buffer

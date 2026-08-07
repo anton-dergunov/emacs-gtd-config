@@ -23,7 +23,7 @@
 
 ;; Provided by other modules / Org; declared so this file loads and its pure
 ;; helpers are testable in isolation.
-(declare-function ps/file-tree--strip-org-extension "ps-file-tree" (name))
+(declare-function ps/file-tree--normalize-display-name "ps-file-tree" (name))
 (declare-function ps/claude--session-buffer-p "ps-claude" (buffer-or-name))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
@@ -64,9 +64,9 @@
 ;;; Filename
 
 (defun ps/mode-line--strip-org (name)
-  "Return NAME with a trailing \".org\" removed."
-  (if (fboundp 'ps/file-tree--strip-org-extension)
-      (ps/file-tree--strip-org-extension name)
+  "Return NAME with a trailing \".org\" removed and \"_\" replaced by a space."
+  (if (fboundp 'ps/file-tree--normalize-display-name)
+      (ps/file-tree--normalize-display-name name)
     name))
 
 (defun ps/mode-line--display-name (name)

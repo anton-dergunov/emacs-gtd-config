@@ -360,6 +360,12 @@ Leaves NAME unchanged if it doesn't end in \".org\" or is exactly \".org\"."
       (substring name 0 (- (length name) (length ".org")))
     name))
 
+(defun ps/file-tree--normalize-display-name (name)
+  "Return NAME with \".org\" stripped and \"_\" replaced by a space.
+Shared by the file tree and the mode line / frame title so a filename like
+\"Deep_Learning.org\" reads as \"Deep Learning\" everywhere it is displayed."
+  (replace-regexp-in-string "_" " " (ps/file-tree--strip-org-extension name)))
+
 (defun ps/file-tree--spacer ()
   "Return a propertized space `ps/file-tree-name-spacing' characters wide."
   (propertize " " 'display (list 'space :width ps/file-tree-name-spacing)))
@@ -370,8 +376,7 @@ and add leading spacing.
 Suitable for `treemacs-file-name-transformer'. Does not affect the
 underlying path used to open the file."
   (concat (ps/file-tree--spacer)
-          (replace-regexp-in-string
-           "_" " " (ps/file-tree--strip-org-extension name))))
+          (ps/file-tree--normalize-display-name name)))
 
 (defun ps/file-tree-transform-dir-name (name)
   "Transform NAME for display: add leading spacing.
