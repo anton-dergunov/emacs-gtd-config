@@ -248,19 +248,23 @@ journal, archives, and the two config files that live in the Org base directory.
 ** Blank line recovery (ps-blank-lines.el)
 Beorg and Orgzly strip the blank lines out of org files when they save them.
 =Recover blank lines from history= (F7) finds the version of each file that
-still has them and reports what could be restored — it never writes.
+still has them and reports what could be restored.  Nothing is written until
+you review it: =a= in the report walks the files one at a time through ediff,
+and only what you accept is saved.
 
 =new-edge-strategy= decides what to do at a gap the older version knows nothing
 about, which happens when a heading is moved or newly typed on the phone:
 ='learned= predicts from your own files, ='zero= never guesses.  =match-floor=
 is how similar two headings must be to count as the same one.  The ancestor
-limits bound how far back each file's history is searched.
+limits bound how far back each file's history is searched.  =side-by-side= puts
+your file and the proposal in two columns during the review; nil stacks them.
 #+begin_src emacs-lisp
   (setq ps/blank-lines-new-edge-strategy   'learned
         ps/blank-lines-match-floor          0.55
         ps/blank-lines-rule-min-samples     5
         ps/blank-lines-ancestor-max-commits 50
-        ps/blank-lines-ancestor-max-days    30)
+        ps/blank-lines-ancestor-max-days    30
+        ps/blank-lines-review-side-by-side  t)
 #+end_src
 
 ** Scroll bars (ps-scrollbar.el)
