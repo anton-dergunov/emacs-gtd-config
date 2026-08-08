@@ -1785,10 +1785,12 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; Narrower than treemacs's 35-column default.
     (setq treemacs-width 25)
 
-    ;; Keep unlocked so the divider can be dragged to resize manually.
-    ;; See design-docs/file-view-resizing.md for the failed attempts to also
-    ;; prevent the frame resize from changing this window's width.
+    ;; Keep treemacs's own width lock off: it works by setting
+    ;; `window-size-fixed', which also blocks dragging the divider. The width
+    ;; is held steady across frame resizes by `ps/file-tree-width-setup'
+    ;; instead -- see design-docs/file-view-resizing.md.
     (setq treemacs-width-is-initially-locked nil)
+    (ps/file-tree-width-setup)
 
     ;; More compressed indentation per level (default is 2).
     (setq treemacs-indentation 1)

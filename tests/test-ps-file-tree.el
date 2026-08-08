@@ -9,6 +9,7 @@
 ;; marks the symbol special within that file -- repeat it here so the `let'
 ;; bindings below are dynamic rather than lexical.
 (defvar my-org-base-directory)
+(defvar treemacs-width)
 
 (defmacro ps/file-tree-test--with-base-dir (entries &rest body)
   "Create a temp dir containing ENTRIES, bind `dir', run BODY, then clean up.
@@ -523,5 +524,72 @@ editor window instead of splitting a new one (the get-buffer-window-of-nil bug).
       (when (get-file-buffer tmp) (kill-buffer (get-file-buffer tmp)))
       (kill-buffer buf-a)
       (delete-file tmp))))
+
+;;; -------------------------------------------------------
+;;; Window width
+;;; -------------------------------------------------------
+
+(defmacro ps/file-tree-test--with-tree-window (&rest body)
+  "Run BODY with a fake file tree window bound to `tree', `main' beside it.
+The tree buffer only claims `treemacs-mode' as its `major-mode', which is
+all the width helpers look at."
+  (declare (indent 0))
+  `(let ((buf (generate-new-buffer "fake-treemacs")))
+     (unwind-protect
+         (save-window-excursion
+           (delete-other-windows)
+           (with-current-buffer buf (setq major-mode 'treemacs-mode))
+           (let* ((tree (selected-window))
+                  (main (split-window tree nil t)))
+             (set-window-buffer tree buf)
+             (ignore main)
+             ,@body))
+       (kill-buffer buf))))
+
+(ert-deftest ps/file-tree--frame-window-finds-the-tree ()
+  "The lookup returns the window showing a `treemacs-mode' buffer."
+  (ps/file-tree-test--with-tree-window
+    (should (eq (ps/file-tree--frame-window (selected-frame)) tree))))
+
+(ert-deftest ps/file-tree--frame-window-nil-without-tree ()
+  "The lookup returns nil on a frame with no file tree window."
+  (save-window-excursion
+    (delete-other-windows)
+    (should-not (ps/file-tree--frame-window (selected-frame)))))
+
+(ert-deftest ps/file-tree--width-pinned-p-nil-when-unpreserved ()
+  "A window with no preserved width is not pinned."
+  (ps/file-tree-test--with-tree-window
+    (should-not (ps/file-tree--width-pinned-p tree))))
+
+(ert-deftest ps/file-tree--width-pinned-p-after-preserving ()
+  "Preserving the width makes the window count as pinned."
+  (ps/file-tree-test--with-tree-window
+    (window-preserve-size tree t t)
+    (should (ps/file-tree--width-pinned-p tree))))
+
+(ert-deftest ps/file-tree--width-pinned-p-lapses-when-width-changes ()
+  "The pin lapses once the width no longer matches the preserved one.
+This is what makes a divider drag re-pin at the width the user dragged to."
+  (ps/file-tree-test--with-tree-window
+    (window-preserve-size tree t t)
+    (adjust-window-trailing-edge tree (- (frame-char-width)) t t)
+    (should-not (ps/file-tree--width-pinned-p tree))))
+
+(ert-deftest ps/file-tree-pin-width-pins-and-records-the-width ()
+  "Pinning preserves the width and copies it to `treemacs-width'."
+  (let ((treemacs-width 0))
+    (ps/file-tree-test--with-tree-window
+      (ps/file-tree-pin-width (selected-frame))
+      (should (ps/file-tree--width-pinned-p tree))
+      (should (= treemacs-width (window-total-width tree))))))
+
+(ert-deftest ps/file-tree-pin-width-is-a-no-op-without-tree ()
+  "Pinning leaves `treemacs-width' alone when there is no file tree window."
+  (let ((treemacs-width 25))
+    (save-window-excursion
+      (delete-other-windows)
+      (ps/file-tree-pin-width (selected-frame))
+      (should (= treemacs-width 25)))))
 
 ;;; test-ps-file-tree.el ends here

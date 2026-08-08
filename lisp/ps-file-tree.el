@@ -26,6 +26,7 @@
 (declare-function hl-line-highlight "hl-line")
 (defvar my-org-base-directory)
 (defvar treemacs-indentation)
+(defvar treemacs-width)
 ;; Current-line highlight overlays we clear when nothing matches; both are
 ;; revived by `move-overlay' the next time their owner redraws.
 (defvar hl-line-overlay)
@@ -404,6 +405,57 @@ Suitable for `treemacs-directory-name-transformer'."
   "Toggle the file tree window."
   (interactive)
   (treemacs))
+
+;;; Window width
+;;
+;; The file tree keeps whatever width it has until the user drags its divider:
+;; resizing the Emacs frame no longer redistributes columns to it.
+;;
+;; The mechanism is `window-preserve-size', which is honoured by the C-level
+;; frame-resize code (it hands the extra columns to the other windows instead)
+;; but is deliberately *not* honoured by `adjust-window-trailing-edge' -- that
+;; function retries with IGNORE = `preserved', which is exactly the call
+;; `mouse-drag-line' makes for a divider drag.  So a preserved window is
+;; immovable by the frame and still movable by the mouse.
+;;
+;; Preserving records the width as it is *now*; the record lapses as soon as
+;; the width differs, i.e. right after a drag.  `ps/file-tree-pin-width' runs
+;; from `window-size-change-functions' and re-records it, so each drag becomes
+;; the new pinned width.  (`window-size-fixed', which treemacs's own width lock
+;; uses, is the wrong tool here: it also blocks `adjust-window-trailing-edge',
+;; which is why dragging is dead while the tree is locked.)
+
+(defun ps/file-tree--frame-window (frame)
+  "Return the file tree window on FRAME, or nil.
+Unlike `treemacs-get-local-window' this does not consult the selected
+frame, so it is safe to call from `window-size-change-functions', which
+may report a frame other than the selected one."
+  (seq-find (lambda (win)
+              (eq (buffer-local-value 'major-mode (window-buffer win))
+                  'treemacs-mode))
+            (window-list frame 'no-minibuf)))
+
+(defun ps/file-tree--width-pinned-p (window)
+  "Return non-nil if WINDOW's current width is the one preserved for it."
+  (let ((preserved (window-preserved-size window t)))
+    (and (numberp preserved)
+         (= preserved (window-body-width window t)))))
+
+(defun ps/file-tree-pin-width (&optional frame)
+  "Pin the current width of the file tree window on FRAME.
+A pinned width survives frame resizes; dragging the divider still
+changes it, and the new width is pinned in turn.  The width is also
+copied to `treemacs-width' so hiding and re-showing the tree brings it
+back at the width the user last chose."
+  (when-let* ((win (ps/file-tree--frame-window (or frame (selected-frame)))))
+    (unless (ps/file-tree--width-pinned-p win)
+      (window-preserve-size win t t)
+      (setq treemacs-width (window-total-width win)))))
+
+;;;###autoload
+(defun ps/file-tree-width-setup ()
+  "Keep the file tree window's width fixed across frame resizes."
+  (add-hook 'window-size-change-functions #'ps/file-tree-pin-width))
 
 ;;; File sets
 
