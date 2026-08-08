@@ -12,6 +12,7 @@
 ** MAYB Look at standing-desk converters
 
 * Admin
+
 ** NEXT Renew the home insurance before it lapses
 ** TODO File the utility statements
 ** TODO Cancel the unused streaming subscription

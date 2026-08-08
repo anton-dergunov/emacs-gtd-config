@@ -30,6 +30,7 @@ before loose files, so =Inbox= and =Misc= still follow them.
 #+end_src
 
 * Category icons
+
 The icon drawn for a =<Name>.org= file, wherever it sits in the tree.
 #+begin_src emacs-lisp
   (ps/material-icons-add

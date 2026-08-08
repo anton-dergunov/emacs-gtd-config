@@ -11,6 +11,7 @@
 ** TODO Meal prep on weekends
 ** TODO Reduce sugary snacks
 ** TODO Drink more water
+
 ** TODO Learn simple healthy recipes
 ** TODO Track caffeine intake
 
@@ -24,6 +25,7 @@
 ** TODO Reduce information overload
 ** TODO Schedule regular breaks
 ** TODO Spend more time outdoors
+
 ** TODO Practice mindfulness occasionally
 
 * Medical

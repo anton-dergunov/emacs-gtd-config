@@ -245,6 +245,24 @@ journal, archives, and the two config files that live in the Org base directory.
         ps/conflicts-include-past   nil)
 #+end_src
 
+** Blank line recovery (ps-blank-lines.el)
+Beorg and Orgzly strip the blank lines out of org files when they save them.
+=Recover blank lines from history= (F7) finds the version of each file that
+still has them and reports what could be restored — it never writes.
+
+=new-edge-strategy= decides what to do at a gap the older version knows nothing
+about, which happens when a heading is moved or newly typed on the phone:
+='learned= predicts from your own files, ='zero= never guesses.  =match-floor=
+is how similar two headings must be to count as the same one.  The ancestor
+limits bound how far back each file's history is searched.
+#+begin_src emacs-lisp
+  (setq ps/blank-lines-new-edge-strategy   'learned
+        ps/blank-lines-match-floor          0.55
+        ps/blank-lines-rule-min-samples     5
+        ps/blank-lines-ancestor-max-commits 50
+        ps/blank-lines-ancestor-max-days    30)
+#+end_src
+
 ** Scroll bars (ps-scrollbar.el)
 Custom auto-hiding scroll-position indicator (the native macOS bar can't be
 recoloured or made to auto-hide). A theme-coloured pill at the right edge shows
@@ -2000,10 +2018,11 @@ arguments — use =C-u N= or =C-N= instead.
       (global-unset-key (kbd (format "M-%d" i)))))
 #+end_src
 
-** F7 — reinsert empty lines
-Logic lives in =lisp/ps-blank-lines.el=.
+** F7 — recover blank lines from history
+Logic lives in =lisp/ps-blank-lines.el=. Defaults are in the Blank line
+recovery settings block above.
 #+begin_src emacs-lisp
-  (global-set-key [f7] #'ps/blank-lines-reinsert)
+  (global-set-key [f7] #'ps/blank-lines-recover)
 #+end_src
 
 ** F8 — toggle file tree
@@ -2275,7 +2294,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
     ;; Edit org
     (define-key m (kbd "d") #'ps/done-collapse)             ; d → DONE collapse
     (define-key m (kbd "D") #'ps/done-expand)               ; D → DONE expand
-    (define-key m (kbd "r") #'ps/blank-lines-reinsert)      ; r → reinsert blanks
+    (define-key m (kbd "r") #'ps/blank-lines-recover)       ; r → recover blanks
     (define-key m (kbd "t") #'ps/shift-timezone)            ; t → timezone
     ;; Sync & VC
     (define-key m (kbd "s") #'ps/git-sync-toggle)           ; s → sync toggle
@@ -2333,7 +2352,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Collapse DONE Tasks"   ps/done-collapse           :keys "C-c p d"]
        ["Expand DONE Tasks"     ps/done-expand             :keys "C-c p D"]
        ["Refresh DONE Fading"   ps/done-fade-subtrees      t]
-       ["Reinsert Blank Lines"  ps/blank-lines-reinsert    :keys "C-c p r   /   F7"]
+       ["Recover Blank Lines…"  ps/blank-lines-recover     :keys "C-c p r   /   F7"]
        ["Shift Timezones…"      ps/shift-timezone          :keys "C-c p t"])
       ("Sync & Version Control"
        ["Git Sync Enabled" ps/git-sync-toggle

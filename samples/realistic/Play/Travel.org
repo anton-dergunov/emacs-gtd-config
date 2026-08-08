@@ -12,6 +12,7 @@
 
 * Photography Trips
 ** TODO Find sunrise locations for landscape photography
+
 ** TODO Research night photography locations
 ** TODO Practice travel storytelling through photos
 
@@ -26,6 +27,7 @@
 
 * Cities to Visit
 ** MAYB Visit Tokyo during autumn
+
 ** MAYB Explore small coastal towns in Portugal
 ** MAYB Visit mountain regions for landscape photography
 

@@ -6,6 +6,7 @@
 SCHEDULED: <2026-02-10 Tue 11:00-11:30>
 Discussed ML infrastructure background and distributed training experience.
 ** DONE Technical interview
+
 SCHEDULED: <2026-02-17 Tue 14:00-15:00>
 Topics:
 - Retrieval evaluation
@@ -36,6 +37,7 @@ Review SLAM basics and sensor fusion concepts.
 * Nimbus Search
 ** DONE Recruiter call
 SCHEDULED: <2026-04-01 Wed 09:30-10:00>
+
 ** DONE ML systems interview
 SCHEDULED: <2026-04-08 Wed 12:00-13:00>
 Covered:
@@ -46,6 +48,7 @@ Covered:
 ** DONE Behavioural interview
 SCHEDULED: <2026-04-15 Wed 11:00-11:45>
 ** TODO Final panel interview
+
 SCHEDULED: <2026-05-28 Thu 15:00-16:30>
 
 * Harbor Analytics
@@ -71,6 +74,7 @@ Discussion:
 ** TODO Prepare examples of difficult debugging sessions
 
 * General Preparation
+
 ** TODO Refresh probability and statistics
 ** TODO Practice explaining trade-offs clearly
 ** TODO Prepare STAR-format behavioural answers
@@ -84,7 +88,9 @@ Discussion:
 * Useful Resources
 ** System Design
 https://github.com/donnemartin/system-design-primer
+
 ** ML Interview Questions
+
 https://github.com/khangich/machine-learning-interview
 ** SQL Practice
 https://www.sql-practice.com/

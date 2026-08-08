@@ -36,6 +36,10 @@ setup or borrow pieces for your own.
   live.
 - **Modern scrollbars** — an auto-hiding, theme-coloured scroll-position
   indicator, plus smooth pixel scrolling.
+- **Blank-line recovery** — mobile Org apps throw away the blank lines you put
+  in your files. One command finds the last version that still had them, works
+  out where they belong in the file as it is now, and shows you what it would
+  restore and why — without touching a character of your text.
 - **Quiet quality-of-life touches** — multilingual typo checking, faded/folded
   DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
   and automatic background Git sync of your Org files.

@@ -11,6 +11,7 @@
 
 * Coding Agent
 ** TODO Implement tool calling framework
+
 ** TODO Add sandboxed execution
 ** TODO Build planning loop
 ** TODO Add retry logic
@@ -23,6 +24,7 @@
 ** TODO Add dataset versioning
 ** TODO Implement metric dashboards
 ** TODO Add hallucination detection experiments
+
 ** TODO Create synthetic data generation pipeline
 
 * Photography Archive
@@ -36,6 +38,7 @@
 ** TODO Display calendar agenda
 ** TODO Track weekly goals
 ** TODO Add weather integration
+
 ** TODO Create simple habit tracker
 
 * Blog

@@ -12,6 +12,7 @@
 ** TODO Plan the week's focus on Sunday evening
 
 * Tracking
+
 ** TODO Decide what is actually worth tracking  :think:
 ** TODO Try a paper habit sheet for a month
 ** MAYB Compare habit-tracking apps

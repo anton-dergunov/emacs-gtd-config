@@ -11,6 +11,7 @@
 * Time Management
 ** TODO Track focused work sessions
 ** TODO Reduce context switching  :think:
+
 ** TODO Batch shallow tasks  :think:micro:
 ** TODO Experiment with calendar blocking
 ** TODO Create realistic daily plans
@@ -24,6 +25,7 @@
 
 * Digital Cleanup
 ** TODO Clean old screenshots
+
 ** TODO Organize Downloads directory
 ** TODO Remove unused apps
 ** TODO Review browser extensions
@@ -37,6 +39,7 @@
 
 * Learning
 ** TODO Create spaced repetition workflow
+
 ** TODO Build reading queue
 ** TODO Reduce passive tutorial watching
 ** TODO Track completed projects instead of courses
@@ -50,6 +53,7 @@
 * Health and Energy
 ** TODO Improve sleep consistency
 ** TODO Take walking breaks during work
+
 ** TODO Reduce doomscrolling
 ** TODO Stretch during long coding sessions
 

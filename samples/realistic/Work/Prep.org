@@ -12,6 +12,7 @@
 
 * Engineering Skills
 ** TODO Improve debugging speed in PyTorch
+
 ** TODO Learn advanced profiling tools
 ** TODO Practice writing better technical RFCs
 
@@ -26,6 +27,7 @@
 ** TODO Explore structured generation techniques
 
 * Team Skills
+
 ** TODO Improve technical mentoring skills
 ** TODO Learn better meeting facilitation
 ** TODO Practice concise architecture explanations
@@ -38,7 +40,6 @@
 * Learning Projects
 ** INPR Build toy coding agent
 Started: [2026-05-12 Tue]
-
 ** TODO Create synthetic evaluation datasets
 ** TODO Experiment with lightweight RAG pipeline
 

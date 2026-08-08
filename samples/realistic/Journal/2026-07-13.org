@@ -4,8 +4,8 @@
 ** 09:20 Planning
 Sketched out the week. The retrieval evaluation work is the only thing that
 really matters this week; everything else can slip.
-
 ** 17:45 Notes
+
 The async queue bug turned out to be a missing await, not a race. Worth
 remembering that "intermittent" does not automatically mean "concurrency".
 

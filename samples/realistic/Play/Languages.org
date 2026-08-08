@@ -13,6 +13,7 @@
 * Japanese
 ** TODO Learn hiragana thoroughly
 ** TODO Continue katakana practice
+
 ** TODO Learn basic sentence structure
 ** TODO Study particles carefully
 ** TODO Build travel vocabulary
@@ -29,6 +30,7 @@
 *** TODO Podcast "Coffee Break Spanish"
 *** TODO YouTube "Dreaming Spanish"
 *** TODO Read graded readers
+
 ** Japanese
 *** TODO Learn with NHK Easy News
 *** TODO Review Genki exercises

@@ -10,6 +10,7 @@
 ** TODO Learn memory optimization techniques
 ** TODO Create reusable CLI template
 ** TODO Learn better logging practices
+
 ** TODO Study generators and iterators deeply
 
 * C++
@@ -23,6 +24,7 @@
 
 * Rust
 ** TODO Build toy CLI tool
+
 ** TODO Learn ownership model deeply
 ** TODO Understand async ecosystem
 ** TODO Compare Rust and Go ergonomics
@@ -48,6 +50,7 @@
 
 * Git
 ** TODO Learn advanced rebasing
+
 ** TODO Improve commit hygiene
 ** TODO Create reusable git hooks
 ** TODO Learn signed commits
@@ -61,6 +64,7 @@
 ** TODO Benchmark full-text search systems
 
 * Architecture
+
 ** TODO Read about event-driven systems
 ** TODO Study distributed tracing
 ** TODO Review CAP theorem examples
@@ -73,6 +77,7 @@
 ** TODO Review dynamic programming
 ** TODO Implement LRU cache from scratch
 ** TODO Practice interval problems
+
 ** TODO Refresh heap-based algorithms
 ** TODO Review trie structures
 

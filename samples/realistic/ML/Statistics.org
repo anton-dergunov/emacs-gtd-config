@@ -12,6 +12,7 @@
 
 * Practical ML Statistics
 ** TODO Calibration metrics for classifiers
+
 ** TODO Precision/recall tradeoffs
 ** TODO Ranking metrics
 ** TODO Offline vs online evaluation
@@ -43,4 +44,5 @@
 
 * Projects
 ** TODO Simulate A/B testing scenarios in Python
+
 ** TODO Create notebook on calibration curves

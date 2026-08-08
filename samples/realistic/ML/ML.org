@@ -10,6 +10,7 @@
 ** TODO Understand speculative decoding  :think:
 ** TODO Compare tokenizer approaches  :think:micro:
 ** TODO Benchmark quantized models locally
+
 ** TODO Read about retrieval-augmented generation  :download:
 ** TODO Compare dense vs sparse retrieval
 ** TODO Evaluate reranking models
@@ -22,6 +23,7 @@
 ** TODO Learn about calibration metrics
 ** TODO Investigate retrieval recall metrics
 ** TODO Study context-window degradation
+
 ** TODO Implement automatic regression testing
 ** TODO Review red-teaming techniques
 ** TODO Learn about factuality evaluation
@@ -34,6 +36,7 @@
 ** TODO Learn model serving with vLLM
 ** TODO Create reproducible experiment template
 ** TODO Improve Docker workflows
+
 ** TODO Understand GPU profiling tools
 ** TODO Learn Triton inference server basics
 ** TODO Benchmark local inference hardware
@@ -46,6 +49,7 @@
 ** TODO Review probability distributions
 ** TODO Learn causal inference concepts
 ** TODO Study calibration curves
+
 ** TODO Review statistical testing pitfalls
 ** TODO Learn uplift modeling basics
 
@@ -59,6 +63,7 @@
 ** TODO Compare offline and online metrics
 
 * Vision Models
+
 ** TODO Learn segmentation architectures
 ** TODO Study diffusion models
 ** TODO Review image augmentation strategies
@@ -70,11 +75,13 @@
 ** TODO "The Bitter Lesson"
 https://www.cs.utexas.edu/~eunsol/courses/data/bitter_lesson.pdf
 ** TODO "Hidden Technical Debt in Machine Learning Systems"
+
 https://papers.nips.cc/paper/5656-hidden-technical-debt-in-machine-learning-systems.pdf
 ** TODO "Scaling Laws for Neural Language Models"
 https://arxiv.org/abs/2001.08361
 
 * Practical Experiments
+
 ** TODO Fine-tune a small open-source model
 ** TODO Create retrieval benchmark on personal notes
 ** TODO Build lightweight agent framework

@@ -16,10 +16,9 @@ Need to optimize for:
 - interesting technical challenges,
 - healthy work environment,
 - strong engineering culture.
-
 ** TODO [#B] Create yearly career review template
-DEADLINE: <2026-06-01 Mon>
 
+DEADLINE: <2026-06-01 Mon>
 ** INPR Map current strengths and weaknesses          :reflection:think:
 Started: [2026-05-12 Tue]
 Strengths:
@@ -43,16 +42,12 @@ Topics:
 - reranking
 - chunking strategies
 - retrieval evaluation
-
 *** NEXT Build toy retrieval pipeline from scratch
 SCHEDULED: <2026-05-22 Fri>
-
 *** TODO Learn practical evaluation of LLM systems
 DEADLINE: <2026-06-10 Wed>
-
 *** DONE Finish review of transformer internals
 CLOSED: [2026-05-10 Sun 18:40]
-
 *** WAIT Feedback from colleague on evaluation framework proposal
 Waiting for architecture comments.
 
@@ -60,7 +55,6 @@ Waiting for architecture comments.
 *** TODO Practice designing scalable ML systems
 *** TODO Study event-driven architectures
 *** TODO Understand GPU scheduling basics
-
 *** Multi-region deployment
 **** TODO Read about failover strategies
 **** TODO Compare cloud provider offerings
@@ -70,7 +64,6 @@ Waiting for architecture comments.
 *** TODO Improve modern C++ knowledge
 *** TODO Learn advanced typing in Python
 *** TODO Explore async workflows deeply
-
 *** Debugging Practice
 **** TODO Reproduce subtle memory leak in toy service
 **** TODO Create debugging checklist for ML pipelines
@@ -80,7 +73,6 @@ CLOSED: [2026-05-09 Sat]
 * Communication Skills
 ** TODO [#A] Improve architecture presentation skills       :softskills:
 SCHEDULED: <2026-05-26 Tue 10:00>
-
 ** TODO Practice concise writing for RFCs
 ** TODO Learn better stakeholder communication
 ** TODO Improve meeting facilitation
@@ -89,7 +81,6 @@ SCHEDULED: <2026-05-26 Tue 10:00>
 *** TODO Publish one technical article per month
 *** NEXT Create reusable article structure
 SCHEDULED: <2026-05-23 Sat>
-
 *** DONE Publish short post about debugging workflows
 CLOSED: [2026-05-11 Mon]
 
@@ -97,26 +88,21 @@ CLOSED: [2026-05-11 Mon]
 ** TODO Learn better delegation techniques
 ** TODO Read about engineering management
 ** TODO Study feedback frameworks
-
 ** Mentoring
 *** TODO Schedule mentoring session with junior engineer
 SCHEDULED: <2026-05-27 Wed 14:00-15:00>
-
 *** TODO Create onboarding notes template
 *** WAIT Response from mentee regarding project ideas
 
 * Research
 ** TODO Track important AI papers weekly
 SCHEDULED: <2026-05-21 Thu +1w>
-
 ** TODO Build habit of paper summarization
 ** TODO Improve understanding of multimodal systems
-
 ** Interesting Topics
 *** World Models
 **** TODO Read introductory papers
 **** TODO Understand planning approaches
-
 *** Agents
 **** TODO Compare memory architectures
 **** TODO Evaluate tool calling approaches
@@ -126,16 +112,15 @@ SCHEDULED: <2026-05-21 Thu +1w>
 ** TODO Reach out to former colleagues
 ** TODO Participate in local ML meetup
 ** TODO Improve professional online presence
-
 ** Conferences
 *** MAYB Attend systems conference
 *** MAYB Attend applied AI conference
 
 * Career Experiments
 ** TODO Explore open-source contribution strategy
+
 ** TODO Build public portfolio projects
 ** TODO Create technical demo repository
-
 ** Side Projects
 *** TODO Tiny vector search demo
 *** TODO Agent orchestration playground
@@ -145,7 +130,6 @@ SCHEDULED: <2026-05-21 Thu +1w>
 ** TODO Improve GitHub project documentation
 ** TODO Create consistent screenshot style
 ** TODO Prepare architecture diagrams
-
 ** Blog Topics
 *** TODO "Lessons from building long-term systems"
 *** TODO "Evaluating AI systems in practice"
@@ -155,7 +139,6 @@ SCHEDULED: <2026-05-21 Thu +1w>
 ** TODO Reduce context switching
 ** TODO Create stronger weekly planning habit
 ** TODO Protect deep work blocks
-
 ** Daily Structure
 *** TODO Morning review ritual
 *** TODO Evening shutdown checklist
@@ -165,7 +148,6 @@ SCHEDULED: <2026-05-21 Thu +1w>
 ** TODO Create layered learning workflow
 ** TODO Revisit old notes regularly
 ** TODO Improve spaced repetition usage
-
 ** Courses
 *** TODO Distributed systems refresher
 *** TODO Practical statistics refresher
@@ -174,6 +156,7 @@ SCHEDULED: <2026-05-21 Thu +1w>
 * Collaboration
 ** TODO Improve code review quality
 ** TODO Practice clearer async communication
+
 ** TODO Learn conflict resolution techniques
 
 * Architecture Notes
@@ -189,7 +172,6 @@ Need to focus more on:
 ** TODO Become stronger at technical strategy
 ** TODO Improve ability to lead ambiguous projects
 ** TODO Build stronger systems intuition
-
 ** Five-Year Themes
 *** Better communication
 *** Better technical breadth
@@ -214,18 +196,16 @@ Potential future article:
 ** Interviews
 *** DONE Initial technical screening
 CLOSED: [2026-05-03 Sun]
-
 *** DONE System design discussion
 CLOSED: [2026-05-07 Thu]
-
 *** NEXT Prepare architecture presentation
 SCHEDULED: <2026-05-25 Mon 09:00-11:00>
-
 *** TODO Follow up after onsite discussion
 DEADLINE: <2026-05-28 Thu>
 
 * Obsidian Integration
 ** TODO Review linked notes in Obsidian
+
 [[obsidian:Project Ideas]]
 [[obsidian:AI Systems]]
 [[obsidian:Architecture Notes]]
@@ -239,18 +219,14 @@ DEADLINE: <2026-05-28 Thu>
 ******* TODO Add adversarial examples
 ******* TODO Add multilingual coverage
 ******* TODO Add edge-case prompts
-
 ****** TODO Create annotation guidelines
-
 ***** Metrics
 ****** TODO Compare ranking metrics
 ****** TODO Add latency tracking
 ****** TODO Evaluate calibration
-
 **** Serving
 ***** TODO Measure inference bottlenecks
 ***** TODO Compare batching approaches
-
 *** Research
 **** TODO Evaluate small language models
 **** TODO Compare retrieval approaches
@@ -258,30 +234,25 @@ DEADLINE: <2026-05-28 Thu>
 * Recurring Tasks
 ** TODO Weekly career review
 SCHEDULED: <2026-05-24 Sun +1w>
-
 ** TODO Monthly learning review
 SCHEDULED: <2026-06-01 Mon +1m>
-
 ** TODO Quarterly portfolio cleanup
 SCHEDULED: <2026-07-01 Wed +3m>
 
 * Time Variations
 ** TODO Morning planning block
 SCHEDULED: <2026-05-21 Thu 08:00-08:30>
-
 ** TODO Research discussion
 SCHEDULED: <2026-05-21 Thu 10:00-12:00>
-
 ** TODO Overlapping architecture sync
 SCHEDULED: <2026-05-21 Thu 11:00-12:30>
-
 ** TODO Evening reading session
 SCHEDULED: <2026-05-21 Thu 20:00-21:30>
 
 * Mixed States
+
 ** DONE Old completed initiative
 CLOSED: [2026-04-10 Fri]
-
 *** DONE Subtask one
 *** DONE Subtask two
 *** TODO Follow-up improvement
@@ -306,6 +277,7 @@ Examples:
 
 * Priorities
 ** TODO [#A] Prepare for systems interview
+
 ** TODO [#B] Finish statistics refresher
 ** TODO [#C] Reorganize old learning notes
 

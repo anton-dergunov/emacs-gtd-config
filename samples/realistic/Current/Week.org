@@ -11,6 +11,7 @@
 ** Finish benchmark for vector search latency
 ** Clean Downloads directory
 ** Reply to recruiter emails
+
 ** Review probability notes
 ** Photography walk after work
 
@@ -24,6 +25,7 @@
 ** Practice ML system design interview
 ** Implement chunk overlap experiment
 ** Continue reading book about distributed systems
+
 ** Backup photo archive
 
 * Friday
@@ -37,6 +39,7 @@
 ** Edit travel photos
 ** Long walk in park
 ** Read fiction book
+
 ** Meal prep for next week
 
 * Someday

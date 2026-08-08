@@ -12,12 +12,10 @@
 - Utilities
 - Internet
 - Insurance
-
 ** Transportation
 - Public transport
 - Occasional travel
 - Car rental budget
-
 ** Professional Development
 - Books
 - Courses
@@ -25,6 +23,7 @@
 - Cloud computing costs
 
 * Investing
+
 ** TODO Read about index fund strategies :finance:
 ** TODO Understand tax-efficient investing accounts
 ** TODO Compare investment platforms
@@ -38,8 +37,8 @@
 * Expense Tracking
 ** NEXT Create simple monthly review template
 SCHEDULED: <2026-05-25 Mon>
-
 ** TODO Categorize historical expenses
+
 ** TODO Reduce unused subscriptions
 
 * Long-Term Goals

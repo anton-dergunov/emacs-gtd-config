@@ -43,11 +43,11 @@ The key after =C-c p S= is the situation's own =:key= — the set is yours, so s
 | =C-c p O= / =F5= | =ps/insert-obsidian-link-prompt=         | Obsidian link (prompt)    |
 
 * Edit Org
-| Key                   | Command                        | Action                       |
-|-----------------------+--------------------------------+------------------------------|
-| =C-c p d= / =C-c p D= | =ps/done-collapse= / =-expand= | collapse / expand DONE tasks |
-| =C-c p r= / =F7=      | =ps/blank-lines-reinsert=      | normalize blank lines        |
-| =C-c p t=             | =ps/shift-timezone=            | shift timezones              |
+| Key                   | Command                        | Action                           |
+|-----------------------+--------------------------------+----------------------------------|
+| =C-c p d= / =C-c p D= | =ps/done-collapse= / =-expand= | collapse / expand DONE tasks     |
+| =C-c p r= / =F7=      | =ps/blank-lines-recover=       | recover blank lines from history |
+| =C-c p t=             | =ps/shift-timezone=            | shift timezones                  |
 
 * Layout & navigation
 | Key                 | Command                             | Action                    |

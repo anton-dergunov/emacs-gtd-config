@@ -8,8 +8,8 @@ SCHEDULED: <2026-06-01 Mon>
 - Explain GTD adaptation
 - Include screenshots
 - Mention long-term maintainability
-
 ** TODO Draft article "What ML Engineers Can Learn from Knowledge Management" :ml:pkm:
+
 DEADLINE: <2026-06-14 Sun>
 Topics:
 - Information overload
@@ -17,7 +17,6 @@ Topics:
 - Long-term notes
 - Incremental learning
 - Context accumulation
-
 ** MAYB Write article about debugging neural networks :ml:debugging:
 Potential sections:
 - Gradient explosions
@@ -25,7 +24,6 @@ Potential sections:
 - Tensor shape mismatches
 - Dataset leakage
 - Distributed training failures
-
 ** NEXT Create outline for article "Designing Better AI Coding Agents"
 SCHEDULED: <2026-05-22 Fri>
 - Planning loops
@@ -41,13 +39,11 @@ SCHEDULED: <2026-05-22 Fri>
 - Table of contents
 - Key takeaways
 - Further reading
-
 ** TODO Improve screenshot workflow for Emacs articles
 - Consistent font
 - Window layout
 - SVG export
 - Terminal screenshots
-
 ** INPR Build static site preview pipeline
 Started: [2026-05-18 Sun]
 Current blockers:
@@ -56,6 +52,7 @@ Current blockers:
 - Mobile rendering
 
 * Writing Skills
+
 ** TODO Read "On Writing Well"
 ** TODO Practice concise technical explanations  :think:
 ** TODO Study strong introductions in technical blogs  :phone:easy:
@@ -69,13 +66,14 @@ Current blockers:
 ** TODO Write about failure modes in LLM agents
 
 * Research Notes
+
 ** Links
 - https://martinfowler.com/
 - https://simonwillison.net/
 - https://www.benkuhn.net/
 - https://lilianweng.github.io/
-
 ** Observations
+
 - Good engineering writing is concrete.
 - Screenshots matter more than expected.
 - Architecture diagrams improve engagement.

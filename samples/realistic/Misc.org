@@ -16,6 +16,7 @@
 
 * Productivity
 ** TODO Simplify recurring task management
+
 ** TODO Reduce notification noise
 ** TODO Improve weekly review process
 
@@ -30,6 +31,7 @@
 ** TODO Reduce screen time before sleep
 
 * Fun Projects
+
 ** MAYB Build retro-style terminal dashboard
 ** MAYB Create tiny personal search engine
 ** MAYB Build custom RSS aggregation workflow
@@ -42,7 +44,6 @@
 * Someday Ideas
 ** TODO Test 
 SCHEDULED: <2026-06-14 Sun 20:00-21:00>
-
 ** MAYB Learn basic music theory
 ** MAYB Try watercolor painting
 ** MAYB Build small home server

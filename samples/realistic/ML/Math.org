@@ -12,6 +12,7 @@
 
 * Optimization
 ** TODO Understand AdamW in detail
+
 ** TODO Compare SGD vs adaptive optimizers
 ** TODO Learn trust region optimization basics
 
@@ -26,6 +27,7 @@
 ** TODO Explore compression intuition
 
 * Geometry
+
 ** TODO Learn intuition for manifolds
 ** TODO Understand cosine similarity geometrically
 ** TODO Explore high-dimensional spaces
@@ -36,7 +38,6 @@
 - Saddle points
 - Local minima
 - Batch size effects
-
 ** Statistics Refresher
 - Expectation
 - Variance
@@ -49,7 +50,8 @@
 ** TODO Video series by 3Blue1Brown
 
 * Problem Solving
-** NEXT Solve one math problem daily
-SCHEDULED: <2026-05-21 Thu +1d>
 
+** NEXT Solve one math problem daily
+
+SCHEDULED: <2026-05-21 Thu +1d>
 ** TODO Create spaced repetition deck for formulas

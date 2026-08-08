@@ -90,13 +90,30 @@ fi
 # the sync timer from ever starting; ps/git-sync-paused is a runtime fallback.
 export PS_GIT_SYNC_DISABLE=1
 
+# PS_ORG_BASE points the session at a different org directory than local.el
+# names.  Needed to try anything that reads the org files' *git history*: by
+# default my-org-base-directory is samples/realistic/, which lives inside this
+# repo, so history there is this config repo's own.  See
+# scripts/make_blank_line_playground.sh.
+ORG_BASE_EVAL=()
+if [ -n "${PS_ORG_BASE:-}" ]; then
+  if [ ! -d "$PS_ORG_BASE" ]; then
+    echo "PS_ORG_BASE is not a directory: $PS_ORG_BASE" >&2
+    exit 1
+  fi
+  ORG_BASE_EVAL=(--eval "(setq my-org-base-directory \"$PS_ORG_BASE/\")")
+  echo "Org base: $PS_ORG_BASE"
+fi
+
 if $SANDBOX; then
   "$EMACS_BIN" --init-directory "$INIT_DIR" \
     --eval "(setq ps/git-sync-paused t)" \
+    "${ORG_BASE_EVAL[@]}" \
     "$@"
   rm -rf "$SANDBOX_DIR"
 else
   exec "$EMACS_BIN" --init-directory "$INIT_DIR" \
     --eval "(setq ps/git-sync-paused t)" \
+    "${ORG_BASE_EVAL[@]}" \
     "$@"
 fi
