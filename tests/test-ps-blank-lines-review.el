@@ -311,6 +311,24 @@ take the row from the button — otherwise clicking one file opens another's."
         ;; And point followed the click, so `1' now acts on what was clicked.
         (should (eq second (ps/blank-lines--result-at-point)))))))
 
+(ert-deftest ps/blank-lines-review--a-rescan-leaves-one-report-window ()
+  "A leftover side window would put a second, stale report beside the real one."
+  (save-window-excursion
+    (delete-other-windows)
+    (let ((buffer (get-buffer-create "*Org Blank Lines*")))
+      (unwind-protect
+          (progn
+            (with-current-buffer buffer (ps-blank-lines-mode))
+            (switch-to-buffer buffer)
+            ;; The state a torn-down review can leave behind.
+            (ps/blank-lines-review--keep-visible buffer 30)
+            (should (= 2 (length (get-buffer-window-list buffer nil t))))
+            (ps/blank-lines--drop-stray-windows)
+            (should (= 1 (length (get-buffer-window-list buffer nil t))))
+            (should-not (window-parameter (car (get-buffer-window-list buffer nil t))
+                                          'window-side)))
+        (kill-buffer buffer)))))
+
 (ert-deftest ps/blank-lines-review--closing-puts-the-windows-back ()
   "Showing the report can split a lone window; closing must undo that."
   (save-window-excursion

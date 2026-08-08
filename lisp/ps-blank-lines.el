@@ -305,7 +305,9 @@ this model it never touched the file anyway."
   (ps/blank-lines-review-cancel)
   (let ((pending (seq-filter #'ps/blank-lines--pending-p ps/blank-lines--results)))
     (unless pending (user-error "Nothing left to apply"))
-    (when (yes-or-no-p
+    ;; Single-key: a blocking yes/no prompt swallows the next keystroke, so a
+    ;; second impatient `A' looked like the confirmation had been ignored.
+    (when (y-or-n-p
            (format "Restore %d blank line(s) across %d file(s)? "
                    (apply #'+ 0 (mapcar #'ps/blank-lines-result-restored pending))
                    (length pending)))
@@ -361,6 +363,18 @@ the user is working through.  Press \\<ps-blank-lines-mode-map>\\[ps/blank-lines
                        (cdr (assoc relpath skipped)))))))
            (ps/blank-lines--refresh))))
      buffer)))
+
+(defun ps/blank-lines--drop-stray-windows ()
+  "Delete leftover side windows showing the report.
+
+`ps/blank-lines-review-cancel' restores the layout it saved, but a window that
+outlived that — a diff torn down some other way, a frame rearranged mid-review
+— would leave a second copy of the report on screen beside the real one."
+  (when-let* ((buffer (get-buffer "*Org Blank Lines*")))
+    (dolist (window (get-buffer-window-list buffer nil t))
+      (when (and (window-live-p window)
+                 (window-parameter window 'window-side))
+        (ignore-errors (delete-window window))))))
 
 (defun ps/blank-lines--scale-history (factor)
   "Scale how far back each file's history is searched by FACTOR, and rescan.
@@ -544,6 +558,11 @@ blank lines, and shows what would be restored — with where each gap came
 from.  The scan itself writes nothing; in the report,
 \\<ps-blank-lines-mode-map>\\[ps/blank-lines-accept-this-file] accepts a file and \\[ps/blank-lines-review-this-file] opens it side by side first."
   (interactive)
+  ;; A diff still on screen compares the files as they were before this scan,
+  ;; and its side window would sit beside the freshly shown report — two copies
+  ;; of the same buffer, one of them stale.
+  (ps/blank-lines-review-cancel)
+  (ps/blank-lines--drop-stray-windows)
   (pcase-let* ((`(,rule . ,results) (ps/blank-lines-scan))
                (buffer (get-buffer-create "*Org Blank Lines*"))
                ;; Only on the way in: a rescan must not forget the layout the
