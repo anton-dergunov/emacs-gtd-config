@@ -323,8 +323,8 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
             (should (eq major-mode 'org-mode)))
         (kill-buffer buffer)))))
 
-(ert-deftest ps/blank-lines-review--the-file-is-read-only-during-a-session ()
-  "The left side is a reference; a session must not let it be typed into."
+(ert-deftest ps/blank-lines-review--both-sides-are-editable ()
+  "Either side can be worked in: `b' applies left, `a' drops right."
   (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
     (ps/blank-lines-review-test--noninteractive
      (let ((result (ps/blank-lines-review-test--result
@@ -332,16 +332,53 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
                     ps/blank-lines-review-test--healthy)))
        (ps/blank-lines-review--session result)
        (unwind-protect
-           (with-current-buffer (find-file-noselect file)
-             (should buffer-read-only)
-             (should-error (insert "typed by accident") :type 'buffer-read-only))
-         ;; Ediff restores the flag on quit, so cancelling also clears it.
+           (let ((session ps/blank-lines-review--reviewing))
+             (with-current-buffer (plist-get session :current)
+               (should-not buffer-read-only))
+             (with-current-buffer (plist-get session :proposed)
+               (should-not buffer-read-only)))
          (ps/blank-lines-review-cancel))
-       (with-current-buffer (find-file-noselect file)
-         (should-not buffer-read-only))
        ;; Cancelling writes nothing.
        (should (equal ps/blank-lines-review-test--damaged
                       (ps/blank-lines-review-test--read file)))))))
+
+(ert-deftest ps/blank-lines-review--a-hand-applied-change-wins-over-the-proposal ()
+  "Editing the file directly is the more specific statement, so it is kept."
+  (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
+    (ps/blank-lines-review-test--noninteractive
+     (let* ((result (ps/blank-lines-review-test--result
+                     file ps/blank-lines-review-test--damaged
+                     ps/blank-lines-review-test--healthy))
+            (current (find-file-noselect file))
+            (partial "* One\n\ntext\n* Two\nmore\n")
+            (proposed (generate-new-buffer " *test-proposal*")))
+       (with-current-buffer proposed
+         (insert ps/blank-lines-review-test--healthy))
+       ;; `b' on one hunk leaves the file modified; the proposal still holds
+       ;; everything, and must not win.
+       (with-current-buffer current
+         (erase-buffer)
+         (insert partial))
+       (should (equal partial (ps/blank-lines-review--outcome current proposed)))
+       (ps/blank-lines-review--commit result current proposed)
+       (should (equal partial (ps/blank-lines-review-test--read file)))))))
+
+(ert-deftest ps/blank-lines-review--cancelling-discards-a-hand-applied-change ()
+  "A decision made in the report must not land on top of a half-review."
+  (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
+    (ps/blank-lines-review-test--noninteractive
+     (let ((result (ps/blank-lines-review-test--result
+                    file ps/blank-lines-review-test--damaged
+                    ps/blank-lines-review-test--healthy)))
+       (ps/blank-lines-review--session result)
+       (with-current-buffer (find-file-noselect file)
+         (goto-char (point-min))
+         (insert "\n"))
+       (ps/blank-lines-review-cancel)
+       (with-current-buffer (find-file-noselect file)
+         (should-not (buffer-modified-p))
+         (should (equal ps/blank-lines-review-test--damaged
+                        (buffer-substring-no-properties (point-min) (point-max)))))))))
 
 (ert-deftest ps/blank-lines-review--the-report-survives-ediffs-window-takeover ()
   "The report sits in a side window, the one kind `delete-other-windows' keeps."
@@ -350,7 +387,7 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
         (save-window-excursion
           (delete-other-windows)
           (switch-to-buffer report)
-          (let ((side (ps/blank-lines-review--keep-visible report)))
+          (let ((side (ps/blank-lines-review--keep-visible report 40)))
             (should (window-live-p side))
             ;; Right: the file tree owns the left, so the diff replaces the
             ;; tree rather than the report.
@@ -365,6 +402,27 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
             (should (eq report (window-buffer side)))))
       (kill-buffer report))))
 
+(ert-deftest ps/blank-lines-review--the-report-keeps-the-width-it-had ()
+  "Opening a diff must not resize the thing the user is reading from."
+  (let ((report (get-buffer-create "*blr-width-test*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer report)
+          ;; A narrow report window, as if a file tree were beside it.
+          (let* ((full (window-total-width))
+                 (before (progn (split-window-right (- full 30))
+                                (other-window 1)
+                                (window-total-width))))
+            (ps/blank-lines-review--enter-layout report)
+            (let ((side (seq-find (lambda (w) (window-parameter w 'window-side))
+                                  (window-list))))
+              (should (window-live-p side))
+              ;; Within a column of what it was; side windows round.
+              (should (<= (abs (- before (window-total-width side))) 1)))
+            (ps/blank-lines-review--exit-layout)))
+      (kill-buffer report))))
+
 (ert-deftest ps/blank-lines-review--an-empty-queue-does-not-touch-the-layout ()
   (let ((ediff-window-setup-function #'ediff-setup-windows-multiframe))
     (should (= 0 (ps/blank-lines-review-start nil)))
@@ -372,10 +430,14 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
     (should-not ps/blank-lines-review--saved)))
 
 (ert-deftest ps/blank-lines-review--commands-exist ()
-  (should (commandp 'ps/blank-lines-review-all))
   (should (commandp 'ps/blank-lines-review-this-file))
   (should (commandp 'ps/blank-lines-review-accept-all))
-  (should (commandp 'ps/blank-lines-review-abort)))
+  (should (commandp 'ps/blank-lines-review-reject-all))
+  (should (commandp 'ps/blank-lines-close))
+  ;; Walking every file with one command was dropped: the report is where
+  ;; files are chosen, so the queue was machinery with no user for it.
+  (should-not (fboundp 'ps/blank-lines-review-all))
+  (should-not (fboundp 'ps/blank-lines-review-abort)))
 
 (provide 'test-ps-blank-lines-review)
 ;;; test-ps-blank-lines-review.el ends here

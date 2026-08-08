@@ -74,16 +74,16 @@ there is nothing to go on, the file is left exactly as it is.
 Nothing is written until you say so. Most of the time you can decide straight
 from the report, without opening a diff at all:
 
-| Key   | Action                                      |
-|-------+---------------------------------------------|
-| =1=   | accept this file — put its blank lines back |
-| =2=   | dismiss this file, leaving it alone         |
-| =A=   | accept every file in the report             |
-| =n=   | next file                                   |
-| =p=   | previous file                               |
-| =RET= | open the file on this line                  |
-| =g=   | scan again                                  |
-| =s=   | switch how new spacing is worked out        |
+| Key | Action                                      |
+|-----+---------------------------------------------|
+| =1= | accept this file — put its blank lines back |
+| =2= | dismiss this file, leaving it alone         |
+| =A= | accept every file in the report             |
+| =n= | next file                                   |
+| =p= | previous file                               |
+| =g= | scan again                                  |
+| =s= | switch how new spacing is worked out        |
+| =q= | close the report, and any diff it opened    |
 
 Each row shows the reason for every blank line it would restore, so =1= and =2=
 are decisions you can make from what is already on screen. Accepting marks the
@@ -93,39 +93,34 @@ you keep your place. Press =g= when you want it recomputed from disk.
 
 ** Looking at a file side by side
 When you want to see a change in context, or take some of a file but not all of
-it:
-
-| Key | Action                                   |
-|-----+------------------------------------------|
-| =d= | open the file on this line, side by side |
-| =a= | walk through every file, one at a time   |
+it, press =d= (or =RET=, or click the file name) on a row.
 
 Your file appears on the left as it stands now, and on the right the same file
-with its blank lines back — which is what will be saved. The diff opens where
-the file tree was; the report stays on the right where it already was, and the
-tree comes back when you are done.
+with its blank lines back. The diff opens where the file tree was, so the
+report keeps its place and its width; the tree comes back when you are done.
 
-Everything starts accepted, because these are blank lines you had. You are
-looking for the odd one you disagree with, not approving each one:
+Everything starts accepted, because these are blank lines you had — you are
+looking for the odd one you disagree with, not approving each one. Both sides
+are editable, so you can work from whichever end suits you:
 
-| Key  | Action                             |
-|------+------------------------------------|
-| =n=  | next change                        |
-| =p=  | previous change                    |
-| =a=  | reject this change                 |
-| =rb= | undo that rejection                |
-| =x=  | reject every change in this file   |
-| =+=  | accept every change again          |
-| =q=  | keep what is on the right, move on |
-| =Q=  | stop reviewing                     |
+| Key | Action                                 |
+|-----+----------------------------------------|
+| =n= | next change                            |
+| =p= | previous change                        |
+| =b= | take this change into your file        |
+| =a= | drop this change from the proposal     |
+| =+= | accept every change                    |
+| =x= | drop every change                      |
+| =q= | done — keep what the review settled on |
 
-The left side is read-only: it is your file as it is now, there to compare
-against, and nothing you do to it would be saved. Editing happens on the right.
-If you reject everything, the file is left untouched rather than rewritten with
-its own contents. Whatever you decide is folded back into the report.
+If you edited the left side by hand, that is what gets saved; otherwise the
+right side is. =+= and =x= reset both sides, so after either there is no
+question about which one you meant. Dropping everything leaves the file
+untouched rather than rewriting it with its own contents.
 
-Deciding a file with =1= or =2= closes the diff and puts the windows back, since
-the comparison on screen has just been answered.
+Whatever you decide goes back into the report. Deciding a file there with =1=
+or =2= closes the diff and puts the windows back, since the comparison on
+screen has just been answered.
 
 ** What it will not do
 A file is saved only if you accepted something in it, and only if what you

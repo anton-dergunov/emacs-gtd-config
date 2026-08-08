@@ -6,24 +6,20 @@
 ;; could be restored; this walks the proposals one file at a time through
 ;; Ediff, and saves a file only when the review actually changed it.
 ;;
-;; Buffer A is your file as it stands, **read-only**; buffer B is the proposal,
-;; editable, and B is what gets written.  That is the diff-review convention —
-;; left is what you have, right is what you would end up with — and it means
-;; the review starts from *everything accepted*, which is the right default for
-;; blank lines you once typed and a phone deleted.  Ediff's own `a' therefore
-;; reads as "reject this change": it copies your file's version of the region
-;; back into the proposal.  `rb' undoes a rejection.
+;; Buffer A is your file as it stands, buffer B the same file with its blank
+;; lines back — left is what you have, right is what you would end up with, the
+;; diff-review convention.  Both are editable, so both of Ediff's own copy keys
+;; do something real: `b' applies a change into the file, `a' drops one from
+;; the proposal.  The review therefore starts from *everything accepted*, which
+;; is the right default for blank lines the user once typed and a phone
+;; deleted, while still allowing the change-at-a-time reading.
 ;;
-;; `b' is disabled.  It would copy into the read-only reference, which changes
-;; nothing that gets saved while making the difference vanish as though it had
-;; been decided.  Ediff's copy commands bind `inhibit-read-only', so
-;; `buffer-read-only' on A cannot stop `b' by itself — the key has to go.
-;;
-;; Three keys are added to the session's keymap (`ediff-mode-map' is
-;; `ediff-defvar-local', so none of this leaks into an unrelated Ediff): `+'
-;; accepts everything again, `x' rejects everything, `Q' abandons the queue.
-;; All three come from what stock Ediff leaves free — `!' is not free, it is
-;; `ediff-update-diffs'.
+;; What gets written is settled by `ps/blank-lines-review--outcome': a file the
+;; user edited by hand wins, otherwise the proposal.  `+' (accept everything)
+;; and `x' (drop everything) reset *both* sides, precisely so that the question
+;; cannot arise after them.  Both keys come from what stock Ediff leaves free —
+;; `!' is not free, it is `ediff-update-diffs' — and `ediff-mode-map' is
+;; `ediff-defvar-local', so neither leaks into an unrelated Ediff.
 ;;
 ;; Three guards stand between a review and the disk, in the order they fire:
 ;;
@@ -31,9 +27,9 @@
 ;;     the scan read, is skipped rather than reviewed.  The proposal was
 ;;     computed against a specific version, and applying it to a newer one
 ;;     would revert whatever came in between.
-;;   - Nothing is written when the proposal ends up identical to the file, so
-;;     rejecting everything is a no-op rather than a rewrite.
-;;   - Before saving, the proposal is checked against the scanned text with
+;;   - Nothing is written when the outcome is identical to the file, so
+;;     dropping everything is a no-op rather than a rewrite.
+;;   - Before saving, the outcome is checked against the scanned text with
 ;;     blank lines removed.  Equal means only blank lines changed, which is the
 ;;     whole promise of the feature; unequal means the review edited content,
 ;;     and that is never saved silently.
@@ -97,20 +93,19 @@ Nil stacks them, which is Ediff's own default."
   "Plist of layout state to put back when the review ends.")
 
 (defvar ps/blank-lines-review--reviewing nil
-  "Plist for the file on screen: :current and its :read-only flag before us.")
+  "Plist for the file on screen: :current, :proposed and its :scanned text.")
 
-(defun ps/blank-lines-review--release-file ()
-  "Give the reviewed file back its own read-only flag.
-
-Ediff does not do this for us — `buffer-read-only' is commented out of
-`ediff-protected-variables', so a session that sets it has to clear it, or the
-user is left with a file buffer they cannot type in."
-  (when-let* ((session ps/blank-lines-review--reviewing)
-              (current (plist-get session :current)))
-    (when (buffer-live-p current)
-      (with-current-buffer current
-        (setq buffer-read-only (plist-get session :read-only)))))
-  (setq ps/blank-lines-review--reviewing nil))
+(defun ps/blank-lines-review--replace (buffer text)
+  "Make BUFFER hold TEXT, keeping point and markers where it can."
+  (when (buffer-live-p buffer)
+    (let ((source (generate-new-buffer " *ps-blank-lines-replace*")))
+      (unwind-protect
+          (progn
+            (with-current-buffer source (insert text))
+            (with-current-buffer buffer
+              (let ((inhibit-read-only t))
+                (replace-buffer-contents source))))
+        (kill-buffer source)))))
 
 (defun ps/blank-lines-review-in-progress-p ()
   "Return non-nil while a review session still has files queued."
@@ -141,21 +136,22 @@ user is left with a file buffer they cannot type in."
 ;; left, so the diff opening on the left is the diff taking the tree's place
 ;; rather than the report's.
 
-(defconst ps/blank-lines-review--report-window
-  '((display-buffer-in-side-window)
+(defun ps/blank-lines-review--report-window (width)
+  "Return the display action putting the report in a side window WIDTH wide."
+  `((display-buffer-in-side-window)
     (side . right)
     (slot . 0)
-    (window-width . 0.32)
+    ,@(when width `((window-width . ,width)))
     (window-parameters . ((no-other-window . t)
-                          (no-delete-other-windows . t))))
-  "How the report is displayed beside a review.")
+                          (no-delete-other-windows . t)))))
 
-(defun ps/blank-lines-review--keep-visible (buffer)
-  "Put BUFFER in a side window that will survive Ediff; return that window.
+(defun ps/blank-lines-review--keep-visible (buffer width)
+  "Put BUFFER in a side window WIDTH columns wide; return that window.
 Leaves a main window selected.  BUFFER may also still be showing in a main
 window; Ediff takes that one over, which is what resolves the duplicate."
   (when (buffer-live-p buffer)
-    (let ((side (display-buffer buffer ps/blank-lines-review--report-window)))
+    (let ((side (display-buffer buffer
+                                (ps/blank-lines-review--report-window width))))
       (when (window-live-p side)
         (when-let* ((main (seq-find (lambda (window)
                                       (not (window-parameter window 'window-side)))
@@ -166,13 +162,19 @@ window; Ediff takes that one over, which is what resolves the duplicate."
 (defun ps/blank-lines-review--enter-layout (&optional keep-visible)
   "Give the content area over to Ediff, remembering what to put back.
 KEEP-VISIBLE, if given, is a buffer to park beside the review."
-  (setq ps/blank-lines-review--saved
-        (list :window-config (current-window-configuration)
-              :file-tree (and (ps/file-tree-window-exists-p) t)
-              :setup ediff-window-setup-function
-              :split ediff-split-window-function))
-  (ps/file-tree-hide)
-  (ps/blank-lines-review--keep-visible keep-visible)
+  ;; Measure the report before anything moves: hiding the file tree hands its
+  ;; columns to a neighbour, and the report growing as the diff opens is a
+  ;; distracting reflow of the thing the user is reading from.
+  (let ((width (when-let* ((buffer keep-visible)
+                           (window (get-buffer-window buffer)))
+                 (window-total-width window))))
+    (setq ps/blank-lines-review--saved
+          (list :window-config (current-window-configuration)
+                :file-tree (and (ps/file-tree-window-exists-p) t)
+                :setup ediff-window-setup-function
+                :split ediff-split-window-function))
+    (ps/file-tree-hide)
+    (ps/blank-lines-review--keep-visible keep-visible width))
   (setq ediff-window-setup-function #'ediff-setup-windows-plain
         ediff-split-window-function (if ps/blank-lines-review-side-by-side
                                         #'split-window-horizontally
@@ -338,19 +340,14 @@ under review."
         (unless (buffer-live-p control)
           (kill-buffer proposed)
           (error "Ediff did not return a control buffer"))
-        ;; Your file is the reference, not the workspace.  Ediff will not put
-        ;; this flag back, so the session records what it was and clears it in
-        ;; `ps/blank-lines-review--release-file'.
-        (with-current-buffer current
-          (setq ps/blank-lines-review--reviewing
-                (list :current current :read-only buffer-read-only))
-          (setq buffer-read-only t))
+        (setq ps/blank-lines-review--reviewing
+              (list :current current :proposed proposed
+                    :scanned (ps/blank-lines-result-scanned result)
+                    :full (ps/blank-lines-result-proposed result)))
         (with-current-buffer control
           (setq-local ediff-keep-variants t)
           (define-key ediff-mode-map "+" #'ps/blank-lines-review-accept-all)
           (define-key ediff-mode-map "x" #'ps/blank-lines-review-reject-all)
-          (define-key ediff-mode-map "Q" #'ps/blank-lines-review-abort)
-          (define-key ediff-mode-map "b" #'ps/blank-lines-review--no-copy-to-file)
           (add-hook 'ediff-quit-hook
                     (lambda ()
                       (ps/blank-lines-review--commit result current proposed))
@@ -358,57 +355,52 @@ under review."
           (setq-local ediff-after-quit-hook-internal
                       (list #'ps/blank-lines-review--next))
           ;; Ediff starts with no difference selected (`ediff-current-difference'
-          ;; is -1), and `a' refuses to act until one is — "Bad diff region
+          ;; is -1), and `a'/`b' refuse to act until one is — "Bad diff region
           ;; number, 0".  Select the first, so the session opens ready to act.
           (when (> ediff-number-of-differences 0)
             (ediff-jump-to-difference 1)))
-        (message "%s: all accepted — %s reject one, %s undo, %s reject all, %s keep and go on"
+        (message "%s: %s take one, %s drop one, %s take all, %s drop all, %s done"
                  relpath
+                 (propertize "b" 'face 'help-key-binding)
                  (propertize "a" 'face 'help-key-binding)
-                 (propertize "rb" 'face 'help-key-binding)
+                 (propertize "+" 'face 'help-key-binding)
                  (propertize "x" 'face 'help-key-binding)
                  (propertize "q" 'face 'help-key-binding))))))
 
-(defun ps/blank-lines-review--no-copy-to-file ()
-  "Refuse Ediff's `b', which would edit the read-only reference.
+;; `+' and `x' answer for the whole file, so they reset *both* sides.  Leaving
+;; a hand-applied change in A while setting B would make the answer depend on
+;; which side the commit happened to prefer.
 
-The left side is your file as it stands; the right side is what will be
-written.  Copying leftwards changes nothing that gets saved, while making the
-difference disappear as though it had been decided."
-  (interactive)
-  (message "The left side is read-only.  %s rejects a change, %s undoes that"
-           (propertize "a" 'face 'help-key-binding)
-           (propertize "rb" 'face 'help-key-binding)))
+(defun ps/blank-lines-review--reset (text-for-a text-for-b)
+  "Put TEXT-FOR-A in the file buffer and TEXT-FOR-B in the proposal."
+  (when-let* ((session ps/blank-lines-review--reviewing))
+    (let ((current (plist-get session :current))
+          (proposed (plist-get session :proposed)))
+      (ps/blank-lines-review--replace current text-for-a)
+      (when (buffer-live-p current)
+        (with-current-buffer current (set-buffer-modified-p nil)))
+      (ps/blank-lines-review--replace proposed text-for-b)))
+  (ediff-update-diffs))
 
 (defun ps/blank-lines-review-accept-all ()
-  "Take back every rejection, so the whole proposal is accepted again."
+  "Accept every change in this file."
   (interactive)
   (ediff-barf-if-not-control-buffer)
-  ;; `ediff-pop-diff' restores what `a' saved; regions never rejected have
-  ;; nothing saved and simply signal, which is the no-op we want.
-  (dotimes (i ediff-number-of-differences)
-    (ignore-errors (ediff-pop-diff i 'B)))
-  (message "Whole file accepted — %s to keep it and go on"
+  (when-let* ((session ps/blank-lines-review--reviewing))
+    (ps/blank-lines-review--reset (plist-get session :scanned)
+                                  (plist-get session :full)))
+  (message "Whole file accepted — %s to keep it"
            (propertize "q" 'face 'help-key-binding)))
 
 (defun ps/blank-lines-review-reject-all ()
   "Reject every change, leaving this file exactly as it is."
   (interactive)
   (ediff-barf-if-not-control-buffer)
-  (let ((n ediff-number-of-differences))
-    (dotimes (i n)
-      (ediff-copy-diff i 'A 'B))
-    (message "All %d change(s) rejected — %s to leave the file alone, %s to undo"
-             n
-             (propertize "q" 'face 'help-key-binding)
-             (propertize "+" 'face 'help-key-binding))))
-
-(defun ps/blank-lines-review-abort ()
-  "Finish reviewing this file and drop the rest of the queue."
-  (interactive)
-  (ediff-barf-if-not-control-buffer)
-  (setq ps/blank-lines-review--queue nil)
-  (call-interactively #'ediff-quit))
+  (when-let* ((session ps/blank-lines-review--reviewing)
+              (scanned (plist-get session :scanned)))
+    (ps/blank-lines-review--reset scanned scanned))
+  (message "All changes dropped — %s to leave the file alone"
+           (propertize "q" 'face 'help-key-binding)))
 
 (defun ps/blank-lines-review--control-buffer ()
   "Return the live Ediff control buffer of a review in progress, if any."
@@ -427,7 +419,14 @@ stale comparison.  Nothing needs undoing in the file — under this model the
 review only ever edits the proposal, which is discarded."
   (interactive)
   (setq ps/blank-lines-review--queue nil)
-  (ps/blank-lines-review--release-file)
+  ;; Discard any hand-applied change, so the file on disk and the buffer agree
+  ;; and a decision made in the report is not layered on top of a half-review.
+  (when-let* ((session ps/blank-lines-review--reviewing)
+              (current (plist-get session :current)))
+    (when (and (buffer-live-p current) (buffer-modified-p current))
+      (ps/blank-lines-review--replace current (plist-get session :scanned))
+      (with-current-buffer current (set-buffer-modified-p nil))))
+  (setq ps/blank-lines-review--reviewing nil)
   (when-let* ((control (ps/blank-lines-review--control-buffer)))
     (with-current-buffer control
       ;; Drop our hooks first: quitting must neither save nor advance.
@@ -443,35 +442,42 @@ review only ever edits the proposal, which is discarded."
 
 (defun ps/blank-lines-review--write (current text scanned relpath)
   "Put TEXT into CURRENT and save it, recording RELPATH as applied."
-  (let ((source (generate-new-buffer " *ps-blank-lines-commit*")))
-    (unwind-protect
-        (progn
-          (with-current-buffer source (insert text))
-          (with-current-buffer current
-            (let ((inhibit-read-only t))
-              (replace-buffer-contents source))
-            (save-buffer)))
-      (kill-buffer source)))
+  (ps/blank-lines-review--replace current text)
+  (with-current-buffer current (save-buffer))
   (push (cons relpath (- (ps/blank-lines-review-blank-count text)
                          (ps/blank-lines-review-blank-count scanned)))
         ps/blank-lines-review--applied))
 
+(defun ps/blank-lines-review--outcome (current proposed)
+  "Return the text the review settled on, or nil if there is none.
+
+Either side can be worked in: `b' applies a change into the file on the left,
+`a' drops one from the proposal on the right.  A file the user edited by hand
+wins, because that is the more specific statement — the proposal is only ever
+the default answer.  `+' and `x' reset both sides precisely so that this
+question cannot arise after them."
+  (cond
+   ((and (buffer-live-p current) (buffer-modified-p current))
+    (with-current-buffer current
+      (buffer-substring-no-properties (point-min) (point-max))))
+   ((buffer-live-p proposed)
+    (with-current-buffer proposed
+      (buffer-substring-no-properties (point-min) (point-max))))))
+
 (defun ps/blank-lines-review--commit (result current proposed)
-  "Write what the review left in PROPOSED into CURRENT, if anything changed.
-RESULT is the proposal under review."
+  "Write what the review settled on into CURRENT, if anything changed.
+RESULT is the proposal under review; PROPOSED is its buffer."
   (let ((relpath (ps/blank-lines-result-relpath result))
         (scanned (ps/blank-lines-result-scanned result))
-        (text (and (buffer-live-p proposed)
-                   (with-current-buffer proposed
-                     (buffer-substring-no-properties (point-min) (point-max))))))
-    (ps/blank-lines-review--release-file)
+        (text (ps/blank-lines-review--outcome current proposed)))
+    (setq ps/blank-lines-review--reviewing nil)
     (when (buffer-live-p proposed)
       (kill-buffer proposed))
     (cond
-     ((null text)
-      (ps/blank-lines-review--skip relpath "the proposal was closed during review"))
      ((not (buffer-live-p current))
       (ps/blank-lines-review--skip relpath "the buffer was closed during review"))
+     ((null text)
+      (ps/blank-lines-review--skip relpath "the proposal was closed during review"))
      ;; Every change rejected — leave the file alone rather than rewrite it
      ;; with its own contents.
      ((equal text scanned)

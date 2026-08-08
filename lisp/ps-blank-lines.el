@@ -157,17 +157,22 @@ for all of them equally; pass two fits the rule and proposes."
   (define-key map (kbd "1")   #'ps/blank-lines-accept-this-file)
   (define-key map (kbd "2")   #'ps/blank-lines-reject-this-file)
   (define-key map (kbd "A")   #'ps/blank-lines-accept-all-files)
-  (define-key map (kbd "a")   #'ps/blank-lines-review-all)
   (define-key map (kbd "d")   #'ps/blank-lines-review-this-file)
   (define-key map (kbd "n")   #'ps/blank-lines-next-file)
   (define-key map (kbd "p")   #'ps/blank-lines-previous-file)
+  (define-key map (kbd "q")   #'ps/blank-lines-close)
   (define-key map (kbd "RET") #'ps/blank-lines--visit-at-point))
 
 (defun ps/blank-lines--visit-at-point ()
-  "Visit the file named by the row under point."
+  "Open the diff for the row under point."
   (interactive)
-  (when-let* ((button (button-at (point))))
-    (button-activate button)))
+  (call-interactively #'ps/blank-lines-review-this-file))
+
+(defun ps/blank-lines-close ()
+  "Close the report, and any diff it opened."
+  (interactive)
+  (ps/blank-lines-review-cancel)
+  (quit-window))
 
 (defun ps/blank-lines--result-at-point ()
   "Return the `ps/blank-lines-result' whose row point is on, if any."
@@ -298,14 +303,12 @@ this model it never touched the file anyway."
 
 ;;;; Reviewing with Ediff
 
-(defun ps/blank-lines-review-all ()
-  "Review every proposal in this report, one file at a time, with Ediff."
-  (interactive)
-  (ps/blank-lines--review (seq-filter #'ps/blank-lines--pending-p
-                                      ps/blank-lines--results)))
-
 (defun ps/blank-lines-review-this-file ()
-  "Review only the file whose row point is on."
+  "Open the diff for the file whose row point is on.
+
+One file at a time and only on request: a queue that walked every file was
+more machinery than the report needs, since the report is where files are
+chosen and where the answer goes back."
   (interactive)
   (if-let* ((result (ps/blank-lines--result-at-point)))
       (ps/blank-lines--review (list result))
@@ -317,8 +320,9 @@ this model it never touched the file anyway."
 The report is updated in place rather than re-scanned: a scan costs seconds
 per file, and re-running it would throw away the view — and point in it — that
 the user is working through.  Press \\<ps-blank-lines-mode-map>\\[ps/blank-lines-recover] for the authoritative state."
-  (when (ps/blank-lines-review-in-progress-p)
-    (user-error "A review is already in progress"))
+  ;; Opening a diff for another file replaces the one on screen rather than
+  ;; refusing: the report is a list you move around in.
+  (ps/blank-lines-review-cancel)
   (unless results (user-error "Nothing left to review"))
   (let ((buffer (current-buffer)))
     (ps/blank-lines-review-start
@@ -394,11 +398,13 @@ drops is the same for every row."
         (removed (ps/blank-lines-result-removed result)))
     (insert " ")
     (insert-button (format "%-26s" (truncate-string-to-width path 26))
-                   'face 'default
+                   ;; Bold: the row is a block of lines and the file name is
+                   ;; what starts it, so it has to be findable at a glance.
+                   'face 'bold
                    'mouse-face 'highlight
                    'follow-link t
                    'help-echo (ps/blank-lines-result-relpath result)
-                   'action (lambda (_b) (find-file-other-window file)))
+                   'action (lambda (_b) (ps/blank-lines-review-this-file)))
     (cond
      ((ps/blank-lines-result-error result)
       (insert (format "— skipped: %s\n" (ps/blank-lines-result-error result))))
@@ -445,7 +451,7 @@ drops is the same for every row."
                                 (length done))
                       "")))
     (insert " 1 accept · 2 dismiss · A accept all\n")
-    (insert " d diff · a diff all · n/p move · RET open\n")
+    (insert " d/RET diff · n/p move · q close\n")
     (insert (format " g rescan · s seams: %s\n" ps/blank-lines-new-edge-strategy))
     (insert (make-string 46 ?─) "\n")
     (dolist (result results)
@@ -470,8 +476,8 @@ drops is the same for every row."
 
 Scans every Org file, finds the version of each that still remembers its
 blank lines, and shows what would be restored — with where each gap came
-from.  The scan itself writes nothing; press \\<ps-blank-lines-mode-map>\\[ps/blank-lines-review-all] in the report to review
-the proposals file by file and save the ones you accept."
+from.  The scan itself writes nothing; in the report,
+\\<ps-blank-lines-mode-map>\\[ps/blank-lines-accept-this-file] accepts a file and \\[ps/blank-lines-review-this-file] opens it side by side first."
   (interactive)
   (pcase-let* ((`(,rule . ,results) (ps/blank-lines-scan))
                (buffer (get-buffer-create "*Org Blank Lines*")))
