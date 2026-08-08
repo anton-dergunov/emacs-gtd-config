@@ -165,6 +165,9 @@ leave that split behind — so closing puts back what was there.")
   (define-key map (kbd "n")   #'ps/blank-lines-next-file)
   (define-key map (kbd "p")   #'ps/blank-lines-previous-file)
   (define-key map (kbd "q")   #'ps/blank-lines-close)
+  (define-key map (kbd "+")   #'ps/blank-lines-look-further-back)
+  (define-key map (kbd "=")   #'ps/blank-lines-look-further-back)
+  (define-key map (kbd "-")   #'ps/blank-lines-look-less-far-back)
   (define-key map (kbd "RET") #'ps/blank-lines--visit-at-point))
 
 (defun ps/blank-lines--visit-at-point ()
@@ -299,6 +302,7 @@ this model it never touched the file anyway."
 (defun ps/blank-lines-accept-all-files ()
   "Restore every blank line in the report, in every file, and save them."
   (interactive)
+  (ps/blank-lines-review-cancel)
   (let ((pending (seq-filter #'ps/blank-lines--pending-p ps/blank-lines--results)))
     (unless pending (user-error "Nothing left to apply"))
     (when (yes-or-no-p
@@ -357,6 +361,31 @@ the user is working through.  Press \\<ps-blank-lines-mode-map>\\[ps/blank-lines
                        (cdr (assoc relpath skipped)))))))
            (ps/blank-lines--refresh))))
      buffer)))
+
+(defun ps/blank-lines--scale-history (factor)
+  "Scale how far back each file's history is searched by FACTOR, and rescan.
+
+Both limits move together.  Raising only the commit count would look like it
+did nothing whenever the day limit is the one actually binding — which it
+usually is, since a file with a long history runs out of days first."
+  (setq ps/blank-lines-ancestor-max-commits
+        (max 5 (min 2000 (round (* factor ps/blank-lines-ancestor-max-commits))))
+        ps/blank-lines-ancestor-max-days
+        (max 1 (min 3650 (round (* factor ps/blank-lines-ancestor-max-days)))))
+  (message "Searching back %d commits / %d days"
+           ps/blank-lines-ancestor-max-commits
+           ps/blank-lines-ancestor-max-days)
+  (ps/blank-lines-recover))
+
+(defun ps/blank-lines-look-further-back ()
+  "Search twice as far back through each file's history, and rescan."
+  (interactive)
+  (ps/blank-lines--scale-history 2))
+
+(defun ps/blank-lines-look-less-far-back ()
+  "Search half as far back through each file's history, and rescan."
+  (interactive)
+  (ps/blank-lines--scale-history 0.5))
 
 (defun ps/blank-lines-toggle-strategy ()
   "Switch what happens at gaps the file's history says nothing about."
@@ -465,20 +494,29 @@ drops is the same for every row."
          (done (seq-filter (lambda (r) (integerp (ps/blank-lines-result-applied r)))
                            results)))
     (erase-buffer)
-    (insert (format " %d files · %d to go · +%d -%d%s\n"
-                    (length results)
-                    (length pending)
-                    (apply #'+ 0 (mapcar #'ps/blank-lines-result-restored pending))
-                    (apply #'+ 0 (mapcar #'ps/blank-lines-result-removed pending))
+    ;; Only the files with something to decide: the total scanned is a fact
+    ;; about the scan, not about the work left.
+    (insert (format " %s%s\n"
+                    (if pending
+                        (format "%d file(s) to fix · +%d -%d"
+                                (length pending)
+                                (apply #'+ 0 (mapcar #'ps/blank-lines-result-restored
+                                                     pending))
+                                (apply #'+ 0 (mapcar #'ps/blank-lines-result-removed
+                                                     pending)))
+                      "Nothing left to fix")
                     (if done
-                        (format " · ✓ %d in %d"
+                        (format " · ✓ %d restored in %d"
                                 (apply #'+ 0 (mapcar #'ps/blank-lines-result-applied done))
                                 (length done))
                       "")))
     (insert (make-string 46 ?─) "\n")
     (insert " 1 accept · 2 dismiss · A accept all\n")
     (insert " d/RET diff · n/p move · q close\n")
-    (insert (format " g rescan · s gaps with no history: %s\n"
+    (insert (format " g rescan · -/+ history: %d commits, %d days\n"
+                    ps/blank-lines-ancestor-max-commits
+                    ps/blank-lines-ancestor-max-days))
+    (insert (format " s gaps with no history: %s\n"
                     (ps/blank-lines-spacing-label)))
     (insert (make-string 46 ?─) "\n")
     (dolist (result results)

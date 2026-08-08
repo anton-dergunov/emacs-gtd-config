@@ -82,7 +82,9 @@ from the report, without opening a diff at all:
 | =n= | next file                                   |
 | =p= | previous file                               |
 | =g= | scan again                                  |
-| =s= | switch how unknown gaps are handled         |
+| =+= | look twice as far back in history           |
+| =-= | look half as far back                       |
+| =s= | switch how gaps with no history are handled |
 | =q= | close the report, and any diff it opened    |
 
 Each row shows the reason for every blank line it would restore, so =1= and =2=
@@ -92,11 +94,33 @@ row =✓= and moves to the next, so a whole report can be worked through with
 you keep your place. Press =g= when you want it recomputed from disk, and =q=
 to close it and put your windows back as they were.
 
-Spacing comes from your own history wherever history remembers it. The last
-line shows what happens at the gaps it /doesn't/ remember — a heading you moved,
-or one typed on the phone that was never seen with its blank lines intact.
-=s= switches between working those out from how the rest of your files are
-spaced, and leaving them alone so only remembered spacing is ever restored.
+*** Gaps with no history
+Almost every blank line is copied from the older version of the file: it
+remembers that there was a blank line between /these two headings/, and that is
+what gets put back.
+
+A few gaps have no such memory. If you moved a task on your phone, the two
+headings that now sit next to each other were never neighbours in any version,
+so nothing remembers the spacing between them; the same goes for a heading you
+typed on the phone, which has never existed with its blank lines intact. Those
+are the *gaps with no history*, and the last line of the report says what
+happens to them. =s= switches between:
+
+- /worked out from your style/ — count how you space the rest of your files (a
+  blank line before every top-level heading, say) and apply that here.
+- /left alone/ — propose nothing, so only remembered spacing is ever restored.
+
+They are a handful of gaps per file and often none. The reason column tells you
+which is which: =edge= and =half= are remembered, =rule= is worked out.
+
+*** How far back to look
+The last-but-one line shows how much history is searched for a healthy version
+of each file. =+= doubles it and =-= halves it, rescanning either way.
+
+Both limits move together, because raising just the commit count looks like it
+does nothing whenever the day limit is the one actually binding — which it
+usually is. Widen this if a file shows /no changes/ but you know its blank lines
+were fine a while ago; narrow it if a scan is slow.
 
 ** Looking at a file side by side
 When you want to see a change in context, or take some of a file but not all of

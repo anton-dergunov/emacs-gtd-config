@@ -250,17 +250,12 @@ same staleness and blank-lines-only guards apply as in a review."
       ;; and a write that no human looked at.
       (cons nil "the proposal changes text, not only blank lines"))
      (t
-      (let ((source (generate-new-buffer " *ps-blank-lines-apply*")))
-        (unwind-protect
-            (progn
-              (with-current-buffer source (insert proposed))
-              (with-current-buffer buffer
-                ;; `replace-buffer-contents' rather than erase-and-insert: it
-                ;; keeps point, markers and folding, and touches only the lines
-                ;; that actually differ.
-                (replace-buffer-contents source)
-                (save-buffer)))
-          (kill-buffer source)))
+      ;; Through `ps/blank-lines-review--replace', which binds
+      ;; `inhibit-read-only'.  A read-only Org buffer — left over from an
+      ;; earlier session, under version control, whatever the reason — must not
+      ;; turn an accepted proposal into "Buffer is read-only".
+      (ps/blank-lines-review--replace buffer proposed)
+      (with-current-buffer buffer (save-buffer))
       (cons t (- (ps/blank-lines-review-blank-count proposed)
                  (ps/blank-lines-review-blank-count scanned)))))))
 

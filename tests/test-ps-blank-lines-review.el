@@ -215,6 +215,18 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
       (should (equal ps/blank-lines-review-test--healthy
                      (ps/blank-lines-review-test--read file))))))
 
+(ert-deftest ps/blank-lines-review--apply-works-on-a-read-only-buffer ()
+  "Accepting must not fail with \"Buffer is read-only\"."
+  (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
+    (let ((result (ps/blank-lines-review-test--result
+                   file ps/blank-lines-review-test--damaged
+                   ps/blank-lines-review-test--healthy)))
+      (with-current-buffer (find-file-noselect file)
+        (setq buffer-read-only t))
+      (should (equal '(t . 2) (ps/blank-lines-review-apply result)))
+      (should (equal ps/blank-lines-review-test--healthy
+                     (ps/blank-lines-review-test--read file))))))
+
 (ert-deftest ps/blank-lines-review--apply-refuses-a-stale-file ()
   (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
     (let* ((result (ps/blank-lines-review-test--result
