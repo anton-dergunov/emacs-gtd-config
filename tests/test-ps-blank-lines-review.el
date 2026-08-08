@@ -270,6 +270,61 @@ The whole write path hangs on this, and it is Ediff's behaviour, not ours."
         (goto-char (point-min))
         (should (search-forward "dismissed" nil t))))))
 
+(ert-deftest ps/blank-lines-review--clicking-a-name-acts-on-that-row ()
+  "`push-button' does not move point on a mouse click, so the action must
+take the row from the button — otherwise clicking one file opens another's."
+  (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
+    (let ((first (ps/blank-lines-review-test--result
+                  file ps/blank-lines-review-test--damaged
+                  ps/blank-lines-review-test--healthy))
+          (second (ps/blank-lines-review-test--result
+                   file ps/blank-lines-review-test--damaged
+                   ps/blank-lines-review-test--healthy))
+          (opened nil))
+      (with-temp-buffer
+        (ps-blank-lines-mode)
+        (setq ps/blank-lines--results (list first second)
+              ps/blank-lines--rule (ps/blank-lines-rule-empty))
+        (ps/blank-lines--render)
+        (cl-letf (((symbol-function 'ps/blank-lines--review)
+                   (lambda (results) (setq opened (car results)))))
+          ;; Point parked on the first row; click the second one's name.
+          (ps/blank-lines--goto-row first)
+          (let ((button (progn (ps/blank-lines--goto-row second)
+                               (button-at (point)))))
+            (should button)
+            (ps/blank-lines--goto-row first)
+            (button-activate button)))
+        (should (eq second opened))
+        ;; And point followed the click, so `1' now acts on what was clicked.
+        (should (eq second (ps/blank-lines--result-at-point)))))))
+
+(ert-deftest ps/blank-lines-review--closing-puts-the-windows-back ()
+  "Showing the report can split a lone window; closing must undo that."
+  (save-window-excursion
+    (delete-other-windows)
+    (let ((before (length (window-list)))
+          (buffer (get-buffer-create "*blr-close-test*")))
+      (unwind-protect
+          (with-current-buffer buffer
+            (ps-blank-lines-mode)
+            (setq ps/blank-lines--entry-windows (current-window-configuration))
+            (split-window-right)
+            (should (> (length (window-list)) before))
+            (ps/blank-lines-close)
+            (should (= before (length (window-list)))))
+        (kill-buffer buffer)))))
+
+(ert-deftest ps/blank-lines-review--spacing-strategy-names-are-normalized ()
+  "The old `learned'/`zero' names keep working in an existing config."
+  (should (eq 'style (ps/blank-lines-spacing-strategy 'style)))
+  (should (eq 'style (ps/blank-lines-spacing-strategy 'learned)))
+  (should (eq 'leave-alone (ps/blank-lines-spacing-strategy 'leave-alone)))
+  (should (eq 'leave-alone (ps/blank-lines-spacing-strategy 'zero)))
+  (should (stringp (ps/blank-lines-spacing-label 'style)))
+  (should-not (equal (ps/blank-lines-spacing-label 'style)
+                     (ps/blank-lines-spacing-label 'leave-alone))))
+
 (ert-deftest ps/blank-lines-review--a-settled-row-cannot-be-applied-twice ()
   (ps/blank-lines-review-test--with-file ps/blank-lines-review-test--damaged file
     (let ((result (ps/blank-lines-review-test--result

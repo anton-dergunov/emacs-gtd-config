@@ -252,14 +252,15 @@ still has them and reports what could be restored.  Nothing is written until
 you review it: =a= in the report walks the files one at a time through ediff,
 and only what you accept is saved.
 
-=new-edge-strategy= decides what to do at a gap the older version knows nothing
-about, which happens when a heading is moved or newly typed on the phone:
-='learned= predicts from your own files, ='zero= never guesses.  =match-floor=
-is how similar two headings must be to count as the same one.  The ancestor
-limits bound how far back each file's history is searched.  =side-by-side= puts
-your file and the proposal in two columns during the review; nil stacks them.
+Spacing is taken from history wherever history remembers it.  =unknown-spacing=
+covers only the gaps it doesn't — a heading moved, or typed on the phone and
+never seen intact: ='style= works those out from how the rest of your files are
+spaced, ='leave-alone= proposes nothing there.  =match-floor= is how similar two
+headings must be to count as the same one.  The ancestor limits bound how far
+back each file's history is searched.  =side-by-side= puts your file and the
+proposal in two columns during the review; nil stacks them.
 #+begin_src emacs-lisp
-  (setq ps/blank-lines-new-edge-strategy   'learned
+  (setq ps/blank-lines-unknown-spacing     'style
         ps/blank-lines-match-floor          0.55
         ps/blank-lines-rule-min-samples     5
         ps/blank-lines-ancestor-max-commits 50

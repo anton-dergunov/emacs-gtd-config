@@ -49,15 +49,37 @@
   "Recover blank lines lost to Org editors that strip them."
   :group 'org)
 
-(defcustom ps/blank-lines-new-edge-strategy 'learned
-  "How to resolve a boundary gap that has no counterpart in the ancestor.
+(defcustom ps/blank-lines-unknown-spacing 'style
+  "What to do about a gap the older version of the file says nothing about.
 
-`learned' predicts from a rule fitted to the user's own healthy files.
-`zero' never guesses and returns 0, which is wrong for every level-1 seam
-the corpus contains — see `design-docs/blank-line-recovery.md'."
-  :type '(choice (const :tag "Predict from the fitted rule" learned)
-                 (const :tag "Never guess; use 0" zero))
+This covers only those gaps — everywhere history remembers the spacing, the
+remembered spacing is used and this setting does not apply.  It comes up for a
+heading that was moved, or typed on the phone and never seen with its blank
+lines intact.
+
+`style' works the spacing out from how the rest of your files are spaced.
+`leave-alone' proposes nothing there, so only remembered spacing is ever
+restored.  See `design-docs/blank-line-recovery.md'."
+  :type '(choice (const :tag "Work it out from your own style" style)
+                 (const :tag "Leave those gaps alone" leave-alone))
   :group 'ps-blank-lines)
+
+(define-obsolete-variable-alias 'ps/blank-lines-new-edge-strategy
+  'ps/blank-lines-unknown-spacing "2026-08")
+
+(defun ps/blank-lines-spacing-strategy (&optional value)
+  "Normalize VALUE (default `ps/blank-lines-unknown-spacing') to a strategy.
+Accepts the former `learned' and `zero' names so an existing setting keeps
+working."
+  (pcase (or value ps/blank-lines-unknown-spacing)
+    ((or 'style 'learned) 'style)
+    (_ 'leave-alone)))
+
+(defun ps/blank-lines-spacing-label (&optional value)
+  "Return a human phrase for the strategy VALUE."
+  (if (eq (ps/blank-lines-spacing-strategy value) 'style)
+      "worked out from your style"
+    "left alone"))
 
 (defcustom ps/blank-lines-match-floor 0.55
   "Similarity below which two nodes are not considered the same node."
@@ -329,7 +351,7 @@ the node map, AINDEX the ancestor's document-order table, ANODES its nodes."
                   (sep (ps/blank-lines-node-sep after)))
         (list sep 'half-edge "from what followed the same predecessor")))
      ;; 3. Fitted rule.
-     ((when-let* (((eq strategy 'learned))
+     ((when-let* (((eq strategy 'style))
                   (pred (ps/blank-lines-rule-predict
                          rule
                          (ps/blank-lines-rule-cell
@@ -436,7 +458,8 @@ Returns a plist:
   :restored  blank lines added
   :removed   blank lines taken away
   :changes   list of `ps/blank-lines-change', for provenance in the summary"
-  (let ((strategy (if strategy-p strategy ps/blank-lines-new-edge-strategy))
+  (let ((strategy (ps/blank-lines-spacing-strategy
+                  (if strategy-p strategy ps/blank-lines-unknown-spacing)))
         (wfile (and (stringp wtext) (ps/blank-lines-parse wtext)))
         (afile (and (stringp atext) (ps/blank-lines-parse atext))))
     (cond
@@ -470,7 +493,7 @@ Returns a plist:
 Used to pick between ancestor candidates, so it deliberately ignores the
 fitted rule: a candidate should win on what it remembers, not on what the
 corpus-wide rule would have guessed anyway."
-  (let ((result (ps/blank-lines-propose wtext atext :strategy 'zero)))
+  (let ((result (ps/blank-lines-propose wtext atext :strategy 'leave-alone)))
     (if (plist-get result :ok) (plist-get result :restored) 0)))
 
 (provide 'ps-blank-lines-engine)

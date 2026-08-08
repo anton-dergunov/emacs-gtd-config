@@ -113,7 +113,7 @@ for all of them equally; pass two fits the rule and proposes."
                (atext (and pick (plist-get pick :text)))
                (result (and atext (ps/blank-lines-propose
                                    wtext atext :rule rule
-                                   :strategy ps/blank-lines-new-edge-strategy))))
+                                   :strategy ps/blank-lines-unknown-spacing))))
           (push (ps/blank-lines--make-result
                  :file file
                  :relpath relpath
@@ -136,6 +136,10 @@ for all of them equally; pass two fits the rule and proposes."
   "Results of the current *Org Blank Lines* session.")
 (defvar-local ps/blank-lines--rule nil
   "The rule fitted during the current session.")
+(defvar-local ps/blank-lines--entry-windows nil
+  "Window configuration from before the report was first shown.
+Showing the report can split a lone window, and burying the buffer would then
+leave that split behind — so closing puts back what was there.")
 
 (defvar ps-blank-lines-mode-map (make-sparse-keymap))
 
@@ -169,10 +173,13 @@ for all of them equally; pass two fits the rule and proposes."
   (call-interactively #'ps/blank-lines-review-this-file))
 
 (defun ps/blank-lines-close ()
-  "Close the report, and any diff it opened."
+  "Close the report, any diff it opened, and the window it took."
   (interactive)
-  (ps/blank-lines-review-cancel)
-  (quit-window))
+  (let ((windows ps/blank-lines--entry-windows))
+    (ps/blank-lines-review-cancel)
+    (if (window-configuration-p windows)
+        (set-window-configuration windows)
+      (quit-window))))
 
 (defun ps/blank-lines--result-at-point ()
   "Return the `ps/blank-lines-result' whose row point is on, if any."
@@ -188,13 +195,22 @@ for all of them equally; pass two fits the rule and proposes."
 ;;;; Moving between rows
 
 (defun ps/blank-lines--goto-row (result)
-  "Put point on RESULT's row, if it is on screen."
+  "Put point on RESULT's row, if it is on screen.
+Point lands on the file name rather than the space before it, so the row reads
+as selected and the button under point is the row's own."
   (let ((position (point-min)))
     (while (and position
                 (not (eq result (get-text-property position 'ps/blank-lines-result))))
       (setq position (next-single-property-change
                       position 'ps/blank-lines-result)))
-    (when position (goto-char position))))
+    (when position
+      (goto-char position)
+      (unless (button-at (point))
+        (when-let* ((button (next-button position))
+                    ((eq result (get-text-property (button-start button)
+                                                   'ps/blank-lines-result))))
+          (goto-char (button-start button))))
+      (point))))
 
 (defun ps/blank-lines--move-row (direction)
   "Move point to the previous or next file row, per DIRECTION (-1 or 1)."
@@ -343,11 +359,11 @@ the user is working through.  Press \\<ps-blank-lines-mode-map>\\[ps/blank-lines
      buffer)))
 
 (defun ps/blank-lines-toggle-strategy ()
-  "Switch between predicting new seams from the rule and never guessing."
+  "Switch what happens at gaps the file's history says nothing about."
   (interactive)
-  (setq ps/blank-lines-new-edge-strategy
-        (if (eq ps/blank-lines-new-edge-strategy 'learned) 'zero 'learned))
-  (message "New-edge strategy: %s" ps/blank-lines-new-edge-strategy)
+  (setq ps/blank-lines-unknown-spacing
+        (if (eq (ps/blank-lines-spacing-strategy) 'style) 'leave-alone 'style))
+  (message "Gaps with no history: %s" (ps/blank-lines-spacing-label))
   (ps/blank-lines-recover))
 
 (defconst ps/blank-lines--source-labels
@@ -404,7 +420,16 @@ drops is the same for every row."
                    'mouse-face 'highlight
                    'follow-link t
                    'help-echo (ps/blank-lines-result-relpath result)
-                   'action (lambda (_b) (ps/blank-lines-review-this-file)))
+                   ;; `push-button' does not move point on a mouse click, so
+                   ;; the row has to come from the button, not from point —
+                   ;; otherwise clicking one file opened another one's diff.
+                   ;; Point is moved too, so `1' then acts on what was clicked.
+                   'action (lambda (button)
+                             (when-let* ((window (get-buffer-window
+                                                  (current-buffer))))
+                               (select-window window))
+                             (goto-char (button-start button))
+                             (ps/blank-lines-review-this-file)))
     (cond
      ((ps/blank-lines-result-error result)
       (insert (format "— skipped: %s\n" (ps/blank-lines-result-error result))))
@@ -450,9 +475,11 @@ drops is the same for every row."
                                 (apply #'+ 0 (mapcar #'ps/blank-lines-result-applied done))
                                 (length done))
                       "")))
+    (insert (make-string 46 ?─) "\n")
     (insert " 1 accept · 2 dismiss · A accept all\n")
     (insert " d/RET diff · n/p move · q close\n")
-    (insert (format " g rescan · s seams: %s\n" ps/blank-lines-new-edge-strategy))
+    (insert (format " g rescan · s gaps with no history: %s\n"
+                    (ps/blank-lines-spacing-label)))
     (insert (make-string 46 ?─) "\n")
     (dolist (result results)
       (unless (and (zerop (ps/blank-lines-result-restored result))
@@ -480,11 +507,16 @@ from.  The scan itself writes nothing; in the report,
 \\<ps-blank-lines-mode-map>\\[ps/blank-lines-accept-this-file] accepts a file and \\[ps/blank-lines-review-this-file] opens it side by side first."
   (interactive)
   (pcase-let* ((`(,rule . ,results) (ps/blank-lines-scan))
-               (buffer (get-buffer-create "*Org Blank Lines*")))
+               (buffer (get-buffer-create "*Org Blank Lines*"))
+               ;; Only on the way in: a rescan must not forget the layout the
+               ;; first opening displaced.
+               (windows (unless (get-buffer-window buffer)
+                          (current-window-configuration))))
     (with-current-buffer buffer
       (unless (eq major-mode 'ps-blank-lines-mode) (ps-blank-lines-mode))
       (setq ps/blank-lines--results results
             ps/blank-lines--rule rule)
+      (when windows (setq ps/blank-lines--entry-windows windows))
       (ps/blank-lines--render))
     (ps/window-show-here buffer)))
 
