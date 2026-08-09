@@ -82,7 +82,15 @@ active theme, falling back to \"gray50\" if that is unavailable."
 
         (goto-char (point-min))
 
-        (while (re-search-forward org-heading-regexp nil t)
+        ;; `org-outline-regexp-bol' ("^\\*+ "), *not* `org-heading-regexp'.
+        ;; The latter makes the title optional ("^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?
+        ;; [ \t]*$"), so a line holding a lone "*" -- exactly what a
+        ;; half-typed new heading looks like -- matches it while Org itself
+        ;; does not consider it a headline.  `org-get-todo-state' then walks
+        ;; back to the enclosing headline and, in a file that has none yet,
+        ;; signals "Before first headline"; from the debounced idle timer
+        ;; below that surfaced as an error mid-typing.
+        (while (re-search-forward org-outline-regexp-bol nil t)
 
           (when (string= (org-get-todo-state) "DONE")
 
@@ -150,11 +158,15 @@ every keystroke; it fires once typing pauses for this long.")
   "Pending idle timer that will rebuild this buffer's fade overlays, or nil.")
 
 (defun ps/done--refade-now (buffer)
-  "Rebuild BUFFER's DONE fade overlays.  The debounced worker."
+  "Rebuild BUFFER's DONE fade overlays.  The debounced worker.
+Errors are demoted to a message: this fires from an idle timer while the
+user is typing, so the buffer can be in any half-finished state, and a
+purely cosmetic overlay rebuild must never interrupt editing with an error."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (setq ps/done--refade-timer nil)
-      (ps/done-fade-subtrees))))
+      (with-demoted-errors "ps/done refade: %S"
+        (ps/done-fade-subtrees)))))
 
 (defun ps/done--schedule-refade (&rest _)
   "Debounce a fade-overlay rebuild onto idle time.

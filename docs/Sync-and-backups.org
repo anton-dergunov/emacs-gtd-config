@@ -174,4 +174,7 @@ one changed, saving takes an explicit confirmation.
   =ps/git-sync-timeout=). Turn it off with the =PS_GIT_SYNC_DISABLE= env var or
   =ps/git-sync-paused=.
 - Auto-save/revert, sessions, and backups: =config.org= → /Session & Backups/
-  and /Org Mode → Behavior → Auto-save .../.
+  and /Org Mode → Behavior → Auto-save .../. Reverts are driven by filesystem
+  notifications rather than polling; =lisp/ps-file-notify.el= keeps a
+  notification that arrives as a file is replaced (a Dropbox sync) from
+  reporting an error once the revert is already done. Nothing to configure.

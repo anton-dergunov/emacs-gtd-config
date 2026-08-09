@@ -109,6 +109,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-scrollbar)
   (require 'ps-emphasis)
   (require 'ps-tags)
+  (require 'ps-file-notify)
 
   ;; Two open files with the same name are told apart by their folder, and the
   ;; mode line / frame title reformat that into "Personal/Inbox".  Pinned rather
@@ -1582,6 +1583,14 @@ slow or failing save cannot take the rest of `after-focus-change-function'
         auto-revert-verbose nil
         auto-revert-check-vc-info nil)
   (global-auto-revert-mode t)
+
+  ;; A file replaced on disk by Dropbox (an edit made in a mobile Org app)
+  ;; can arrive as one notification carrying several actions, and the action
+  ;; that stops the watch leaves the ones behind it calling a callback that
+  ;; is already gone -- "file-notify--call-handler: Symbol's function
+  ;; definition is void: nil" in *Messages*, right after the revert.  See
+  ;; ps-file-notify.el.
+  (ps/file-notify-setup)
 
   ;; `global-auto-revert-mode' already rereads unmodified buffers when the
   ;; file changes on disk, but it waits for a filesystem notification (see

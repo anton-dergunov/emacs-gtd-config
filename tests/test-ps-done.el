@@ -132,6 +132,40 @@ overlay; a fresh `ps/done-fade-subtrees' must not cover the new heading."
       (should-not (cl-some (lambda (ov) (overlay-get ov 'ps-done-fade))
                            (overlays-in line-beg line-end))))))
 
+(ert-deftest ps/done--fade-survives-a-half-typed-heading ()
+  "A lone \"*\" in a file with no headline yet does not signal.
+Regression: the scan used `org-heading-regexp', whose title part is
+optional, so it matched the bare star a user has just typed.  Org does not
+consider that a headline, so `org-get-todo-state' walked back looking for
+one and signalled \"Before first headline\" -- surfaced from the debounced
+idle timer while the user was still typing."
+  (ps/done-test--with-org-buffer "#+TITLE: Unsorted\n\nSome text\n\n*"
+    (should-not (ps/done-fade-subtrees))))
+
+(ert-deftest ps/done--fade-does-not-rescan-a-star-only-line ()
+  "A star-only line inside a DONE subtree yields one fade overlay, not two.
+The old regexp matched that line, and since Org resolves it to the DONE
+headline above, the scan faded the same region a second time -- overlays
+stacked on every rebuild until the star grew a title."
+  (ps/done-test--with-org-buffer "* DONE Finished\nBody.\n\n*\n\n* TODO Next\n"
+    (ps/done-fade-subtrees)
+    (should (= 1 (length (cl-remove-if-not
+                          (lambda (ov)
+                            ;; Timestamp pills also carry the fade tag.
+                            (and (overlay-get ov 'ps-done-fade)
+                                 (not (overlay-get ov 'display))))
+                          (overlays-in (point-min) (point-max))))))))
+
+(ert-deftest ps/done--refade-demotes-errors ()
+  "The debounced worker never lets an error escape into the idle timer."
+  (ps/done-test--with-org-buffer ps/done-test--sample-org
+    (cl-letf (((symbol-function 'ps/done-fade-subtrees)
+               (lambda (&rest _) (error "Boom"))))
+      (should-not (ps/done--refade-now (current-buffer))))
+    ;; The pending-timer flag is cleared even when the rebuild fails, so the
+    ;; next edit can arm a new timer.
+    (should-not ps/done--refade-timer)))
+
 ;;; -------------------------------------------------------
 ;;; Folding
 ;;; -------------------------------------------------------
