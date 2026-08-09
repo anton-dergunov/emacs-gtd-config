@@ -95,6 +95,12 @@ for all of them equally; pass two fits the rule and proposes."
     (unless root
       (user-error "%s is not in a git repository, so there is no history to recover from"
                   (ps/org-files-root)))
+    ;; Said before any work starts: a progress reporter stays quiet for its
+    ;; first 0.2s, and a scan that shows nothing at all reads as a command that
+    ;; did nothing at all.
+    (message "Scanning %d Org file%s for lost blank lines (back %s)..."
+             (length files) (if (= (length files) 1) "" "s")
+             (ps/blank-lines-history-label))
     ;; Pass 1 — ancestors.
     (let ((reporter (make-progress-reporter "Looking for healthy versions..."
                                             0 (length files)))
@@ -106,9 +112,15 @@ for all of them equally; pass two fits the rule and proposes."
                 entries)))
       (progress-reporter-done reporter))
     (setq entries (nreverse entries))
-    ;; Pass 2 — fit, then propose.
-    (let ((rule (ps/blank-lines--fit-rule entries)))
+    ;; Pass 2 — fit, then propose.  Its own reporter, because it is a second
+    ;; parse of every file: without one the echo area says "done" while half
+    ;; the work is still running.
+    (let ((rule (ps/blank-lines--fit-rule entries))
+          (reporter (make-progress-reporter "Working out the spacing..."
+                                            0 (length entries)))
+          (i 0))
       (pcase-dolist (`(,file ,wtext . ,pick) entries)
+        (progress-reporter-update reporter (setq i (1+ i)))
         (let* ((relpath (ps/blank-lines-git-relpath root file))
                (atext (and pick (plist-get pick :text)))
                (result (and atext (ps/blank-lines-propose
@@ -128,6 +140,7 @@ for all of them equally; pass two fits the rule and proposes."
                  :proposed (and result (plist-get result :ok) (plist-get result :text))
                  :error (and result (plist-get result :error)))
                 results)))
+      (progress-reporter-done reporter)
       (cons rule (nreverse results)))))
 
 ;;; Summary buffer
@@ -168,6 +181,8 @@ leave that split behind — so closing puts back what was there.")
   (define-key map (kbd "+")   #'ps/blank-lines-look-further-back)
   (define-key map (kbd "=")   #'ps/blank-lines-look-further-back)
   (define-key map (kbd "-")   #'ps/blank-lines-look-less-far-back)
+  (define-key map (kbd "c")   #'ps/blank-lines-set-commit-limit)
+  (define-key map (kbd "y")   #'ps/blank-lines-set-day-limit)
   (define-key map (kbd "RET") #'ps/blank-lines--visit-at-point))
 
 (defun ps/blank-lines--visit-at-point ()
@@ -376,30 +391,65 @@ outlived that — a diff torn down some other way, a frame rearranged mid-review
                  (window-parameter window 'window-side))
         (ignore-errors (delete-window window))))))
 
-(defun ps/blank-lines--scale-history (factor)
-  "Scale how far back each file's history is searched by FACTOR, and rescan.
+(defun ps/blank-lines-history-label (&optional commits days)
+  "Return how far back the search reaches, as a phrase.
+COMMITS and DAYS default to the current limits.  A day limit of zero reads as
+`any age', which is what it means: only the commit count then applies."
+  (let ((commits (or commits ps/blank-lines-ancestor-max-commits))
+        (days (or days ps/blank-lines-ancestor-max-days)))
+    (format "%d commit%s, %s"
+            commits (if (= commits 1) "" "s")
+            (if (or (null days) (<= days 0))
+                "any age"
+              (format "%d day%s" days (if (= days 1) "" "s"))))))
 
-Both limits move together.  Raising only the commit count would look like it
-did nothing whenever the day limit is the one actually binding — which it
-usually is, since a file with a long history runs out of days first."
-  (setq ps/blank-lines-ancestor-max-commits
-        (max 5 (min 2000 (round (* factor ps/blank-lines-ancestor-max-commits))))
-        ps/blank-lines-ancestor-max-days
-        (max 1 (min 3650 (round (* factor ps/blank-lines-ancestor-max-days)))))
-  (message "Searching back %d commits / %d days"
-           ps/blank-lines-ancestor-max-commits
-           ps/blank-lines-ancestor-max-days)
+(defun ps/blank-lines--step (commits direction)
+  "Return the rung of `ps/blank-lines-ancestor-steps' next to COMMITS.
+
+DIRECTION is 1 to look further back and -1 to look less far.  The rung chosen
+is the nearest one strictly past COMMITS in that direction, so stepping works
+from a count typed in by hand as well as from the ladder itself; at either end
+the outermost rung is returned rather than nothing."
+  (let ((steps (seq-sort-by #'car #'< ps/blank-lines-ancestor-steps)))
+    (if (> direction 0)
+        (or (seq-find (lambda (step) (> (car step) commits)) steps)
+            (car (last steps)))
+      (or (car (last (seq-filter (lambda (step) (< (car step) commits)) steps)))
+          (car steps)))))
+
+(defun ps/blank-lines--step-history (direction)
+  "Move both history limits one rung in DIRECTION, and rescan."
+  (let ((step (ps/blank-lines--step ps/blank-lines-ancestor-max-commits direction)))
+    (setq ps/blank-lines-ancestor-max-commits (car step)
+          ps/blank-lines-ancestor-max-days (cdr step)))
   (ps/blank-lines-recover))
 
 (defun ps/blank-lines-look-further-back ()
-  "Search twice as far back through each file's history, and rescan."
+  "Search one rung further back through each file's history, and rescan."
   (interactive)
-  (ps/blank-lines--scale-history 2))
+  (ps/blank-lines--step-history 1))
 
 (defun ps/blank-lines-look-less-far-back ()
-  "Search half as far back through each file's history, and rescan."
+  "Search one rung less far back through each file's history, and rescan."
   (interactive)
-  (ps/blank-lines--scale-history 0.5))
+  (ps/blank-lines--step-history -1))
+
+(defun ps/blank-lines-set-commit-limit (commits)
+  "Search back exactly COMMITS commits per file, and rescan."
+  (interactive
+   (list (read-number "Search back how many commits: "
+                      ps/blank-lines-ancestor-max-commits)))
+  (setq ps/blank-lines-ancestor-max-commits (max 1 (truncate commits)))
+  (ps/blank-lines-recover))
+
+(defun ps/blank-lines-set-day-limit (days)
+  "Search back exactly DAYS days per file, and rescan.
+Zero lifts the age limit, leaving the commit count to decide on its own."
+  (interactive
+   (list (read-number "Search back how many days (0 for any age): "
+                      ps/blank-lines-ancestor-max-days)))
+  (setq ps/blank-lines-ancestor-max-days (max 0 (truncate days)))
+  (ps/blank-lines-recover))
 
 (defun ps/blank-lines-toggle-strategy ()
   "Switch what happens at gaps the file's history says nothing about."
@@ -526,12 +576,11 @@ drops is the same for every row."
                       "")))
     (insert (make-string 46 ?─) "\n")
     (insert " 1 accept · 2 dismiss · A accept all\n")
-    (insert " d/RET diff · n/p move · q close\n")
-    (insert (format " g rescan · -/+ history: %d commits, %d days\n"
-                    ps/blank-lines-ancestor-max-commits
-                    ps/blank-lines-ancestor-max-days))
+    (insert " d/RET diff · n/p move · q close · g rescan\n")
     (insert (format " s gaps with no history: %s\n"
                     (ps/blank-lines-spacing-label)))
+    (insert (format " history: %s · -/+ step · c/y set\n"
+                    (ps/blank-lines-history-label)))
     (insert (make-string 46 ?─) "\n")
     (dolist (result results)
       (unless (and (zerop (ps/blank-lines-result-restored result))
@@ -575,7 +624,13 @@ from.  The scan itself writes nothing; in the report,
             ps/blank-lines--rule rule)
       (when windows (setq ps/blank-lines--entry-windows windows))
       (ps/blank-lines--render))
-    (ps/window-show-here buffer)))
+    (ps/window-show-here buffer)
+    (let ((pending (seq-filter #'ps/blank-lines--pending-p results)))
+      (message "%s (searched back %s)"
+               (if pending
+                   (format "%d file(s) with blank lines to recover" (length pending))
+                 "No blank lines to recover")
+               (ps/blank-lines-history-label)))))
 
 (provide 'ps-blank-lines)
 ;;; ps-blank-lines.el ends here

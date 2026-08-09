@@ -126,6 +126,56 @@ stays visible alongside the new one."
             (should (member buf-new (mapcar #'window-buffer (ps/window--content-windows))))))
       (mapc #'kill-buffer (list buf-a buf-new)))))
 
+(ert-deftest ps/window-show-here-never-takes-over-a-side-window ()
+  "Regression test: pressing a view key while point is in the file tree used
+to replace the tree with the view, inside the tree's own narrow slot -- a side
+window is dedicated with the value `side', not t, and `switch-to-buffer'
+refuses only the latter.  On screen the command looked like it had done
+nothing at all, and the next invocation, now with a content window selected,
+worked.  The view must land in a content window and leave the side window's
+buffer alone."
+  (let ((buf-tree (generate-new-buffer "tree"))
+        (buf-main (generate-new-buffer "main"))
+        (buf-new (generate-new-buffer "new")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf-main)
+          (let ((win-main (selected-window))
+                (win-side (split-window)))
+            (unwind-protect
+                (progn
+                  (set-window-buffer win-side buf-tree)
+                  (set-window-parameter win-side 'window-side 'left)
+                  (select-window win-side)
+                  (ps/window-show-here buf-new)
+                  (should (eq (window-buffer win-side) buf-tree))
+                  (should (eq (window-buffer win-main) buf-new))
+                  (should-not (ps/window--side-window-p (selected-window))))
+              (set-window-parameter win-side 'window-side nil))))
+      (mapc #'kill-buffer (list buf-tree buf-main buf-new)))))
+
+(ert-deftest ps/window--select-main-leaves-a-content-window-selected ()
+  "Selecting from a side window moves to a content window; from a content
+window it changes nothing."
+  (let ((buf-main (generate-new-buffer "main")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf-main)
+          (let ((win-main (selected-window))
+                (win-side (split-window)))
+            (unwind-protect
+                (progn
+                  (set-window-parameter win-side 'window-side 'left)
+                  (select-window win-side)
+                  (should (eq (ps/window--select-main) win-main))
+                  (should (eq (selected-window) win-main))
+                  ;; Already on a content window: a no-op.
+                  (should (eq (ps/window--select-main) win-main)))
+              (set-window-parameter win-side 'window-side nil))))
+      (kill-buffer buf-main))))
+
 ;;; -------------------------------------------------------
 ;;; ps/window--split-if-alone-advice
 ;;; -------------------------------------------------------

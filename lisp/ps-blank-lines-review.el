@@ -61,6 +61,7 @@
 (require 'ediff)
 (require 'ps-blank-lines-tree)
 (require 'ps-file-tree)
+(require 'ps-window)
 
 (declare-function ps/blank-lines-result-file "ps-blank-lines")
 (declare-function ps/blank-lines-result-relpath "ps-blank-lines")
@@ -153,10 +154,7 @@ window; Ediff takes that one over, which is what resolves the duplicate."
     (let ((side (display-buffer buffer
                                 (ps/blank-lines-review--report-window width))))
       (when (window-live-p side)
-        (when-let* ((main (seq-find (lambda (window)
-                                      (not (window-parameter window 'window-side)))
-                                    (window-list))))
-          (select-window main))
+        (ps/window--select-main)
         side))))
 
 (defun ps/blank-lines-review--enter-layout (&optional keep-visible)

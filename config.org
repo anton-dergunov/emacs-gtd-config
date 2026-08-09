@@ -257,22 +257,30 @@ journal, archives, and the two config files that live in the Org base directory.
 Beorg and Orgzly strip the blank lines out of org files when they save them.
 =Recover blank lines from history= (F7) finds the version of each file that
 still has them and reports what could be restored.  Nothing is written until
-you review it: =a= in the report walks the files one at a time through ediff,
-and only what you accept is saved.
+you review it: =d= in the report walks a file through ediff, and only what you
+accept is saved.
 
 Spacing is taken from history wherever history remembers it.  =unknown-spacing=
 covers only the gaps it doesn't — a heading moved, or typed on the phone and
 never seen intact: ='style= works those out from how the rest of your files are
 spaced, ='leave-alone= proposes nothing there.  =match-floor= is how similar two
-headings must be to count as the same one.  The ancestor limits bound how far
-back each file's history is searched.  =side-by-side= puts your file and the
-proposal in two columns during the review; nil stacks them.
+headings must be to count as the same one.  =side-by-side= puts your file and
+the proposal in two columns during the review; nil stacks them.
+
+The ancestor limits bound how far back each file's history is searched.  A
+phone edit lands as a single commit and is usually noticed the same or the next
+day, so a few commits and a day are enough; =max-days= of 0 means any age.  The
+report's =-= and =+= step through =ancestor-steps=, and =c= / =y= set either
+number outright.
 #+begin_src emacs-lisp
   (setq ps/blank-lines-unknown-spacing     'style
         ps/blank-lines-match-floor          0.55
         ps/blank-lines-rule-min-samples     5
-        ps/blank-lines-ancestor-max-commits 50
-        ps/blank-lines-ancestor-max-days    30
+        ps/blank-lines-ancestor-max-commits 5
+        ps/blank-lines-ancestor-max-days    1
+        ps/blank-lines-ancestor-steps       '((1 . 1) (2 . 1) (3 . 1) (4 . 1) (5 . 1)
+                                             (10 . 2) (20 . 3) (50 . 7) (100 . 14)
+                                             (200 . 30) (500 . 90) (1000 . 365))
         ps/blank-lines-review-side-by-side  t)
 #+end_src
 

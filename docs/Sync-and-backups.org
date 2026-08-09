@@ -82,8 +82,10 @@ from the report, without opening a diff at all:
 | =n= | next file                                   |
 | =p= | previous file                               |
 | =g= | scan again                                  |
-| =+= | look twice as far back in history           |
-| =-= | look half as far back                       |
+| =+= | look one step further back in history       |
+| =-= | look one step less far back                 |
+| =c= | search back an exact number of commits      |
+| =y= | search back an exact number of days         |
 | =s= | switch how gaps with no history are handled |
 | =q= | close the report, and any diff it opened    |
 
@@ -114,13 +116,28 @@ They are a handful of gaps per file and often none. The reason column tells you
 which is which: =edge= and =half= are remembered, =rule= is worked out.
 
 *** How far back to look
-The last-but-one line shows how much history is searched for a healthy version
-of each file. =+= doubles it and =-= halves it, rescanning either way.
+The last line of the header shows how much history is searched for a healthy
+version of each file — by default the last five commits touching it, and only
+those from the last day.
 
-Both limits move together, because raising just the commit count looks like it
-does nothing whenever the day limit is the one actually binding — which it
-usually is. Widen this if a file shows /no changes/ but you know its blank lines
-were fine a while ago; narrow it if a scan is slow.
+That is narrow on purpose. The phone writes the whole file once, when you leave
+its editor, so the damage arrives as a single commit; the automatic sync commits
+every minute on this side, and a file mangled on the phone is usually opened
+again here the same day or the next. Looking further back costs a scan that
+takes noticeably longer for versions that are no better.
+
+Widen it when a file shows /no changes/ but you know its blank lines were fine a
+while ago:
+
+- =+= and =-= step one rung at a time, from a single commit up to a thousand.
+  Both limits move together, because git applies them together: raising just the
+  commit count would look like it does nothing whenever the day limit is the one
+  actually binding.
+- =c= asks for an exact number of commits, and =y= for an exact number of days.
+  Answer =y= with =0= to drop the age limit altogether — then the commit count
+  alone decides, and the header reads /any age/.
+
+Either way the report is recomputed straight away.
 
 ** Looking at a file side by side
 When you want to see a change in context, or take some of a file but not all of
@@ -167,8 +184,8 @@ one changed, saving takes an explicit confirmation.
   and =-review= alongside it; settings are in =config.org= → /Settings → Blank
   line recovery/ (=ps/blank-lines-unknown-spacing= chooses what happens at gaps
   history says nothing about, =ps/blank-lines-match-floor= how alike two
-  headings must be to count as the same one, and the two
-  =ps/blank-lines-ancestor-...= limits how far back to look).
+  headings must be to count as the same one, and the =ps/blank-lines-ancestor-...=
+  limits and step ladder how far back to look).
 - Git sync: =lisp/ps-git-sync.el=; behavior is configured in =config.org= →
   /Package Management → Git sync/ (=ps/git-sync-interval= and the stuck-sync
   =ps/git-sync-timeout=). Turn it off with the =PS_GIT_SYNC_DISABLE= env var or

@@ -27,14 +27,34 @@
 
 ;;; Customization
 
-(defcustom ps/blank-lines-ancestor-max-commits 50
-  "How many commits back to consider when looking for a healthy version."
+(defcustom ps/blank-lines-ancestor-max-commits 5
+  "How many commits back to consider when looking for a healthy version.
+
+A phone edit arrives as a single commit — the app holds the whole file in
+memory and writes it once, on leaving the editor — so the healthy version is
+usually the commit right before it.  A handful is plenty; the report's `+'
+widens this when it isn't."
   :type 'integer
   :group 'ps-blank-lines)
 
-(defcustom ps/blank-lines-ancestor-max-days 30
-  "How far back in days to consider when looking for a healthy version."
+(defcustom ps/blank-lines-ancestor-max-days 1
+  "How far back in days to consider when looking for a healthy version.
+Zero means no age limit, leaving the commit count to decide on its own."
   :type 'integer
+  :group 'ps-blank-lines)
+
+(defcustom ps/blank-lines-ancestor-steps
+  '((1 . 1) (2 . 1) (3 . 1) (4 . 1) (5 . 1)
+    (10 . 2) (20 . 3) (50 . 7) (100 . 14) (200 . 30) (500 . 90) (1000 . 365))
+  "Rungs of (COMMITS . DAYS) that `-' and `+' step through in the report.
+
+A ladder rather than a scale factor, for two reasons.  Halving cannot land on
+every small value that matters — a single edited file is exactly one commit —
+and it is not reversible, so `-' `-' `+' `+' left the limits somewhere the user
+never chose.  Both limits move together because git ANDs them: raising only the
+commit count looks like it did nothing whenever the day limit is the binding
+one."
+  :type '(alist :key-type integer :value-type integer)
   :group 'ps-blank-lines)
 
 ;;; Read-only enforcement
@@ -87,23 +107,27 @@ looks as though it has no history."
                       (file-name-as-directory (file-truename root))))
 
 (defun ps/blank-lines-git-log-commits (root relpath &optional max-commits max-days)
-  "Return commits touching RELPATH as ((SHA . TIME) ...), newest first."
-  (pcase-let ((`(,exit . ,out)
-               (ps/blank-lines-git--run
-                root
-                (append (list "log" "--format=%H%x00%cI")
-                        (list "-n" (number-to-string
-                                    (or max-commits ps/blank-lines-ancestor-max-commits)))
-                        (list (format "--since=%d.days.ago"
-                                      (or max-days ps/blank-lines-ancestor-max-days)))
-                        (list "--" relpath)))))
-    (when (zerop exit)
-      (delq nil
-            (mapcar (lambda (line)
-                      (let ((parts (split-string line "\0")))
-                        (when (= (length parts) 2)
-                          (cons (nth 0 parts) (nth 1 parts)))))
-                    (split-string out "\n" t))))))
+  "Return commits touching RELPATH as ((SHA . TIME) ...), newest first.
+
+MAX-DAYS of zero (or nil once `ps/blank-lines-ancestor-max-days' is zero) drops
+`--since' altogether, so the commit count alone decides how far back to look."
+  (let ((days (or max-days ps/blank-lines-ancestor-max-days)))
+    (pcase-let ((`(,exit . ,out)
+                 (ps/blank-lines-git--run
+                  root
+                  (append (list "log" "--format=%H%x00%cI")
+                          (list "-n" (number-to-string
+                                      (or max-commits ps/blank-lines-ancestor-max-commits)))
+                          (when (and days (> days 0))
+                            (list (format "--since=%d.days.ago" days)))
+                          (list "--" relpath)))))
+      (when (zerop exit)
+        (delq nil
+              (mapcar (lambda (line)
+                        (let ((parts (split-string line "\0")))
+                          (when (= (length parts) 2)
+                            (cons (nth 0 parts) (nth 1 parts)))))
+                      (split-string out "\n" t)))))))
 
 (defun ps/blank-lines-git-show (root sha relpath)
   "Return RELPATH's content at SHA, or nil when it was not in that commit."

@@ -31,6 +31,20 @@ window showing the same thing on every refresh.")
   "Windows in the selected frame that aren't side windows."
   (seq-remove #'ps/window--side-window-p (window-list)))
 
+(defun ps/window--select-main ()
+  "Select a content window when the selected one is a side window.
+
+A side window is dedicated with the value `side', not t, and `switch-to-buffer'
+only refuses a window dedicated with t -- so opening a view from the file tree
+would silently replace the tree inside its own narrow slot, which reads as the
+command having done nothing at all.  Returns the selected window; leaves it
+alone when the frame has nothing but side windows, since there is then no
+content window to move to."
+  (when (ps/window--side-window-p (selected-window))
+    (when-let ((main (car (ps/window--content-windows))))
+      (select-window main)))
+  (selected-window))
+
 (defun ps/window--alone-p ()
   "Non-nil when the selected window is the only content window in the frame."
   (<= (length (ps/window--content-windows)) 1))
@@ -72,7 +86,10 @@ while a view is being rebuilt rather than opened (`ps/window-inhibit-split',
 ;;;###autoload
 (defun ps/window-show-here (buffer-or-name)
   "Display BUFFER-OR-NAME in the selected window, preserving the rest of the
-window layout.  See `ps/window--split-if-alone' for the single-window case."
+window layout.  A side window is never taken over -- see
+`ps/window--select-main'.  See `ps/window--split-if-alone' for the
+single-window case."
+  (ps/window--select-main)
   (ps/window--split-if-alone)
   (switch-to-buffer (get-buffer buffer-or-name)))
 
