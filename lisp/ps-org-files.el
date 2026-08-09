@@ -56,6 +56,27 @@ The defaults drop the two config files that live in the Org base directory."
   (or ps/org-files-root
       (and (boundp 'my-org-base-directory) my-org-base-directory)))
 
+(defun ps/org-files-in-scope-p (&optional file root)
+  "Return non-nil if FILE is a .org file `ps/org-files-in-directory' would find.
+FILE defaults to `buffer-file-name'; ROOT defaults to `ps/org-files-root'.
+Tests FILE directly against the same two exclusion lists
+`ps/org-files-in-directory' uses, without walking the filesystem -- cheap
+enough to call once per visited buffer, unlike a full rescan."
+  (let ((file (or file buffer-file-name))
+        (root (or root (ps/org-files-root))))
+    (when (and file root (string-match-p "\\.org\\'" file))
+      (let* ((file (expand-file-name file))
+             (root (file-name-as-directory (expand-file-name root))))
+        (when (string-prefix-p root file)
+          (and (not (ps/org-files--name-matches-p
+                     (file-name-nondirectory file) ps/org-files-exclude-files))
+               (not (cl-some
+                     (lambda (component)
+                       (ps/org-files--name-matches-p
+                        component ps/org-files-exclude-directories))
+                     (split-string (or (file-name-directory (substring file (length root))) "")
+                                   "/" t)))))))))
+
 (defun ps/org-files-in-directory (directory)
   "Return the sorted .org files under DIRECTORY, recursively.
 Directories whose name matches `ps/org-files-exclude-directories' are not
@@ -63,10 +84,8 @@ descended into; files whose name matches `ps/org-files-exclude-files' are
 dropped.  Returns nil if DIRECTORY is nil or does not exist."
   (when (and directory (file-directory-p directory))
     (sort
-     (seq-remove
-      (lambda (file)
-        (ps/org-files--name-matches-p (file-name-nondirectory file)
-                                      ps/org-files-exclude-files))
+     (seq-filter
+      (lambda (file) (ps/org-files-in-scope-p file directory))
       (directory-files-recursively
        directory "\\.org\\'" nil
        (lambda (dir)

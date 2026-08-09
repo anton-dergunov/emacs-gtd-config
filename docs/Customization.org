@@ -14,8 +14,8 @@ There are two layers, modelled on an editor's *User* vs *Workspace* settings:
 
 - =config.org= — the shared, public configuration. Its /Settings/ section
   (right after the bootstrap) is the single place to adjust defaults: there's a
-  block per feature (Appearance, Availability, Conflicts, Mode line, Material
-  icons, File Tree, …).
+  block per feature (Appearance, Availability, Conflicts, Mode line, Task
+  count, Material icons, File Tree, …).
 - =workspace.org= — settings tied to /your/ Org data folder (your category
   icons, your file-tree sets). It lives beside your Org files, loads *after*
   =config.org=, and overrides it. This keeps your personal categories out of the

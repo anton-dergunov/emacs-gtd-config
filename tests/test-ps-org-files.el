@@ -100,6 +100,64 @@ rest become empty files (their parent directories are created as needed)."
   (should-not (ps/org-files-in-directory "/nonexistent/ps-org-files/")))
 
 ;;; -------------------------------------------------------
+;;; ps/org-files-in-scope-p
+;;; -------------------------------------------------------
+
+(ert-deftest ps/org-files-test-in-scope-p-accepts-root-level-file ()
+  "A .org file directly under the root is in scope."
+  (ps/org-files-test--with-tree '("Inbox.org")
+    (should (ps/org-files-in-scope-p (expand-file-name "Inbox.org" dir) dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-accepts-nested-file ()
+  "A .org file nested under the root is in scope."
+  (ps/org-files-test--with-tree '("Work/Career.org")
+    (should (ps/org-files-in-scope-p (expand-file-name "Work/Career.org" dir) dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-rejects-wrong-extension ()
+  "A non-.org file is never in scope."
+  (ps/org-files-test--with-tree '("Work/notes.md")
+    (should-not (ps/org-files-in-scope-p (expand-file-name "Work/notes.md" dir) dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-rejects-outside-root ()
+  "A file outside ROOT entirely is not in scope."
+  (ps/org-files-test--with-tree '("Inbox.org")
+    (should-not (ps/org-files-in-scope-p "/tmp/elsewhere/Other.org" dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-rejects-excluded-file ()
+  "init.org and workspace.org are excluded at any depth."
+  (ps/org-files-test--with-tree '("init.org" "Work/workspace.org")
+    (should-not (ps/org-files-in-scope-p (expand-file-name "init.org" dir) dir))
+    (should-not (ps/org-files-in-scope-p (expand-file-name "Work/workspace.org" dir) dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-rejects-excluded-directory ()
+  "A file under Journal/, Archive/, or a dotted directory is excluded."
+  (ps/org-files-test--with-tree '("Journal/20260715.org"
+                                  "Work/Archive/Done.org"
+                                  ".git/config.org")
+    (should-not (ps/org-files-in-scope-p (expand-file-name "Journal/20260715.org" dir) dir))
+    (should-not (ps/org-files-in-scope-p (expand-file-name "Work/Archive/Done.org" dir) dir))
+    (should-not (ps/org-files-in-scope-p (expand-file-name ".git/config.org" dir) dir))))
+
+(ert-deftest ps/org-files-test-in-scope-p-uses-buffer-defaults ()
+  "With no FILE/ROOT args, `buffer-file-name' and `ps/org-files-root' are used."
+  (ps/org-files-test--with-tree '("Inbox.org")
+    (let ((ps/org-files-root dir))
+      (let ((buf (find-file-noselect (expand-file-name "Inbox.org" dir))))
+        (unwind-protect
+            (with-current-buffer buf
+              (should (ps/org-files-in-scope-p)))
+          (kill-buffer buf))))))
+
+(ert-deftest ps/org-files-test-in-scope-p-matches-in-directory-scan ()
+  "The predicate agrees exactly with `ps/org-files-in-directory''s own filtering."
+  (ps/org-files-test--with-tree '("Inbox.org" "Work/Career.org" "init.org"
+                                  "Journal/20260715.org" "Work/notes.md")
+    (let* ((all-org (directory-files-recursively dir "\\.org\\'"))
+           (expected (sort (seq-filter (lambda (f) (ps/org-files-in-scope-p f dir)) all-org)
+                            #'string<)))
+      (should (equal (ps/org-files-in-directory dir) expected)))))
+
+;;; -------------------------------------------------------
 ;;; ps/org-files-all
 ;;; -------------------------------------------------------
 

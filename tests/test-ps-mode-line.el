@@ -87,6 +87,30 @@
   (should (equal (ps/mode-line--escape "Photo") "Photo")))
 
 ;;; -------------------------------------------------------
+;;; ps/mode-line--task-count-segment
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--task-count-segment-nil-when-no-count ()
+  (with-temp-buffer
+    (let ((ps/mode-line--task-count-open nil))
+      (should-not (ps/mode-line--task-count-segment)))))
+
+(ert-deftest ps/mode-line--task-count-segment-shows-count-and-tooltip ()
+  (with-temp-buffer
+    (let ((ps/mode-line--task-count-open 3)
+          (ps/mode-line--task-count-tooltip "TODO: 3\nDONE: 1"))
+      (let ((s (ps/mode-line--task-count-segment)))
+        (should (equal s "3"))
+        (should (equal (get-text-property 0 'help-echo s) "TODO: 3\nDONE: 1"))))))
+
+(ert-deftest ps/mode-line--task-count-segment-shows-zero-not-absent ()
+  "0 is a valid value distinct from nil and must still render."
+  (with-temp-buffer
+    (let ((ps/mode-line--task-count-open 0)
+          (ps/mode-line--task-count-tooltip "DONE: 1"))
+      (should (equal (ps/mode-line--task-count-segment) "0")))))
+
+;;; -------------------------------------------------------
 ;;; ps/mode-line--percent
 ;;; -------------------------------------------------------
 
@@ -240,6 +264,66 @@
     (should (eq (lookup-key global-map [mode-line mouse-3]) #'ignore))))
 
 ;;; -------------------------------------------------------
+;;; ps/mode-line--render (task-count segment placement)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--render-includes-task-count-between-name-and-percent ()
+  (with-temp-buffer
+    (rename-buffer "Inbox.org" t)
+    (org-mode)
+    (let ((ps/mode-line--task-count-open 2))
+      ;; The trailing "%" is doubled by `ps/mode-line--escape' so it survives
+      ;; mode-line %-construct expansion.
+      (should (equal (ps/mode-line--render) " Inbox · 2 · 0%%")))))
+
+(ert-deftest ps/mode-line--render-omits-task-count-when-nil ()
+  "Unchanged from before this feature existed when there is no count."
+  (with-temp-buffer
+    (rename-buffer "Inbox.org" t)
+    (org-mode)
+    (let ((ps/mode-line--task-count-open nil))
+      (should (equal (ps/mode-line--render) " Inbox · 0%%")))))
+
+(ert-deftest ps/mode-line--render-accounts-for-task-count-width-in-truncation ()
+  "The task-count segment's width is subtracted from the truncation budget
+passed to `ps/mode-line--truncate-segments' -- otherwise the breadcrumb
+would overflow window-body-width by the segment's width once it's added."
+  (with-temp-buffer
+    (rename-buffer "Inbox.org" t)
+    (org-mode)
+    (insert "* Search Ranking\n** Dataset Cleanup Pipeline\n")
+    (goto-char (point-max))
+    (let (captured-avail)
+      (cl-letf (((symbol-function 'window-body-width) (lambda (&rest _) 40))
+                ((symbol-function 'ps/mode-line--truncate-segments)
+                 (lambda (_titles avail) (setq captured-avail avail) "stub")))
+        (let ((ps/mode-line--task-count-open nil)) (ps/mode-line--render))
+        (let ((avail-without-count captured-avail))
+          (let ((ps/mode-line--task-count-open 12)) (ps/mode-line--render))
+          ;; The "12" segment plus its separator (" · 12", 5 columns) shrinks
+          ;; the truncation budget by exactly that much.
+          (should (= (- avail-without-count captured-avail) 5)))))))
+
+;;; -------------------------------------------------------
+;;; ps/mode-line--cache-valid-p / ps/mode-line--render-window-cached
+;;; (per-window cache gating)
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--cache-valid-p-checks-task-count-generation ()
+  "A generation bump alone (bol/name unchanged) invalidates the cache.
+The direct regression guard for the async-update wrinkle: the task count
+recomputes off an idle timer, with neither point nor the buffer name
+necessarily changing at the same time."
+  (with-temp-buffer
+    (rename-buffer "Inbox.org" t)
+    (set-window-parameter nil 'ps-ml-bol (pos-bol))
+    (set-window-parameter nil 'ps-ml-name (buffer-name))
+    (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
+    (should (ps/mode-line--cache-valid-p))
+    (setq-local ps/mode-line--task-count-gen (1+ ps/mode-line--task-count-gen))
+    (should-not (ps/mode-line--cache-valid-p))))
+
+;;; -------------------------------------------------------
 ;;; ps/mode-line--render-window-cached (per-window cache gating)
 ;;; -------------------------------------------------------
 
@@ -270,6 +354,30 @@ change recomputes and updates the window-parameter cache."
           (should (= render-calls 2))
           (should (equal result3 "render-2"))
           (should (equal (window-parameter nil 'ps-ml-str) "render-2")))))))
+
+(ert-deftest ps/mode-line--render-window-cached-recomputes-on-task-count-bump ()
+  "An async task-count update (generation bump, no point movement) is not
+masked by the per-window cache -- the direct regression guard for the
+wrinkle this feature introduces (see `ps/mode-line--cache-valid-p')."
+  (with-temp-buffer
+    (insert "line one\n")
+    (goto-char (point-min))
+    (let ((render-calls 0))
+      (cl-letf (((symbol-function 'ps/mode-line--render)
+                 (lambda () (cl-incf render-calls) (format "render-%d" render-calls))))
+        (set-window-parameter nil 'ps-ml-bol nil)
+        (set-window-parameter nil 'ps-ml-str nil)
+        (set-window-parameter nil 'ps-ml-task-gen nil)
+        (ps/mode-line--render-window-cached)
+        (should (= render-calls 1))
+        ;; Same line, same generation: cache hit, no recompute.
+        (ps/mode-line--render-window-cached)
+        (should (= render-calls 1))
+        ;; Bump the generation without moving point: must still recompute.
+        (setq-local ps/mode-line--task-count-gen (1+ ps/mode-line--task-count-gen))
+        (let ((result (ps/mode-line--render-window-cached)))
+          (should (= render-calls 2))
+          (should (equal result "render-2")))))))
 
 ;;; -------------------------------------------------------
 ;;; ps/mode-line--agenda-render (view-switcher)

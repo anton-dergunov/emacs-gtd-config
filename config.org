@@ -104,6 +104,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-typo)
   (require 'ps-org-src-comment)
   (require 'ps-mode-line)
+  (require 'ps-task-count)
   (require 'ps-heading-stars)
   (require 'ps-scrollbar)
   (require 'ps-emphasis)
@@ -118,6 +119,12 @@ All self-contained logic lives in =lisp/ps-*.el=.
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
   (ps/mode-line-setup)
+
+  ;; Feeds the mode line's task-count segment (ps-mode-line.el's
+  ;; defvar-local ps/mode-line--task-count-* vars); ps-task-count.el
+  ;; requires ps-mode-line, so those vars already exist by this point
+  ;; regardless of hook-run order.
+  (ps/task-count-setup)
 
   ;; Keep a headline's tag pills together when the line wraps.
   (ps/tags-setup)
@@ -326,6 +333,18 @@ Remove once the root cause is found.
 Separator placed between mode-line components (filename · position · heading).
 #+begin_src emacs-lisp
   (setq ps/mode-line-separator " · ")
+#+end_src
+
+** Task count (ps-task-count.el)
+The number after the filename in an Org buffer's mode line counts that file's
+open (non-DONE) TODO-state headings; hover it for the full per-state
+breakdown, DONE included. It only appears for files this config would scan
+for the agenda (see /Org files/ above), and only once the file has at least
+one recognized-state heading. Recomputed on edits, debounced onto idle time
+=ps/task-count-idle-delay= seconds after the last one (like the DONE-fade
+overlays), so it never runs on every keystroke.
+#+begin_src emacs-lisp
+  (setq ps/task-count-idle-delay 0.5)
 #+end_src
 
 ** Material icons (ps-material-icons.el)

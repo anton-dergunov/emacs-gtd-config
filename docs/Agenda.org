@@ -111,13 +111,20 @@ below.
 * The mode line
 The mode line (the status strip at the bottom of each window) is tuned for this
 planning environment rather than left at the Emacs default: it shows the file
-name, your position, and the current heading path, separated by a thin =·=. The
-heading path is shown as plain text — links collapse to their name (an
-=obsidian:= link shows just its note title) and emphasis markers like =*bold*=
-are dropped. Like
+name, an open-task count, your position, and the current heading path,
+separated by a thin =·=. The heading path is shown as plain text — links
+collapse to their name (an =obsidian:= link shows just its note title) and
+emphasis markers like =*bold*= are dropped. Like
 =org-super-agenda= grouping and the layout pills, it's part of making the
 planning view readable — not a cosmetic theme choice. Its colors follow whatever
 [[file:Customization.org][theme]] you pick.
+
+In a file that's part of your planning set, a count of open tasks (TODO, NEXT,
+and the like — not DONE) appears next to the file name; hover it to see the
+full breakdown by state, DONE included. It's recomputed shortly after you edit
+the file, so it stays current as you work. Files outside your planning set —
+this config's own docs and settings, for instance — never show it, and neither
+does a file with no task headings at all.
 
 In any of the five planning-view buffers — Agenda, [[file:Calendar.org][Calendar]],
 [[file:Tasks-view.org][Tasks]], [[file:Planning-tools.org][Availability]], or
@@ -155,3 +162,7 @@ view; switching to Calendar or Tasks clears it.
 - The mode line is =lisp/ps-mode-line.el=; its separator is
   =ps/mode-line-separator= in =config.org= → /Mode line/. The view-switcher
   popup is =ps/mode-line--agenda-click=, in the same file.
+- The task count is =lisp/ps-task-count.el=; =ps/task-count-idle-delay= in
+  =config.org= → /Task count/ controls how long it waits after an edit before
+  recomputing. Which files it applies to is the same set as the agenda — see
+  /Org files/ under Settings.

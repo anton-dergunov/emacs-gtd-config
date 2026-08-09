@@ -197,11 +197,39 @@ breadcrumb is returned unchanged."
 
 ;;; Org-buffer mode line
 
+(defvar-local ps/mode-line--task-count-open nil
+  "Count of this buffer's open (non-DONE) TODO-state headings, or nil.
+Nil means either the file is out of `ps/org-files-in-scope-p', or it has no
+headings with a recognized TODO state -- either way, no segment is shown.
+Note 0 is a valid value (every recognized heading is DONE) and is distinct
+from nil.  Owned by `ps/task-count--recompute' in lisp/ps-task-count.el.")
+
+(defvar-local ps/mode-line--task-count-tooltip nil
+  "Per-state task-count breakdown shown on hover, or nil alongside
+`ps/mode-line--task-count-open' being nil.  Owned by
+`ps/task-count--recompute' in lisp/ps-task-count.el.")
+
+(defvar-local ps/mode-line--task-count-gen 0
+  "Generation counter bumped every time the task count is recomputed.
+Folded into the per-window render cache key (see `ps/mode-line--cache-valid-p')
+so an idle-timer-driven update is not masked by a cache that only otherwise
+keys on point/buffer-name.  Owned by `ps/task-count--recompute' in
+lisp/ps-task-count.el.")
+
 (defun ps/mode-line--escape (s)
   "Escape % in S so it survives mode-line %-construct expansion.
 A `:eval' result is itself processed for %-constructs, so a literal % must
 be doubled or it (and the following character) is swallowed."
   (replace-regexp-in-string "%" "%%" s))
+
+(defun ps/mode-line--task-count-segment ()
+  "Return the propertized task-count segment, or nil when there is none.
+No `mouse-face'/`local-map': this segment isn't clickable, unlike the
+agenda title and conflict-count segments -- a bare `help-echo' is enough
+for a hover tooltip without implying an action that doesn't exist."
+  (when ps/mode-line--task-count-open
+    (propertize (ps/mode-line--escape (number-to-string ps/mode-line--task-count-open))
+                'help-echo ps/mode-line--task-count-tooltip)))
 
 (defun ps/mode-line--render ()
   "Return the Org-buffer mode-line string for the current point/buffer state."
@@ -209,13 +237,18 @@ be doubled or it (and the following character) is swallowed."
          (name (ps/mode-line--buffer-name))
          (pct (ps/mode-line--percent))
          (titles (ps/mode-line--outline-titles))
+         (task-str (and ps/mode-line--task-count-open
+                        (number-to-string ps/mode-line--task-count-open)))
+         (task-seg (ps/mode-line--task-count-segment))
+         (task-width (if task-str (+ (string-width sep) (string-width task-str)) 0))
          (prefix (concat " "
                          (propertize (ps/mode-line--escape name)
                                      'face 'mode-line-emphasis)
+                         (if task-seg (concat sep task-seg) "")
                          sep (ps/mode-line--escape pct))))
     (if titles
         ;; Width math uses the unescaped strings (escaping does not widen).
-        (let* ((used (+ (string-width (concat " " name sep pct)) (string-width sep)))
+        (let* ((used (+ (string-width (concat " " name sep pct)) task-width (string-width sep)))
                (avail (- (window-body-width) used))
                (crumb (ps/mode-line--escape
                        (ps/mode-line--truncate-segments titles avail))))
@@ -408,24 +441,31 @@ click (select window) and drag-to-resize are left untouched."
 
 (defun ps/mode-line--cache-valid-p ()
   "Non-nil when this window's cached mode-line string is still current.
-Both the line and the buffer name are checked: `uniquify' renames an
+The line and the buffer name are checked: `uniquify' renames an
 already-open buffer the moment a second file of the same name is opened,
 and without the name in the key the renamed buffer would keep showing its
-old title until point happened to move to another line."
+old title until point happened to move to another line.  The task-count
+generation is checked too: it updates asynchronously off an idle timer
+(see lisp/ps-task-count.el), with neither point nor the buffer name
+necessarily changing, so without this the cache would keep showing a
+stale count until the next line move."
   (and (eql (pos-bol) (window-parameter nil 'ps-ml-bol))
-       (equal (buffer-name) (window-parameter nil 'ps-ml-name))))
+       (equal (buffer-name) (window-parameter nil 'ps-ml-name))
+       (eql ps/mode-line--task-count-gen (window-parameter nil 'ps-ml-task-gen))))
 
 (defun ps/mode-line--render-window-cached ()
   "Return the Org-buffer mode-line string using a per-window cache.
 Recomputes only when the cache key changes (see
 `ps/mode-line--cache-valid-p'); otherwise returns the cached result.
-Stored in window parameters (`ps-ml-bol', `ps-ml-name', `ps-ml-str') so two
-windows showing the same buffer each track their own position."
+Stored in window parameters (`ps-ml-bol', `ps-ml-name', `ps-ml-task-gen',
+`ps-ml-str') so two windows showing the same buffer each track their own
+position."
   (if (ps/mode-line--cache-valid-p)
       (or (window-parameter nil 'ps-ml-str) "")
     (let ((str (ps/mode-line--render)))
       (set-window-parameter nil 'ps-ml-bol (pos-bol))
       (set-window-parameter nil 'ps-ml-name (buffer-name))
+      (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
       (set-window-parameter nil 'ps-ml-str str)
       str)))
 
@@ -440,6 +480,7 @@ window-parameter cache set by `ps/mode-line--render-window-cached'."
   "Install the planning mode line in the current Org buffer."
   (set-window-parameter nil 'ps-ml-bol (pos-bol))
   (set-window-parameter nil 'ps-ml-name (buffer-name))
+  (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
   (set-window-parameter nil 'ps-ml-str (ps/mode-line--render))
   (setq-local mode-line-format '((:eval (ps/mode-line--render-window-cached))))
   (add-hook 'post-command-hook #'ps/mode-line--maybe-refresh nil t))
