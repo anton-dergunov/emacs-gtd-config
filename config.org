@@ -82,6 +82,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-utils)
   (require 'ps-org-files)
   (require 'ps-prose-width)
+  (require 'ps-line-numbers)
   (require 'ps-window)
   (require 'ps-links)
   (require 'ps-done)
@@ -773,6 +774,19 @@ to 0 to disable margins entirely.
   (setq ps/prose-width-columns 180)
 #+end_src
 
+** Line numbers (ps-line-numbers.el)
+How the line-number gutter is drawn in Org buffers (see /Editor & UI → Line
+numbers/, which is also where the gutter's width in columns is set).
+=ps/line-numbers-scale= is the size of the digits relative to the body text; 1
+leaves them at full size. =ps/line-numbers-face= is the face they take their
+colour from — inherited, so it follows the theme — and applies to the current
+line's number too, which themes otherwise draw in the full body-text colour;
+nil leaves the colours alone.
+#+begin_src emacs-lisp
+  (setq ps/line-numbers-scale 0.8)
+  (setq ps/line-numbers-face 'shadow)
+#+end_src
+
 * Editor & UI
 ** Basic UI tweaks
 #+begin_src emacs-lisp
@@ -940,10 +954,14 @@ underneath to act on.
   ;; sub-line `vscroll' that pixel-precise scrolling sets during a gesture is
   ;; enough to flip the width 4 -> 3 -> 4; since line numbers are right-aligned
   ;; within the gutter, the digits and the text jump left and back together.
-  ;; 4 is the width the estimate settles on anyway once you scroll past the
-  ;; boundary, so pinning it removes the flicker without preventing genuine
-  ;; growth (files past ~9000 lines still get a 5th column). `setq-default' is
-  ;; required: the variable is permanently buffer-local.
+  ;;
+  ;; The value below was settled by trying them: 4 (the width the estimate
+  ;; itself settles on) stopped the flicker but reserved more space than
+  ;; wanted, 3 also worked, and 2 stops it too while giving the gutter the
+  ;; width that actually looks right. It is a *minimum*, so a long file still
+  ;; widens the gutter on its own and narrows it again afterwards, without the
+  ;; flicker coming back. `setq-default' is required: the variable is
+  ;; permanently buffer-local.
   (setq-default display-line-numbers-width 2)
 
   ;; Display line numbers globally
@@ -966,6 +984,11 @@ underneath to act on.
               (lambda (&rest _)
                 (not (apply #'derived-mode-p ps/display-line-numbers-exempt-modes)))
               '((name . ps/display-line-numbers-exempt)))
+
+  ;; In Org buffers, draw the gutter smaller and in a muted colour, so it stops
+  ;; competing with the prose (ps-line-numbers.el; sizes in Settings). Only the
+  ;; buffers Org owns -- code buffers keep the standard gutter.
+  (add-hook 'org-mode-hook #'ps/line-numbers-enable)
 #+end_src
 
 ** Font

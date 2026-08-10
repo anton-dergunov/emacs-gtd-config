@@ -141,11 +141,20 @@ Reading width/ (=ps/prose-width-columns=); set it to =0= to turn margins off
 entirely.
 
 * Line numbers
-Line numbers show in file buffers and in the Tasks view, in a gutter of a fixed
-four columns. The width is deliberately fixed: left to size itself, the gutter
-grows and shrinks by a column as you scroll, which nudges the numbers and the
-text sideways. Change the width in =config.org= → /Editor & UI → Line numbers/,
-or set it to =nil= there to let Emacs size the gutter itself.
+Line numbers show in file buffers and in the Tasks view. In Org buffers they are
+drawn smaller than the text and in a muted colour — the number on the line
+you're editing included, which a theme would otherwise paint in the full body
+text colour, making it the loudest thing on the page. The numbers stay readable
+without competing with the prose; code buffers keep the ordinary gutter. Adjust
+the size and the colour in =config.org= → /Settings → Line numbers/
+(=ps/line-numbers-scale=, =ps/line-numbers-face=); a scale of =1= leaves them at
+full size, and a face of =nil= leaves the colours alone.
+
+The gutter reserves at least two columns and widens by itself for a longer file.
+That minimum matters: sizing itself from scratch, the gutter grows and shrinks by
+a column as you scroll, which nudges the numbers and the text sideways. Change
+the minimum in =config.org= → /Editor & UI → Line numbers/, or set it to =nil=
+there to let Emacs size the gutter freely.
 
 * Category icons
 Icons in the agenda and file tree come from the *Material Symbols Outlined* font
@@ -285,6 +294,9 @@ The design rationale is in =design-docs/typo-checker.md=.
   (=ps/color-theme=, =ps/preview-theme=).
 - Line-number gutter width: =config.org= → /Editor & UI → Line numbers/
   (=display-line-numbers-width=).
+- Line-number size and colour in Org buffers: =lisp/ps-line-numbers.el=, wired in
+  =config.org= → /Editor & UI → Line numbers/; settings in =config.org= →
+  /Settings → Line numbers/ (=ps/line-numbers-scale=, =ps/line-numbers-face=).
 - Live markup preview: the =org-appear= package, wired in =config.org= →
   /Appearance → Show formatting markup only at point/.
 - Literal heading stars while typing: =lisp/ps-heading-stars.el=, wired in
