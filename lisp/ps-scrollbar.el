@@ -236,14 +236,43 @@ current start."
   (pcase-let ((`(,l ,top ,r ,b) rect))
     (and (>= px l) (< px r) (>= py top) (< py b))))
 
-(defun ps/scrollbar--strip-rect-1 (wr br bt pl pt it ib)
+(defun ps/scrollbar--margin-pixels (margins char-width)
+  "Right display-margin width in pixels, from MARGINS and CHAR-WIDTH.
+MARGINS is a `window-margins' cons (LEFT . RIGHT) in columns, either side
+nil when unset; CHAR-WIDTH is the frame's canonical character width, which
+is the unit `set-window-margins' counts in."
+  (* (or (cdr margins) 0) char-width))
+
+(defun ps/scrollbar--strip-rect-1 (wr br bt pl pt it ib &optional mr)
   "Pure geometry behind `ps/scrollbar--strip-rect': a window's scrollbar
 track as (LEFT TOP RIGHT BOTTOM), in pixels relative to its frame's native
 origin.  WR/BR/BT are the window's (basic and body) right/bottom edges and
 PL/PT the parent frame's native origin, all in absolute screen pixels; IT/IB
-are the window's inside (text-area) top/bottom, already frame-relative."
-  (let* ((strip-w (max 2 (- wr br)))
-         (left (- br pl))
+are the window's inside (text-area) top/bottom, already frame-relative.
+MR is the right display margin in pixels (nil or 0 when there is none).
+
+The track is anchored to the window's *right edge* and is only as wide as
+the chrome that is not margin: a display margin belongs to the text column,
+not to the track.  Emacs excludes margins from the window body, so the naive
+width `WR - BR' silently swallows them -- and once a centred reading column
+is in play (see `lisp/ps-prose-width.el', which sets margins of tens of
+columns) that turned the pill into a huge block floating well left of the
+window edge, since its width scales with the track and it is centred inside
+it.  Subtracting MR and measuring back from WR fixes both at once.
+
+Measuring from WR rather than skipping MR forward from BR also keeps this
+correct whichever side of the margin the fringe is drawn on: Emacs puts the
+fringe between margin and text by default, while `visual-fill-column' (which
+is what creates margins here) passes OUTSIDE-MARGINS to `set-window-fringes'
+and so keeps the fringe flush with the window edge.  Only the latter leaves
+the track over real fringe pixels -- which is also what keeps a bare-track
+click arriving as `right-fringe' (see `ps/scrollbar-mode-map') -- but the
+pill is a child frame painted on top, so it lands at the edge either way.
+
+With MR of 0 this is exactly the original geometry: LEFT comes back to BR."
+  (let* ((mr (or mr 0))
+         (strip-w (max 2 (- wr br mr)))
+         (left (- wr strip-w pl))
          (top (- bt pt)))
     (list left top (+ left strip-w) (+ top (- ib it)))))
 
@@ -530,7 +559,10 @@ whether the mouse is within the track."
                  (`(,_wl ,_wt ,wr ,_wb) (window-edges window nil t t))
                  (`(,_bl ,bt ,br ,_bb)  (window-edges window t   t t))
                  (`(,pl ,pt ,_pr ,_pb)  (frame-edges parent 'native-edges)))
-      (ps/scrollbar--strip-rect-1 wr br bt pl pt it ib))))
+      (ps/scrollbar--strip-rect-1
+       wr br bt pl pt it ib
+       (ps/scrollbar--margin-pixels (window-margins window)
+                                    (frame-char-width parent))))))
 
 (defun ps/scrollbar--render (window)
   "Show/position the pill for WINDOW.

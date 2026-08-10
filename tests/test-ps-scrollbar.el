@@ -74,6 +74,27 @@
   (let ((rect (ps/scrollbar--strip-rect-1 800 800 100 0 0 0 100)))
     (should (= (- (nth 2 rect) (nth 0 rect)) 2))))
 
+(ert-deftest ps/scrollbar--strip-rect-1-ignores-right-margin ()
+  "A display margin belongs to the text column, not the track.
+Same window as `-basic', but the body edge has been pulled 300px left by a
+centred reading column (see `ps-prose-width.el'); the track must stay the
+same 14px strip at the window's right edge, not grow to 314px and drift
+left with the text."
+  (should (equal (ps/scrollbar--strip-rect-1 814 500 120 100 50 70 470 300)
+                 (list 700 70 714 470))))
+
+(ert-deftest ps/scrollbar--strip-rect-1-nil-margin-is-zero ()
+  "Omitting MR is identical to passing 0 (the pre-margin geometry)."
+  (should (equal (ps/scrollbar--strip-rect-1 814 800 120 100 50 70 470)
+                 (ps/scrollbar--strip-rect-1 814 800 120 100 50 70 470 0))))
+
+(ert-deftest ps/scrollbar--margin-pixels-converts-columns ()
+  "The right margin is read from the cons and scaled by the char width."
+  (should (= (ps/scrollbar--margin-pixels '(20 . 30) 10) 300))
+  ;; Either side may be nil when unset -- that is no margin, not an error.
+  (should (= (ps/scrollbar--margin-pixels '(nil . nil) 10) 0))
+  (should (= (ps/scrollbar--margin-pixels nil 10) 0)))
+
 (ert-deftest ps/scrollbar--in-strip-p-inside-and-outside ()
   (let ((rect '(700 70 714 470)))
     (should (ps/scrollbar--in-strip-p 705 200 rect))
