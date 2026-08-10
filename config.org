@@ -770,7 +770,7 @@ before rebuilding the index.
 plan/prose files (see /Org Mode → Appearance → Reading width margins/); set
 to 0 to disable margins entirely.
 #+begin_src emacs-lisp
-  (setq ps/prose-width-columns 120)
+  (setq ps/prose-width-columns 180)
 #+end_src
 
 * Editor & UI
