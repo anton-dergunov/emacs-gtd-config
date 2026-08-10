@@ -81,6 +81,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
   (require 'ps-org-files)
+  (require 'ps-prose-width)
   (require 'ps-window)
   (require 'ps-links)
   (require 'ps-done)
@@ -129,6 +130,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
 
   ;; Keep a headline's tag pills together when the line wraps.
   (ps/tags-setup)
+
+  ;; Keep reading-width margins off for the duration of any Ediff session.
+  (ps/prose-width-setup)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -759,6 +763,14 @@ before rebuilding the index.
   (setq ps/ai-context-file ".claude/generated-context.md")
   (setq ps/ai-context-next-keyword "NEXT")
   (setq ps/ai-context-save-debounce 2.0)
+#+end_src
+
+** Reading width (ps-prose-width.el)
+=ps/prose-width-columns= is the maximum text width, in characters, for Org
+plan/prose files (see /Org Mode → Appearance → Reading width margins/); set
+to 0 to disable margins entirely.
+#+begin_src emacs-lisp
+  (setq ps/prose-width-columns 120)
 #+end_src
 
 * Editor & UI
@@ -1456,6 +1468,18 @@ Logic lives in =lisp/ps-schedule-icons.el=. Icons and face are set in the
 Schedule Icon Settings block above.
 #+begin_src emacs-lisp
   (add-hook 'org-mode-hook #'ps/schedule-icons-enable)
+#+end_src
+
+*** Reading width margins
+Centres Org prose in a fixed-width, max-width column with margins that shrink
+to zero on a narrower window — only for the actual plan files the agenda
+scans, not =config.org=, =workspace.org=, the journal/archive, or generated
+views (Agenda, Tasks, etc.). Logic lives in =lisp/ps-prose-width.el=; width is
+set in the Reading Width Settings block above.
+#+begin_src emacs-lisp
+  (use-package visual-fill-column
+    :ensure t
+    :hook (org-mode . ps/prose-width-enable))
 #+end_src
 
 *** Fade and fold DONE tasks

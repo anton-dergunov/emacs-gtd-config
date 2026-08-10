@@ -123,6 +123,23 @@ rest — so text appears to shift as those characters scroll past or animate.
 down so every line keeps the same height. If some character still sits taller,
 add its font to that list with a smaller factor.
 
+* Reading width
+Plan files wrap edge-to-edge on a maximized window, which reads better centred
+in a column with margins — similar to Obsidian. This config does that with
+=visual-fill-column=: text is capped at a maximum width and centred; the
+margins shrink to zero once the window itself is narrower than that width, so
+nothing is lost on a split screen or a small frame.
+
+Margins only apply to actual plan/prose files — the same ones the agenda
+scans — never to =config.org=, =workspace.org=, the journal/archive, or a
+generated view (Agenda, Tasks, Calendar, Schedule/Timeline). They're also off
+during the =F7= blank-line-recovery review, since a diff reads better at full
+pane width.
+
+Change the maximum width, in characters, in =config.org= → /Settings →
+Reading width/ (=ps/prose-width-columns=); set it to =0= to turn margins off
+entirely.
+
 * Line numbers
 Line numbers show in file buffers and in the Tasks view, in a gutter of a fixed
 four columns. The width is deliberately fixed: left to size itself, the gutter
@@ -260,6 +277,10 @@ just stays off.
 The design rationale is in =design-docs/typo-checker.md=.
 
 * Under the hood / Customize
+- Reading-width margins: =lisp/ps-prose-width.el= (uses the =visual-fill-column=
+  package), wired in =config.org= → /Org Mode → Appearance → Reading width
+  margins/; settings in =config.org= → /Settings → Reading width/
+  (=ps/prose-width-columns=).
 - Theme machinery and live preview: =config.org= → /Editor & UI/
   (=ps/color-theme=, =ps/preview-theme=).
 - Line-number gutter width: =config.org= → /Editor & UI → Line numbers/

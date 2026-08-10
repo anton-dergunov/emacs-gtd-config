@@ -44,7 +44,8 @@ setup or borrow pieces for your own.
   character of your text.
 - **Quiet quality-of-life touches** — multilingual typo checking, faded/folded
   DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
-  and automatic background Git sync of your Org files.
+  a centred reading-width column for your plan files on wide windows, and
+  automatic background Git sync of your Org files.
 - **An optional AI assistant** — a side-window helper (on your Claude
   subscription) that reads and edits your notes, aware of what you have selected,
   with its changes shown as diffs. Guide it with an `AGENTS.md` in your Org
