@@ -80,6 +80,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (setq load-prefer-newer t)
   (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
+  (require 'ps-fonts)
   (require 'ps-org-files)
   (require 'ps-prose-width)
   (require 'ps-line-numbers)
@@ -195,30 +196,56 @@ theme-relative equivalents automatically, so switching is a one-line change.
 Colour tweaks across this config keep their original hand-tuned values when
 this is non-nil, and fall back to theme-relative faces otherwise.")
 
-  (defvar ps/main-font
-    (cond
-     ((eq system-type 'darwin)     "Monaco-14")
-     ((eq system-type 'windows-nt) "Consolas-11")
-     ((eq system-type 'gnu/linux)  "monospace-10")
-     (t                            "default-font"))
-    "Default font, applied by `Editor & UI / Font'.")
+#+end_src
 
-  (defvar ps/font-rescale-alist
-    '(("Apple Color Emoji" . 0.8)
-      ("Arial Unicode MS"  . 0.9)
-      ("STIX Two Math"     . 0.85)
-      ("Apple Symbols"     . 0.9)
-      ("Zapf Dingbats"     . 0.9)
-      ("Apple Braille"     . 0.9))
-    "Scale factors for fallback fonts, applied by `Editor & UI / Font'.
-Emoji and symbol glyphs the main font lacks are drawn from fallback fonts
-whose line boxes are taller, so a line containing one is a few pixels
-taller than its neighbours -- text visibly shifts as such glyphs scroll
-past or animate.  Emacs has no way to cap a line's height (`line-height'
-raises its floor, it does not lower its ceiling), so instead the fallback
-fonts are scaled to fit.  These factors bring every tested glyph to the
-same height as the main font on macOS; adjust per font if a glyph still
-sits taller.")
+** Fonts (ps-fonts.el)
+Fonts are named by *role*, and each role is a list of families in preference
+order — the first one installed on this machine is used, and a family you don't
+have is simply skipped, so naming a font that isn't installed can't break
+startup.
+
+=ps/font-mono= is the editing font *and* the frame's ruler: window widths,
+margins and every column-aligned view (agenda, schedule ruler, availability and
+conflict reports) are measured in its character width, so it must be
+monospaced. =ps/font-prose= is used for =variable-pitch= — running text rather
+than anything laid out in columns.
+
+Size lives in =ps/font-size= (points), separate from the family, so changing one
+doesn't mean restating the other. Everything that sizes itself relative to the
+body text — the Org heading ramp, the line-number gutter, icons — follows it
+automatically.
+#+begin_src emacs-lisp
+  ;; Grid-aligned text: the `default' and `fixed-pitch' faces.
+  ;; Good monospace choices (install with e.g. `brew install --cask font-<name>'):
+  ;;   Monaco (macOS, no bold/italic — both are synthesized)
+  ;;   Menlo (macOS, has all four styles)
+  ;;   JetBrains Mono   Commit Mono   Iosevka (narrow)   IBM Plex Mono
+  (setq ps/font-mono '("Monaco" "Menlo" "Consolas" "monospace"))
+
+  ;; Running text: the `variable-pitch' face.
+  ;;   Charter (macOS)   Literata   Source Serif 4   Spectral   Merriweather
+  ;;   Inter   IBM Plex Sans   (sans, if you prefer one)
+  (setq ps/font-prose '("Charter" "Georgia" "serif"))
+
+  ;; Body text size in points, and the size of `variable-pitch' relative to it
+  ;; (a serif at the same point size reads larger than a monospace font).
+  (setq ps/font-size 14)
+  (setq ps/font-prose-scale 1.0)
+
+  ;; Emoji and symbol glyphs your font lacks are drawn from fallback fonts whose
+  ;; line boxes are taller, so a line containing one is a few pixels taller than
+  ;; its neighbours and text visibly shifts as such glyphs scroll past or
+  ;; animate. Emacs can't cap a line's height (`line-height' raises its floor,
+  ;; not its ceiling), so the fallback fonts are scaled to fit instead. These
+  ;; factors match every tested glyph to the main font on macOS; if one still
+  ;; sits taller, add its font here with a smaller factor.
+  (setq ps/font-rescale-alist
+        '(("Apple Color Emoji" . 0.8)
+          ("Arial Unicode MS"  . 0.9)
+          ("STIX Two Math"     . 0.85)
+          ("Apple Symbols"     . 0.9)
+          ("Zapf Dingbats"     . 0.9)
+          ("Apple Braille"     . 0.9)))
 #+end_src
 
 ** Org files (ps-org-files.el)
@@ -992,14 +1019,13 @@ underneath to act on.
 #+end_src
 
 ** Font
-Applies =ps/main-font= from the Settings block above, and =ps/font-rescale-alist=
-so emoji and symbol glyphs don't make their line taller than the rest — without
-it, text shifts vertically as such glyphs scroll past or animate. The rescale
-list must be set before fonts are opened, so it stays here rather than in a
-later section.
+Applies the roles from /Settings → Fonts/: =ps/font-mono= to =default= and
+=fixed-pitch=, =ps/font-prose= to =variable-pitch=, at =ps/font-size=. Each role
+falls back through its list until it finds a family this machine actually has,
+so a font named there but not installed is skipped rather than fatal. Logic
+lives in =lisp/ps-fonts.el=.
 #+begin_src emacs-lisp
-  (setq face-font-rescale-alist ps/font-rescale-alist)
-  (set-face-attribute 'default nil :font ps/main-font)
+  (ps/fonts-apply)
 #+end_src
 
 ** Color theme

@@ -112,16 +112,42 @@ running it needs Screen Recording permission.
 #+end_quote
 
 * Fonts
-The editing font is set in =config.org= → /Editor & UI → Font/. Change the
-family and height there to taste; the icon sizes follow your font height
-automatically.
+Fonts are set in =config.org= → /Settings → Fonts/, by *role* rather than one
+font at a time:
 
-Emoji and symbol characters your editing font doesn't cover are drawn from
-other fonts, which can be slightly taller and make their line taller than the
-rest — so text appears to shift as those characters scroll past or animate.
-=ps/font-rescale-alist= (in the Settings block) scales those fallback fonts
-down so every line keeps the same height. If some character still sits taller,
-add its font to that list with a smaller factor.
+| Setting               | Used for                                            |
+|-----------------------+-----------------------------------------------------|
+| =ps/font-mono=        | The editing font, and everything aligned in columns |
+| =ps/font-prose=       | Running text (the =variable-pitch= face)            |
+| =ps/font-size=        | Body text size, in points                           |
+| =ps/font-prose-scale= | Size of running text relative to the body text      |
+
+Each role is a *list* of font families in preference order, and the first one
+your machine actually has is the one used. A family you don't have installed is
+simply skipped, so you can name a font before installing it — or share the
+config across machines — without anything breaking.
+
+=ps/font-mono= has to be a monospaced font. It's not only the editing font: it
+also defines the character width everything else is measured in, so the agenda,
+the schedule ruler, and the availability and conflict reports all line their
+columns up against it.
+
+Sizes elsewhere follow =ps/font-size= automatically — headings, the line-number
+gutter, and the category icons all scale with it, so changing that one number
+resizes the whole interface.
+
+Emoji and symbol characters your font doesn't cover are drawn from other fonts,
+which can be slightly taller and make their line taller than the rest — so text
+appears to shift as those characters scroll past or animate.
+=ps/font-rescale-alist= scales those fallback fonts down so every line keeps the
+same height. If some character still sits taller, add its font to that list with
+a smaller factor. Those factors are tuned against a particular editing font, so
+they're worth a second look if you change =ps/font-mono=.
+
+#+begin_quote
+Under the hood: =lisp/ps-fonts.el=; settings in =config.org= → /Settings →
+Fonts (ps-fonts.el)/.
+#+end_quote
 
 * Reading width
 Plan files wrap edge-to-edge on a maximized window, which reads better centred
