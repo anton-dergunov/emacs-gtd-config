@@ -592,4 +592,59 @@ This is what makes a divider drag re-pin at the width the user dragged to."
       (ps/file-tree-pin-width (selected-frame))
       (should (= treemacs-width 25)))))
 
+;;; -------------------------------------------------------
+;;; Finding a node by path
+;;; -------------------------------------------------------
+
+(defmacro ps/file-tree-test--with-rendered-tree (rendered &rest body)
+  "Run BODY in a buffer mimicking a rendered tree of RENDERED.
+RENDERED is a list of (LABEL . PATH): LABEL is the text on the line, as the
+display-name transformers leave it, PATH the file it stands for.  Only what
+the lookup touches is faked -- a button per line carrying a `:path' property,
+and the treemacs calls it makes to read the dom, where every listed path has
+an entry whose position is not cached (the normal state of a file leaf)."
+  (declare (indent 1))
+  `(let ((buf (generate-new-buffer "fake-treemacs")))
+     (unwind-protect
+         (with-current-buffer buf
+           (setq major-mode 'treemacs-mode)
+           (dolist (entry ,rendered)
+             (let ((start (point)))
+               (insert (car entry) "\n")
+               (make-text-button start (1- (point)) :path (cdr entry))))
+           (cl-letf (((symbol-function 'treemacs-canonical-path) #'identity)
+                     ((symbol-function 'treemacs-button-get) #'get-text-property)
+                     ((symbol-function 'treemacs-dom-node->position) #'ignore)
+                     ((symbol-function 'treemacs-find-in-dom)
+                      (lambda (path) (rassoc path ,rendered))))
+             ,@body))
+       (kill-buffer buf))))
+
+(ert-deftest ps/file-tree--find-rendered-node-matches-on-path ()
+  "A file is found by its path even though its label spells it differently.
+The label is what `treemacs-file-name-transformer' leaves behind, and treemacs
+searches the buffer text for the file name, which is no longer there."
+  (ps/file-tree-test--with-rendered-tree '(("Notes A" . "/org/Notes_A.org")
+                                           ("Notes B" . "/org/Notes_B.org"))
+    (let ((pos (ps/file-tree--find-rendered-node "/org/Notes_B.org")))
+      (should pos)
+      (should (equal (get-text-property pos :path) "/org/Notes_B.org"))
+      ;; point moved there, as callers expect of `treemacs-find-file-node'
+      (should (= (point) pos)))))
+
+(ert-deftest ps/file-tree--find-rendered-node-nil-when-not-rendered ()
+  "A file that is not on screen is left to treemacs, which can expand to it."
+  (ps/file-tree-test--with-rendered-tree '(("Notes A" . "/org/Notes_A.org"))
+    (should-not (ps/file-tree--find-rendered-node "/org/Sub/Inner.org"))))
+
+(ert-deftest ps/file-tree--find-rendered-node-nil-outside-the-tree ()
+  "Called anywhere but a tree buffer the advice steps aside."
+  (with-temp-buffer
+    (should-not (ps/file-tree--find-rendered-node "/org/Notes_A.org"))))
+
+(ert-deftest ps/file-tree--find-rendered-node-nil-for-extension-nodes ()
+  "An extension node's path is a list, which only treemacs knows how to find."
+  (ps/file-tree-test--with-rendered-tree '(("Notes A" . "/org/Notes_A.org"))
+    (should-not (ps/file-tree--find-rendered-node '("/org/Notes_A.org" "Heading")))))
+
 ;;; test-ps-file-tree.el ends here

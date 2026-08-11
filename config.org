@@ -1905,6 +1905,11 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     (setq treemacs-file-name-transformer #'ps/file-tree-transform-file-name)
     (setq treemacs-directory-name-transformer #'ps/file-tree-transform-dir-name)
 
+    ;; Those two labels are why this is needed: treemacs falls back to searching
+    ;; the buffer text for a file's name when it has to locate its line, and the
+    ;; text no longer spells the name out. Look nodes up by path instead.
+    (ps/file-tree-node-lookup-setup)
+
     ;; treemacs's own follow-mode expands directories and re-roots the view to
     ;; reveal the current file. Ours only moves the highlight, and only when the
     ;; file is already on screen, so the tree never shifts under you.
@@ -1930,10 +1935,12 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; plain content change is a "changed" event, and treemacs drops those
     ;; unless `treemacs-git-mode' is on (see `treemacs--is-event-relevant?'
     ;; in treemacs-filewatch-mode.el), which this config deliberately keeps
-    ;; off. In practice that covers a folder appearing or being removed; a
-    ;; single new file landing inside an already-open folder often does not
-    ;; fire a distinct enough event to be picked up. The more reliable
-    ;; automatic path is `ps/git-sync--run's success sentinel, which calls
+    ;; off. Single files landing in or disappearing from an already-open
+    ;; folder do fire events and are picked up -- that used to look like they
+    ;; weren't, because the update died on the lookup that
+    ;; `ps/file-tree-node-lookup-setup' above fixes. A folder that has never
+    ;; been expanded is not watched at all. The other automatic path is
+    ;; `ps/git-sync--run's success sentinel, which calls
     ;; `ps/file-tree-refresh' after any pull that actually brought something
     ;; in; the header-line refresh button covers everything else.
     (treemacs-filewatch-mode 1)

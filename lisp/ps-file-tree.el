@@ -844,6 +844,46 @@ Call once from the treemacs `:config' block; `ps/file-tree-follow-current-file'
 is re-checked on every run, so it can be toggled at any time."
   (add-hook 'buffer-list-update-hook #'ps/file-tree--follow-schedule))
 
+;;; Finding a node whose label no longer spells out its file name
+
+;; `treemacs-file-name-transformer' hides the ".org" extension and shows "_" as
+;; a space, so a file's line no longer contains its file name as text.  That is
+;; harmless everywhere treemacs matches on the `:path' text property -- but
+;; `treemacs-find-file-node' has a fallback that walks the path one component at
+;; a time with a plain `search-forward', used whenever the node's position is
+;; not cached in `treemacs-dom'.  For a file leaf it essentially never is:
+;; treemacs fills that slot in only once something has gone to the node, and
+;; `ps/file-tree--follow' deliberately doesn't.  So the search looks for
+;; "Notes_A.org" in a line reading "Notes A", fails, and
+;; `treemacs-find-file-node' returns nil -- which its callers do not check.
+;; Deleting a shown .org file from another app lands on `(goto-char nil)' inside
+;; `treemacs-do-delete-single-node', killing the filewatch timer with
+;; "(wrong-type-argument integer-or-marker-p nil)" and leaving the tree showing
+;; a file that is gone.
+;;
+;; Replaced here with the lookup the follow feature already uses: match on
+;; `:path', which no transformer touches.  It answers only for nodes that are
+;; drawn right now -- `treemacs-dom' holds an entry only while a node is on
+;; screen, so a collapsed directory's children fall through to treemacs, whose
+;; remaining job in that case is to expand ancestors.
+
+(defun ps/file-tree--find-rendered-node (path &optional _project)
+  "Return the position of PATH's line in the current tree, or nil.
+Moves point there, like `treemacs-find-file-node', which this advises
+`:before-until' -- a non-nil return replaces treemacs\='s own text search.
+Only file paths are answered for; an extension node's path is a list, which
+is left to treemacs."
+  (when (and (stringp path) (derived-mode-p 'treemacs-mode))
+    (when-let* ((pos (ps/file-tree--visible-node-position path)))
+      (goto-char pos))))
+
+;;;###autoload
+(defun ps/file-tree-node-lookup-setup ()
+  "Locate a file's line in the tree by path rather than by its label text.
+Call once from the treemacs `:config' block."
+  (advice-add 'treemacs-find-file-node :before-until
+              #'ps/file-tree--find-rendered-node))
+
 ;;; Collapse / expand toggle button
 
 (defconst ps/file-tree--collapse-icon "unfold_less"
