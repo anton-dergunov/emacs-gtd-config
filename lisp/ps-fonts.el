@@ -40,6 +40,7 @@
 ;;; Code:
 
 (require 'seq)
+(require 'ps-window)
 
 ;;; Customization
 
@@ -155,6 +156,33 @@ Returns nil for a non-positive or non-numeric POINTS, which reads as \"leave
 the size alone\"."
   (and (numberp points) (> points 0) (round (* 10 points))))
 
+;;; Roles
+
+(defconst ps/fonts--roles
+  '((mono  . ps/font-mono)
+    (prose . ps/font-prose))
+  "Role name -> the setting holding that role's candidate list.
+One list drives the settings, the audition commands and the preview buffer,
+so a role cannot be added in one place and forgotten in another.")
+
+(defun ps/fonts--role-variable (role)
+  "Return the settings variable for ROLE, or nil if ROLE is unknown."
+  (cdr (assq role ps/fonts--roles)))
+
+(defun ps/fonts--promote (family candidates)
+  "Return CANDIDATES with FAMILY first and the rest in their original order.
+This is the list to paste back into the settings block after an audition: the
+font just chosen becomes the preference, and the fallbacks that were already
+there stay behind it rather than being lost."
+  (cons family (seq-remove (lambda (other) (string= other family))
+                           (ps/fonts--candidates candidates))))
+
+(defun ps/fonts--setting-line (variable families)
+  "Return the `setq' line that would make FAMILIES the value of VARIABLE."
+  (format "(setq %s '(%s))"
+          variable
+          (mapconcat (lambda (family) (format "%S" family)) families " ")))
+
 ;;; Application
 
 (defun ps/fonts--set (face spec)
@@ -163,26 +191,309 @@ the size alone\"."
     (apply #'set-face-attribute face nil spec)
     t))
 
+(defun ps/fonts--apply-role (role family)
+  "Apply FAMILY as ROLE's font, now.  A nil FAMILY applies sizes only.
+The settings are not touched, so this is what an audition does: it changes
+what you see without changing what `config.org' says."
+  (pcase role
+    ('mono
+     ;; `default' carries the absolute size; `fixed-pitch' takes the family
+     ;; only, so that it keeps tracking `default' when the size changes.
+     (ps/fonts--set 'default
+                    (ps/fonts--face-spec family (ps/fonts--points-to-height ps/font-size)))
+     (ps/fonts--set 'fixed-pitch (ps/fonts--face-spec family nil)))
+    ('prose
+     (ps/fonts--set 'variable-pitch
+                    (ps/fonts--face-spec family ps/font-prose-scale)))))
+
 ;;;###autoload
 (defun ps/fonts-apply ()
   "Apply `ps/font-mono' and `ps/font-prose' to the frame's base faces.
 Never signals: a role whose families are all missing is left as Emacs had it,
 so naming a font this machine does not have cannot break startup.  Returns
 the (MONO . PROSE) families that were actually applied, either of which may
-be nil."
-  (let* ((mono   (ps/fonts--first-available ps/font-mono))
-         (prose  (ps/fonts--first-available ps/font-prose))
-         (height (ps/fonts--points-to-height ps/font-size)))
+be nil.
+
+Also the way back from an audition -- it re-reads the settings, so it undoes
+anything `ps/font-try' or the preview buffer applied."
+  (interactive)
+  (let ((mono  (ps/fonts--first-available ps/font-mono))
+        (prose (ps/fonts--first-available ps/font-prose)))
     ;; Before any face below opens a font: the rescale factors are consulted
     ;; when a font is opened, not when it is drawn, so setting them here rather
     ;; than leaving it to a caller makes the ordering impossible to get wrong.
     (setq face-font-rescale-alist ps/font-rescale-alist)
-    ;; `default' carries the absolute size; `fixed-pitch' takes the family only
-    ;; so that it keeps tracking `default' when the size changes.
-    (ps/fonts--set 'default (ps/fonts--face-spec mono height))
-    (ps/fonts--set 'fixed-pitch (ps/fonts--face-spec mono nil))
-    (ps/fonts--set 'variable-pitch (ps/fonts--face-spec prose ps/font-prose-scale))
+    (ps/fonts--apply-role 'mono mono)
+    (ps/fonts--apply-role 'prose prose)
     (cons mono prose)))
+
+;;; Auditioning
+
+(defun ps/fonts--installed-families ()
+  "Return the font families this frame can use, sorted, without duplicates.
+Empty in batch, where there is no font backend."
+  (sort (delete-dups (font-family-list)) #'string-lessp))
+
+(defun ps/fonts--read-role (prompt)
+  "Read a role name from the minibuffer with PROMPT."
+  (intern (completing-read prompt (mapcar #'car ps/fonts--roles) nil t nil nil "mono")))
+
+;;;###autoload
+(defun ps/font-try (role family)
+  "Apply FAMILY as ROLE's font right now, to see what it looks like.
+Deliberately does not persist: `config.org' stays the single source of truth,
+so this echoes the settings line that would make the choice permanent, and
+`ps/fonts-apply' puts everything back."
+  (interactive
+   (let ((role (ps/fonts--read-role "Role: ")))
+     (list role (completing-read (format "Font for %s: " role)
+                                 (ps/fonts--installed-families) nil t))))
+  (ps/fonts--apply-role role family)
+  (let ((variable (ps/fonts--role-variable role)))
+    (message "%s — keep it with:  %s"
+             family
+             (ps/fonts--setting-line
+              variable (ps/fonts--promote family (symbol-value variable))))))
+
+;;;###autoload
+(defun ps/font-size-try (points)
+  "Set the body text size to POINTS and re-apply every role.
+Unlike `ps/font-try' this does change the setting, since size is one number
+rather than a preference list -- `ps/font-size' in Settings is where it
+persists."
+  (interactive (list (read-number "Body text size (points): " ps/font-size)))
+  (setq ps/font-size points)
+  (ps/fonts-apply)
+  (message "Body text %spt — keep it with:  (setq ps/font-size %s)" points points))
+
+;;; Preview
+
+(defcustom ps/font-preview-candidates
+  '(;; Monospaced -- for `ps/font-mono'
+    "Monaco" "Menlo" "SF Mono" "PT Mono"
+    "JetBrains Mono" "Commit Mono" "Iosevka" "IBM Plex Mono"
+    ;; Proportional -- for `ps/font-prose'
+    "Charter" "Georgia" "Palatino" "Iowan Old Style" "Hoefler Text"
+    "Literata" "Source Serif 4" "Spectral" "Merriweather" "Newsreader"
+    "IBM Plex Serif"
+    "Inter" "IBM Plex Sans" "Avenir Next" "Seravek"
+    ;; Ships its Mono and Sans variants as *styles* of one family rather than
+    ;; as separate families, so naming the family reaches only its default
+    ;; instance -- the monospaced half is not selectable this way.
+    "Recursive")
+  "Font families offered by `ps/font-preview'.
+Families that are not installed are listed at the bottom of the preview
+rather than drawn, so this can name fonts you have not installed yet.  The
+name to use is the family name the font itself declares, which is not always
+the name of the download -- if something you installed shows up as missing,
+check with `M-x describe-font' or add the name the system reports."
+  :type '(repeat string)
+  :group 'ps-fonts)
+
+(defun ps/fonts--preview-families (&optional availablep)
+  "Return (INSTALLED . MISSING) families for the preview buffer.
+The families the settings currently name come first, so what you are already
+looking at is at the top to compare against, followed by
+`ps/font-preview-candidates'.  AVAILABLEP overrides the installed-font test."
+  (let ((seen (make-hash-table :test #'equal))
+        (test (or availablep #'ps/fonts--available-p))
+        installed missing)
+    (dolist (family (append (ps/fonts--candidates ps/font-mono)
+                            (ps/fonts--candidates ps/font-prose)
+                            (ps/fonts--candidates ps/font-preview-candidates)))
+      (unless (gethash family seen)
+        (puthash family t seen)
+        (if (funcall test family)
+            (push family installed)
+          (push family missing))))
+    (cons (nreverse installed) (nreverse missing))))
+
+(defconst ps/fonts--preview-sample
+  '((heading . "Quarterly review")
+    (heading . "Prepare the deck")
+    (heading . "Draft the outline")
+    (styles  . nil)
+    (prose   . "Plan prose reads for paragraphs, not for columns — 0123456789.")
+    (task    . "TODO  [A]  Draft the quarterly review          Work    Tue")
+    (grid    . "09:00-10:30 ┆ Standup  ┄┄┄┄┄┄┄┄┄┄  ✓ ⏰")
+    (width   . "iiiiiiiiiiiiiiii")
+    (width   . "MMMMMMMMMMMMMMMM"))
+  "The sample rendered for each candidate, as (KIND . TEXT) in order.
+The two `width' lines are the monospace check: equal length means every glyph
+occupies one cell.  The `grid' line carries the characters the schedule ruler
+and the agenda badges need, so a font that lacks them shows its fallback.")
+
+(defun ps/fonts--preview-kind-face (kind family index)
+  "Return the face spec for a sample line of KIND in FAMILY.
+INDEX is the heading level for `heading' lines.  Heading heights come from
+the live `org-level-N' faces when Org is loaded, so the preview shows the
+ramp actually configured rather than a copy of it."
+  (let ((level (intern (format "org-level-%d" index))))
+    (pcase kind
+      ('heading (if (facep level)
+                    (list :family family :inherit level)
+                  (list :family family :weight 'bold)))
+      ('prose   (list :family family))
+      ('task    (list :family family))
+      ('grid    (list :family family))
+      ('width   (list :family family))
+      (_        (list :family family)))))
+
+(defun ps/fonts--preview-insert-styles (family)
+  "Insert the regular/bold/italic row for FAMILY.
+The point of the row: a family with no real bold or italic (Monaco ships
+Regular only) gets a smeared or mechanically sheared imitation from the OS,
+and that is only visible side by side with a family that has all four."
+  (insert "  ")
+  (dolist (style '(("Regular"     :weight normal :slant normal)
+                   ("Bold"        :weight bold   :slant normal)
+                   ("Italic"      :weight normal :slant italic)
+                   ("Bold Italic" :weight bold   :slant italic)))
+    (insert (propertize (car style)
+                        'face (append (list :family family) (cdr style)))
+            "   "))
+  (insert "\n"))
+
+(defun ps/fonts--preview-insert-family (family)
+  "Insert one preview block for FAMILY, with its two apply buttons.
+The whole block carries a `ps-font-family' text property, so the keyboard
+commands can tell which block point is in without parsing the text back."
+  (let ((start (point)))
+    (insert (propertize family 'face '(:weight bold :height 1.1)))
+    (insert "   ")
+    (dolist (role '(mono prose))
+      (insert-text-button (format "[use as %s]" role)
+                          'family family
+                          'role role
+                          'follow-link t
+                          'help-echo (format "Apply %s as the %s font" family role)
+                          'action #'ps/fonts--preview-use-button)
+      (insert " "))
+    (insert "\n")
+    (let ((heading 0))
+      (dolist (line ps/fonts--preview-sample)
+        (pcase (car line)
+          ('styles (ps/fonts--preview-insert-styles family))
+          (kind
+           (when (eq kind 'heading) (setq heading (1+ heading)))
+           (insert "  "
+                   (propertize (cdr line)
+                               'face (ps/fonts--preview-kind-face kind family heading))
+                   "\n")))))
+    (insert "\n")
+    (put-text-property start (point) 'ps-font-family family)))
+
+(defun ps/fonts--preview-use-button (button)
+  "Apply the family BUTTON names to the role it names."
+  (let ((family (button-get button 'family))
+        (role   (button-get button 'role)))
+    (ps/font-try role family)))
+
+(defun ps/fonts--preview-insert-ramp ()
+  "Insert the resolved pixel height of each Org heading level.
+`:height' multipliers are stored as integers in 1/10 pt and then rounded to
+whole pixels, so a deliberately small ramp can round several levels onto the
+same size.  This shows what the configured numbers actually resolve to at the
+current font and size, which is the only way to tune them on purpose."
+  (when (facep 'org-level-1)
+    (insert (propertize "Heading ramp, as it actually resolves\n"
+                        'face '(:weight bold)))
+    (dolist (level '(1 2 3 4 5))
+      ;; `:height' without INHERIT, so this shows the multiplier as configured
+      ;; rather than the absolute size it resolves to through the face chain --
+      ;; the multiplier is the number being tuned, the pixels are the result.
+      (let* ((face (intern (format "org-level-%d" level)))
+             (spec (and (facep face) (face-attribute face :height))))
+        (insert (format "  level %d   :height %-10s → %s px\n"
+                        level
+                        (if (numberp spec) spec "inherited")
+                        (if (facep face) (window-font-height nil face) "?")))))
+    (insert "\n")))
+
+(defun ps/fonts--preview-render ()
+  "Redraw the *Font Preview* buffer."
+  (let ((inhibit-read-only t)
+        (families (ps/fonts--preview-families)))
+    (erase-buffer)
+    (insert (propertize "Font preview\n" 'face '(:weight bold :height 1.2)))
+    (insert "Click a button (or press m / p on a block) to apply a font now — "
+            "nothing is saved.\n")
+    (insert (format "Currently: mono %s · prose %s · %spt.  "
+                    (or (ps/fonts--first-available ps/font-mono) "—")
+                    (or (ps/fonts--first-available ps/font-prose) "—")
+                    ps/font-size))
+    (insert "Keys: m/p apply · s size · g refresh · r revert · q quit\n\n")
+    (ps/fonts--preview-insert-ramp)
+    (dolist (family (car families))
+      (ps/fonts--preview-insert-family family))
+    (when (cdr families)
+      (insert (propertize "Not installed\n" 'face '(:weight bold)))
+      (insert "  " (string-join (cdr families) ", ") "\n")
+      (insert "  Most are available as Homebrew casks, e.g."
+              " brew install --cask font-jetbrains-mono\n"))
+    (goto-char (point-min))))
+
+(defun ps/fonts--preview-family-at-point ()
+  "Return the family whose block point is inside, or nil.
+Reads the `ps-font-family' property the block was rendered with; the blank
+line that ends a block carries it too, so point never falls between blocks."
+  (get-text-property (point) 'ps-font-family))
+
+(defun ps/font-preview-use-mono ()
+  "Apply the family at point as the monospaced font."
+  (interactive)
+  (if-let ((family (ps/fonts--preview-family-at-point)))
+      (ps/font-try 'mono family)
+    (user-error "Point is not inside a font block")))
+
+(defun ps/font-preview-use-prose ()
+  "Apply the family at point as the prose font."
+  (interactive)
+  (if-let ((family (ps/fonts--preview-family-at-point)))
+      (ps/font-try 'prose family)
+    (user-error "Point is not inside a font block")))
+
+(defun ps/font-preview-refresh ()
+  "Redraw the preview, keeping point where it is."
+  (interactive)
+  (let ((line (line-number-at-pos)))
+    (ps/fonts--preview-render)
+    (forward-line (1- line))))
+
+(defun ps/font-preview-revert ()
+  "Undo every audition and go back to what the settings say."
+  (interactive)
+  (ps/fonts-apply)
+  (ps/font-preview-refresh)
+  (message "Back to the fonts config.org names"))
+
+(defvar ps/font-preview-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "m") #'ps/font-preview-use-mono)
+    (define-key map (kbd "p") #'ps/font-preview-use-prose)
+    (define-key map (kbd "s") #'ps/font-size-try)
+    (define-key map (kbd "g") #'ps/font-preview-refresh)
+    (define-key map (kbd "r") #'ps/font-preview-revert)
+    map)
+  "Keymap for `ps-font-preview-mode'.")
+
+(define-derived-mode ps-font-preview-mode special-mode "Font Preview"
+  "Major mode for the *Font Preview* buffer."
+  (setq truncate-lines t))
+
+;;;###autoload
+(defun ps/font-preview ()
+  "Show the same sample rendered in every candidate font, to compare them.
+Applying one from here is an audition only; set `ps/font-mono' /
+`ps/font-prose' in Settings to keep it, or press `r' to go back."
+  (interactive)
+  (let ((buffer (get-buffer-create "*Font Preview*")))
+    (with-current-buffer buffer
+      (unless (eq major-mode 'ps-font-preview-mode)
+        (ps-font-preview-mode))
+      (ps/fonts--preview-render))
+    (ps/window-show-here buffer)))
 
 (provide 'ps-fonts)
 ;;; ps-fonts.el ends here

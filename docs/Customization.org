@@ -144,6 +144,31 @@ same height. If some character still sits taller, add its font to that list with
 a smaller factor. Those factors are tuned against a particular editing font, so
 they're worth a second look if you change =ps/font-mono=.
 
+** Audition fonts live
+=M-x ps/font-preview= (or =C-c p P=) renders the same sample in every candidate
+font, one block each, so you compare them against real content instead of by
+name: the heading ramp at its configured sizes, a line of prose, an agenda row,
+the characters the schedule ruler draws with, and regular / bold / italic side
+by side. That last row is worth a look — a font without a real bold or italic
+gets a smeared or mechanically slanted imitation from the system, which is only
+obvious next to a font that has all four.
+
+- =m= / =p= — use the font at point as the monospaced / prose font
+- =s= — change the body text size
+- =r= — put everything back the way Settings has it
+- =g= — redraw, =q= — quit
+
+Applying a font from the preview is an *audition*: it changes what you see
+without changing any setting, and shows you the exact line to paste into
+=config.org= to keep it. =M-x ps/font-try= does the same for one font without
+opening the buffer.
+
+Fonts you haven't installed are listed at the bottom rather than drawn, so the
+candidate list (=ps/font-preview-candidates=) can name fonts to try later. Most
+are free and installable in one command, e.g. =brew install --cask
+font-jetbrains-mono=. Note that the name to use is the family name the font
+declares, which isn't always the name of the download.
+
 #+begin_quote
 Under the hood: =lisp/ps-fonts.el=; settings in =config.org= → /Settings →
 Fonts (ps-fonts.el)/.

@@ -92,4 +92,102 @@ the machine from breaking startup."
         (ps/font-prose '("AlsoNotInstalledXYZ")))
     (should (equal (ps/fonts-apply) '(nil . nil)))))
 
+;;; Roles
+
+(ert-deftest ps/fonts-test-role-variable ()
+  "Every role resolves to the setting that holds its candidate list."
+  (should (eq (ps/fonts--role-variable 'mono) 'ps/font-mono))
+  (should (eq (ps/fonts--role-variable 'prose) 'ps/font-prose))
+  (should (null (ps/fonts--role-variable 'nonexistent))))
+
+;;; Promotion (the settings line an audition echoes)
+
+(ert-deftest ps/fonts-test-promote-puts-the-choice-first ()
+  "The audition choice becomes the preference; the fallbacks stay behind it."
+  (should (equal (ps/fonts--promote "Iosevka" '("Monaco" "Menlo"))
+                 '("Iosevka" "Monaco" "Menlo"))))
+
+(ert-deftest ps/fonts-test-promote-does-not-duplicate ()
+  "Choosing a font already in the list moves it up rather than repeating it."
+  (should (equal (ps/fonts--promote "Menlo" '("Monaco" "Menlo" "Consolas"))
+                 '("Menlo" "Monaco" "Consolas"))))
+
+(ert-deftest ps/fonts-test-promote-keeps-the-rest-in-order ()
+  "Fallback order is a preference, so promotion must not reshuffle it."
+  (should (equal (ps/fonts--promote "D" '("A" "B" "C"))
+                 '("D" "A" "B" "C"))))
+
+(ert-deftest ps/fonts-test-setting-line-is-pasteable ()
+  "The echoed line is valid elisp that reproduces the list."
+  (let* ((line (ps/fonts--setting-line 'ps/font-mono '("JetBrains Mono" "Monaco")))
+         (form (car (read-from-string line))))
+    (should (equal line "(setq ps/font-mono '(\"JetBrains Mono\" \"Monaco\"))"))
+    (should (eq (nth 0 form) 'setq))
+    (should (eq (nth 1 form) 'ps/font-mono))
+    (should (equal (eval (nth 2 form) t) '("JetBrains Mono" "Monaco")))))
+
+;;; Preview candidate lists
+
+(ert-deftest ps/fonts-test-preview-families-splits-installed-and-missing ()
+  "Installed families are drawn, missing ones are only listed."
+  (let ((ps/font-mono '("Monaco"))
+        (ps/font-prose '("Charter"))
+        (ps/font-preview-candidates '("Iosevka" "Literata")))
+    (should (equal (ps/fonts--preview-families
+                    (lambda (f) (member f '("Monaco" "Literata"))))
+                   '(("Monaco" "Literata") . ("Charter" "Iosevka"))))))
+
+(ert-deftest ps/fonts-test-preview-families-lists-current-settings-first ()
+  "What you are already looking at heads the list, to compare against."
+  (let ((ps/font-mono '("Menlo"))
+        (ps/font-prose '("Georgia"))
+        (ps/font-preview-candidates '("Menlo" "Iosevka")))
+    (should (equal (car (ps/fonts--preview-families (lambda (_) t)))
+                   '("Menlo" "Georgia" "Iosevka")))))
+
+(ert-deftest ps/fonts-test-preview-families-deduplicates ()
+  "A family named by both a setting and the candidate list appears once."
+  (let ((ps/font-mono '("Monaco" "Monaco"))
+        (ps/font-prose '("Monaco"))
+        (ps/font-preview-candidates '("Monaco")))
+    (should (equal (ps/fonts--preview-families (lambda (_) t))
+                   '(("Monaco"))))))
+
+;;; Preview rendering
+
+(ert-deftest ps/fonts-test-preview-block-renders ()
+  "A preview block draws without error and names its family."
+  (with-temp-buffer
+    (ps/fonts--preview-insert-family "Monaco")
+    (should (string-match-p "Monaco" (buffer-string)))
+    (should (string-match-p "use as mono" (buffer-string)))
+    (should (string-match-p "use as prose" (buffer-string)))))
+
+(ert-deftest ps/fonts-test-preview-block-is-tagged-throughout ()
+  "Every position in a block answers with its family, including the blank line
+that ends it -- otherwise `m'/`p' pressed just below a block would act on the
+next one, or on nothing."
+  (with-temp-buffer
+    (ps/fonts--preview-insert-family "Monaco")
+    (goto-char (point-min))
+    (should (equal (ps/fonts--preview-family-at-point) "Monaco"))
+    (goto-char (1- (point-max)))
+    (should (equal (ps/fonts--preview-family-at-point) "Monaco"))))
+
+(ert-deftest ps/fonts-test-preview-sample-covers-the-fragile-glyphs ()
+  "The sample has to include the characters the schedule ruler and agenda use,
+since those are exactly the ones a text font lacks and silently falls back for."
+  (let ((grid (cdr (assq 'grid ps/fonts--preview-sample))))
+    (should (string-match-p "┆" grid))
+    (should (string-match-p "┄" grid))))
+
+(ert-deftest ps/fonts-test-preview-sample-has-a-monospace-check ()
+  "Two equal-length runs of a narrow and a wide glyph: same width on screen
+means the family is monospaced.  Their *character* counts must match for the
+comparison to mean anything."
+  (let ((widths (mapcar #'cdr (seq-filter (lambda (line) (eq (car line) 'width))
+                                          ps/fonts--preview-sample))))
+    (should (= (length widths) 2))
+    (should (apply #'= (mapcar #'length widths)))))
+
 ;;; ps-fonts tests end here

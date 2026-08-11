@@ -1028,6 +1028,18 @@ lives in =lisp/ps-fonts.el=.
   (ps/fonts-apply)
 #+end_src
 
+** Live font preview
+=M-x ps/font-preview= (also =C-c p P=) renders the same sample — the heading
+ramp, a line of prose, an agenda row, the schedule ruler's characters, and
+regular/bold/italic side by side — in every candidate font, so fonts are
+compared against real content rather than by name. Applying one from there is
+an audition: it changes what you see without touching Settings, echoes the
+=setq= line that would make it permanent, and =r= puts everything back.
+=M-x ps/font-try= does the same for a single font without the buffer, and
+=M-x ps/font-size-try= changes the body size. Candidates are
+=ps/font-preview-candidates=; ones you haven't installed are listed rather
+than drawn.
+
 ** Color theme
 Loads =ps/color-theme= from Settings, auto-installing the package that provides it
 when needed. The Solarized-specific tuning below only runs for =solarized-*=
@@ -2432,6 +2444,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "W") #'ps/open-workspace-config)     ; W → open Workspace config
     (define-key m (kbd "w") #'ps/reload-workspace-config)   ; w → reload Workspace config
     (define-key m (kbd "T") #'ps/preview-theme)             ; T → Theme preview
+    (define-key m (kbd "P") #'ps/font-preview)              ; P → font Preview
     ;; Help
     (define-key m (kbd "h") #'ps/help-open-doc))            ; h → Help / docs index
 
@@ -2505,6 +2518,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
         ["Open workspace.org"     ps/open-workspace-config   :keys "C-c p W"]
         ["Reload"                 ps/reload-workspace-config :keys "C-c p w"])
        ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
+       ["Preview Fonts…"          ps/font-preview            :keys "C-c p P"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])
       ("Help"
