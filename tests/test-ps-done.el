@@ -161,7 +161,15 @@ stacked on every rebuild until the star grew a title."
   (ps/done-test--with-org-buffer ps/done-test--sample-org
     (cl-letf (((symbol-function 'ps/done-fade-subtrees)
                (lambda (&rest _) (error "Boom"))))
-      (should-not (ps/done--refade-now (current-buffer))))
+      ;; `with-demoted-errors' is built on `condition-case-unless-debug',
+      ;; which skips its own handler whenever `debug-on-error' is non-nil.
+      ;; On Emacs < 30, ERT itself binds `debug-on-error' to t for a test's
+      ;; whole body (its pre-`handler-bind' mechanism for backtraces), which
+      ;; would let "Boom" escape here regardless of what is under test.  Bind
+      ;; it back to nil so this exercises the same non-debugging condition a
+      ;; real editing session runs under.
+      (let ((debug-on-error nil))
+        (should-not (ps/done--refade-now (current-buffer)))))
     ;; The pending-timer flag is cleared even when the rebuild fails, so the
     ;; next edit can arm a new timer.
     (should-not ps/done--refade-timer)))
