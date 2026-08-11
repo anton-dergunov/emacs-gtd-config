@@ -115,22 +115,35 @@ running it needs Screen Recording permission.
 Fonts are set in =config.org= → /Settings → Fonts/, by *role* rather than one
 font at a time:
 
-| Setting               | Used for                                            |
-|-----------------------+-----------------------------------------------------|
-| =ps/font-mono=        | The editing font, and everything aligned in columns |
-| =ps/font-prose=       | Running text (the =variable-pitch= face)            |
-| =ps/font-size=        | Body text size, in points                           |
-| =ps/font-prose-scale= | Size of running text relative to the body text      |
+| Setting                | Used for                                            |
+|------------------------+-----------------------------------------------------|
+| =ps/font-mono=         | The editing font, and everything aligned in columns |
+| =ps/font-prose=        | Running text (the =variable-pitch= face)            |
+| =ps/font-ui=           | Interface chrome — currently the file tree          |
+| =ps/font-size=         | Body text size, in points                           |
+| =ps/font-prose-scale=  | Size of running text relative to the body text      |
+| =ps/font-ui-scale=     | Size of interface text relative to the body text    |
+| =ps/font-line-spacing= | Extra space between lines, per font family          |
 
 Each role is a *list* of font families in preference order, and the first one
 your machine actually has is the one used. A family you don't have installed is
 simply skipped, so you can name a font before installing it — or share the
-config across machines — without anything breaking.
+config across machines — without anything breaking. Note that this is a
+/fallback chain/, not a menu: listing four fonts doesn't offer a choice between
+them, it just means the first one. To switch between several, see
+[[*Live with a font before choosing it][Live with a font before choosing it]].
+
+This is the same split VS Code and Obsidian make (Obsidian calls them the
+Interface Font, the Text Font and the Monospace Font): the thing you're editing
+and the chrome around it don't have to be the same font.
 
 =ps/font-mono= has to be a monospaced font. It's not only the editing font: it
 also defines the character width everything else is measured in, so the agenda,
 the schedule ruler, and the availability and conflict reports all line their
 columns up against it.
+
+=ps/font-ui= has no such constraint — the file tree is a list of short labels,
+not columns — so a proportional font is both allowed and easier to read there.
 
 Sizes elsewhere follow =ps/font-size= automatically — headings, the line-number
 gutter, and the category icons all scale with it, so changing that one number
@@ -144,6 +157,21 @@ same height. If some character still sits taller, add its font to that list with
 a smaller factor. Those factors are tuned against a particular editing font, so
 they're worth a second look if you change =ps/font-mono=.
 
+** Line spacing
+How much air a font wants between its lines is a property /of the font/: a
+condensed face with a tall x-height reads cramped at the leading a wider face is
+comfortable at. So =ps/font-line-spacing= is keyed by family rather than being a
+single global number, and switching fonts brings the right leading with it
+instead of needing a second adjustment afterwards:
+
+#+begin_src elisp
+(setq ps/font-line-spacing '(("Menlo" . 0.2)))
+#+end_src
+
+A float is a fraction of the line height, an integer is pixels. Families not
+listed get no extra spacing. Press =l= in the font preview to try a value on
+the current font.
+
 ** Audition fonts live
 =M-x ps/font-preview= (or =C-c p P=) renders the same sample in every candidate
 font, one block each, so you compare them against real content instead of by
@@ -153,10 +181,15 @@ by side. That last row is worth a look — a font without a real bold or italic
 gets a smeared or mechanically slanted imitation from the system, which is only
 obvious next to a font that has all four.
 
-- =m= / =p= — use the font at point as the monospaced / prose font
-- =s= — change the body text size
+- =m= / =p= / =u= — use the font at point as the monospaced / prose / interface font
+- =s= — change the body text size, =l= — change this font's line spacing
+- =S= — change the prose or interface size relative to the body text
+- =c= — cycle a role through your favourites
 - =r= — put everything back the way Settings has it
 - =g= — redraw, =q= — quit
+
+Pressing =u= with the file tree on screen restyles the tree as you press it, so
+tree fonts can be compared in place.
 
 Applying a font from the preview is an *audition*: it changes what you see
 without changing any setting, and shows you the exact line to paste into
@@ -168,6 +201,24 @@ candidate list (=ps/font-preview-candidates=) can name fonts to try later. Most
 are free and installable in one command, e.g. =brew install --cask
 font-jetbrains-mono=. Note that the name to use is the family name the font
 declares, which isn't always the name of the download.
+
+** Live with a font before choosing it
+A preview tells you which fonts to rule out. It doesn't tell you which one you
+want to read all day — that takes actually reading all day in it, and it's easy
+to mistake a font you're /used to/ for a font you prefer. So put the ones that
+survived the preview in =ps/font-favourites= and switch between them in place:
+
+#+begin_src elisp
+(setq ps/font-favourites
+      '((mono  . ("Monaco" "Menlo" "IBM Plex Mono" "iA Writer Mono S"))
+        (prose . ("IBM Plex Serif" "Charter" "iA Writer Quattro S"))
+        (ui    . ("IBM Plex Serif" "SF Pro Text" "Inter"))))
+#+end_src
+
+=C-c p M= steps the editing font to the next one, =C-c p U= the file tree's.
+Each applies immediately — no preview buffer, no restart — and neither is
+saved, so the settings stay the source of truth until you decide. Each switch
+also brings that family's line spacing with it.
 
 #+begin_quote
 Under the hood: =lisp/ps-fonts.el=; settings in =config.org= → /Settings →

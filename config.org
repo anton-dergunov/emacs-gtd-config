@@ -215,22 +215,50 @@ doesn't mean restating the other. Everything that sizes itself relative to the
 body text — the Org heading ramp, the line-number gutter, icons — follows it
 automatically.
 #+begin_src emacs-lisp
+  ;; NOTE: these lists are a *fallback chain*, not a menu — only the first
+  ;; family you actually have installed is ever used. To switch between several
+  ;; fonts while working, put them in `ps/font-favourites' below and cycle.
+
   ;; Grid-aligned text: the `default' and `fixed-pitch' faces.
-  ;; Good monospace choices (install with e.g. `brew install --cask font-<name>'):
-  ;;   Monaco (macOS, no bold/italic — both are synthesized)
-  ;;   Menlo (macOS, has all four styles)
-  ;;   JetBrains Mono   Commit Mono   Iosevka (narrow)   IBM Plex Mono
+  ;;   Monaco (macOS, ships Regular only — bold/italic are synthesized)
+  ;;   Menlo (macOS, has all four styles; wants extra leading, see below)
+  ;;   IBM Plex Mono   iA Writer Mono S   JetBrains Mono   Commit Mono   Iosevka
   (setq ps/font-mono '("Monaco" "Menlo" "Consolas" "monospace"))
 
-  ;; Running text: the `variable-pitch' face.
-  ;;   Charter (macOS)   Literata   Source Serif 4   Spectral   Merriweather
-  ;;   Inter   IBM Plex Sans   (sans, if you prefer one)
-  (setq ps/font-prose '("Charter" "Georgia" "serif"))
+  ;; Running text: the `variable-pitch' face. Not used anywhere yet — Org plan
+  ;; files still render in `ps/font-mono'.
+  ;;   IBM Plex Serif   Charter (macOS)   Literata   Spectral   Merriweather
+  ;;   iA Writer Quattro S / Duo S (between prose and a grid — a good match for
+  ;;   plan files, which are prose inside an outline rather than either one)
+  (setq ps/font-prose '("IBM Plex Serif" "Charter" "Georgia" "serif"))
 
-  ;; Body text size in points, and the size of `variable-pitch' relative to it
-  ;; (a serif at the same point size reads larger than a monospace font).
+  ;; Interface chrome that isn't text being edited — currently the file tree.
+  ;; Nothing here is column-aligned, so it needn't be monospaced.
+  ;;   IBM Plex Serif   Inter (Obsidian's)   IBM Plex Sans   Public Sans
+  ;;   SF Pro Text — the macOS system font, and what VS Code's explorer uses
+  ;;   here; needs `brew install --cask font-sf-pro' (a .pkg, asks for sudo)
+  (setq ps/font-ui '("IBM Plex Serif" "SF Pro Text" "Inter" "Helvetica Neue"))
+
+  ;; Fonts worth living with for a few days before deciding. `C-c p M' cycles
+  ;; the editing font, `C-c p U' the file tree's; both apply immediately and
+  ;; neither is saved, so the settings above stay the source of truth.
+  (setq ps/font-favourites
+        '((mono  . ("Monaco" "Menlo" "IBM Plex Mono" "iA Writer Mono S"))
+          (prose . ("IBM Plex Serif" "Charter" "iA Writer Quattro S"))
+          (ui    . ("IBM Plex Serif" "SF Pro Text" "Inter"))))
+
+  ;; Body text size in points, and the size of the prose / interface fonts
+  ;; relative to it (a proportional face at the same point size reads larger
+  ;; than a monospaced one).
   (setq ps/font-size 14)
   (setq ps/font-prose-scale 1.0)
+  (setq ps/font-ui-scale 1.0)
+
+  ;; How much air a font needs between lines is a property of the font, so it
+  ;; is keyed by family: auditioning one brings its leading with it. A float is
+  ;; a fraction of the line height, an integer is pixels; families not listed
+  ;; get no extra spacing. Menlo at 0.2 draws lines 1.2x apart.
+  (setq ps/font-line-spacing '(("Menlo" . 0.2)))
 
   ;; Emoji and symbol glyphs your font lacks are drawn from fallback fonts whose
   ;; line boxes are taller, so a line containing one is a few pixels taller than
@@ -1039,6 +1067,10 @@ an audition: it changes what you see without touching Settings, echoes the
 =M-x ps/font-size-try= changes the body size. Candidates are
 =ps/font-preview-candidates=; ones you haven't installed are listed rather
 than drawn.
+
+Deciding between fonts you like usually takes days of real use rather than one
+look, so =C-c p M= / =C-c p U= step the editing and file-tree fonts through
+=ps/font-favourites= in place — no preview buffer, no restart.
 
 ** Color theme
 Loads =ps/color-theme= from Settings, auto-installing the package that provides it
@@ -1992,6 +2024,13 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
                 (lambda (&rest _) (ps/file-tree--decorate-buffer)))
 
     (add-hook 'treemacs-mode-hook (lambda () (display-line-numbers-mode 0)))
+
+    ;; Draw the tree in the interface font (`ps/font-ui' in Settings). File
+    ;; names are a list of short labels, not columns, so nothing here needs a
+    ;; monospaced font -- this is the same split VS Code and Obsidian make
+    ;; between their interface font and their editor font. Restyles any tree
+    ;; already on screen too, so reloading the config takes effect at once.
+    (ps/fonts-ui-setup 'treemacs-mode-hook 'treemacs-mode)
     (add-hook 'treemacs-mode-hook
       (lambda () (setq-local frame-title-format "File Tree")))
 
@@ -2445,6 +2484,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "w") #'ps/reload-workspace-config)   ; w → reload Workspace config
     (define-key m (kbd "T") #'ps/preview-theme)             ; T → Theme preview
     (define-key m (kbd "P") #'ps/font-preview)              ; P → font Preview
+    (define-key m (kbd "M") #'ps/font-cycle-mono)           ; M → next Mono font
+    (define-key m (kbd "U") #'ps/font-cycle-ui)             ; U → next UI font
     ;; Help
     (define-key m (kbd "h") #'ps/help-open-doc))            ; h → Help / docs index
 
@@ -2519,6 +2560,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
         ["Reload"                 ps/reload-workspace-config :keys "C-c p w"])
        ["Preview Color Theme…"    ps/preview-theme           :keys "C-c p T"]
        ["Preview Fonts…"          ps/font-preview            :keys "C-c p P"]
+       ["Next Editing Font"       ps/font-cycle-mono         :keys "C-c p M"]
+       ["Next File Tree Font"     ps/font-cycle-ui           :keys "C-c p U"]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])
       ("Help"

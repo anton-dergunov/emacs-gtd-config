@@ -89,8 +89,28 @@ remapping of the same face is not stacked onto a redundant multiplier."
 This is the property that keeps a font named in the settings but absent from
 the machine from breaking startup."
   (let ((ps/font-mono '("DefinitelyNotInstalledXYZ"))
-        (ps/font-prose '("AlsoNotInstalledXYZ")))
-    (should (equal (ps/fonts-apply) '(nil . nil)))))
+        (ps/font-prose '("AlsoNotInstalledXYZ"))
+        (ps/font-ui '("NorThisOneXYZ")))
+    (should (equal (ps/fonts-apply) '((mono . nil) (prose . nil) (ui . nil))))))
+
+(ert-deftest ps/fonts-test-apply-covers-every-role ()
+  "`ps/fonts-apply' is driven by `ps/fonts--roles', so adding a role there
+cannot leave it unapplied."
+  (should (equal (mapcar #'car (ps/fonts-apply))
+                 (mapcar #'car ps/fonts--roles))))
+
+;;; Line spacing
+
+(ert-deftest ps/fonts-test-line-spacing-is-per-family ()
+  "Leading is a property of the font, so it is looked up by family."
+  (let ((alist '(("Menlo" . 0.2) ("Iosevka" . 3))))
+    (should (equal (ps/fonts--line-spacing "Menlo" alist) 0.2))
+    (should (equal (ps/fonts--line-spacing "Iosevka" alist) 3))))
+
+(ert-deftest ps/fonts-test-line-spacing-defaults-to-none ()
+  "A family with no entry gets no extra leading, not an error."
+  (should (null (ps/fonts--line-spacing "Monaco" '(("Menlo" . 0.2)))))
+  (should (null (ps/fonts--line-spacing nil '(("Menlo" . 0.2))))))
 
 ;;; Roles
 
@@ -152,6 +172,43 @@ the machine from breaking startup."
         (ps/font-preview-candidates '("Monaco")))
     (should (equal (ps/fonts--preview-families (lambda (_) t))
                    '(("Monaco"))))))
+
+;;; Cycling favourites
+
+(ert-deftest ps/fonts-test-next-steps-forward ()
+  "Cycling moves one along the shortlist."
+  (should (equal (ps/fonts--next "Monaco" '("Monaco" "Menlo" "IBM Plex Mono"))
+                 "Menlo")))
+
+(ert-deftest ps/fonts-test-next-wraps ()
+  "The last favourite cycles back to the first, so the list is a loop."
+  (should (equal (ps/fonts--next "IBM Plex Mono" '("Monaco" "Menlo" "IBM Plex Mono"))
+                 "Monaco")))
+
+(ert-deftest ps/fonts-test-next-starts-at-the-beginning ()
+  "A font that is not in the shortlist -- the usual case on the first cycle,
+when what is applied came from the settings -- starts the list from the top."
+  (should (equal (ps/fonts--next "Iosevka" '("Monaco" "Menlo")) "Monaco"))
+  (should (equal (ps/fonts--next nil '("Monaco" "Menlo")) "Monaco")))
+
+(ert-deftest ps/fonts-test-next-handles-an-empty-shortlist ()
+  "No favourites means nothing to cycle to, not an error."
+  (should (null (ps/fonts--next "Monaco" nil))))
+
+(ert-deftest ps/fonts-test-favourites-cover-every-role ()
+  "Every role can be cycled; a role without favourites would fail only when
+someone pressed the key."
+  (dolist (role (mapcar #'car ps/fonts--roles))
+    (should (alist-get role ps/font-favourites))))
+
+;;; Relative scales
+
+(ert-deftest ps/fonts-test-scales-exclude-mono ()
+  "`mono' has no relative size: it is the body size, set in points, and every
+other size is a multiple of it."
+  (should (null (alist-get 'mono ps/fonts--role-scales)))
+  (should (eq (alist-get 'prose ps/fonts--role-scales) 'ps/font-prose-scale))
+  (should (eq (alist-get 'ui ps/fonts--role-scales) 'ps/font-ui-scale)))
 
 ;;; Preview rendering
 

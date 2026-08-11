@@ -50,6 +50,8 @@ The key after =C-c p S= is the situation's own =:key= — the set is yours, so s
 | =C-c p W= / =C-c p w= | =ps/open-/reload-workspace-config= | open / reload =workspace.org= |
 | =C-c p T=             | =ps/preview-theme=                 | audition a color theme        |
 | =C-c p P=             | =ps/font-preview=                  | audition fonts                |
+| =C-c p M=             | =ps/font-cycle-mono=               | next editing font             |
+| =C-c p U=             | =ps/font-cycle-ui=                 | next file tree font           |
 | =C-c p h=             | =ps/help-open-doc=                 | open this documentation       |
 
 * Org task editing (in an Org file)

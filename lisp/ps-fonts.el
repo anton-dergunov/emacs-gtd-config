@@ -69,6 +69,33 @@ proportional half of the UI intentional rather than inherited."
   :type '(repeat string)
   :group 'ps-fonts)
 
+(defcustom ps/font-ui '("SF Pro Text" "Inter" "Helvetica Neue")
+  "Families for interface chrome that is not text being edited, most-wanted
+first -- currently the file tree.  Resolved the same way as `ps/font-mono'.
+
+Nothing here is laid out in columns, so this role has no monospace
+requirement: file names are a list of short labels, which is exactly what a
+proportional face is for.  This mirrors how VS Code and Obsidian split their
+font settings (Obsidian calls it the Interface Font, and uses it for the
+folder tree); on macOS both resolve to the system UI font, which is why
+`SF Pro Text' heads the list."
+  :type '(repeat string)
+  :group 'ps-fonts)
+
+(defface ps/font-ui-face nil
+  "Face carrying `ps/font-ui', for buffers that opt into the interface font.
+Buffers apply it with `buffer-face-set' rather than being restyled one by
+one, so changing the family updates every one of them at once -- which is
+what makes auditioning a tree font from `ps/font-preview' show up live."
+  :group 'ps-fonts)
+
+(defcustom ps/font-ui-scale 1.0
+  "Size of `ps/font-ui-face' relative to `default'.
+A proportional face at the same point size as a monospaced one reads larger,
+so this is usually slightly below 1."
+  :type 'float
+  :group 'ps-fonts)
+
 (defcustom ps/font-size 14
   "Size of the `default' face, in points.
 Applied as an absolute `:height', so every face that sizes itself with a
@@ -84,6 +111,22 @@ usually slightly below 1.  Applied as a relative `:height', which keeps the
 correction proportional when `ps/font-size' changes.  A value of 1 leaves the
 size alone."
   :type 'float
+  :group 'ps-fonts)
+
+(defcustom ps/font-line-spacing
+  '(("Menlo" . 0.2))
+  "Extra space between lines, per monospaced family.
+How much air a font needs between lines is a property *of the font*, not a
+separate preference: a condensed face with a tall x-height reads cramped at
+the leading a wider one is comfortable at.  Keying this by family means
+auditioning a font brings its leading with it, instead of every switch
+needing a second adjustment.
+
+A float is a fraction of the line height, an integer is pixels.  Families not
+listed here get no extra spacing.  Applied to the default value of
+`line-spacing', so buffers that pin their own (the file tree, the scroll-bar
+overlays) are unaffected."
+  :type '(alist :key-type string :value-type number)
   :group 'ps-fonts)
 
 (defcustom ps/font-rescale-alist
@@ -150,6 +193,11 @@ multiplier."
    (and (numberp height) (> height 0) (not (equal height 1.0))
         (list :height height))))
 
+(defun ps/fonts--line-spacing (family &optional alist)
+  "Return the extra line spacing configured for FAMILY, or nil for none.
+ALIST defaults to `ps/font-line-spacing'."
+  (cdr (assoc family (or alist ps/font-line-spacing))))
+
 (defun ps/fonts--points-to-height (points)
   "Convert POINTS to an absolute `:height', an integer in 1/10 pt.
 Returns nil for a non-positive or non-numeric POINTS, which reads as \"leave
@@ -160,7 +208,8 @@ the size alone\"."
 
 (defconst ps/fonts--roles
   '((mono  . ps/font-mono)
-    (prose . ps/font-prose))
+    (prose . ps/font-prose)
+    (ui    . ps/font-ui))
   "Role name -> the setting holding that role's candidate list.
 One list drives the settings, the audition commands and the preview buffer,
 so a role cannot be added in one place and forgotten in another.")
@@ -168,6 +217,11 @@ so a role cannot be added in one place and forgotten in another.")
 (defun ps/fonts--role-variable (role)
   "Return the settings variable for ROLE, or nil if ROLE is unknown."
   (cdr (assq role ps/fonts--roles)))
+
+(defvar ps/fonts--current nil
+  "Alist of ROLE -> the family currently applied, audition or not.
+`ps/font-cycle' steps from here rather than from the settings, so cycling
+continues from what is on screen rather than restarting from the top.")
 
 (defun ps/fonts--promote (family candidates)
   "Return CANDIDATES with FAMILY first and the rest in their original order.
@@ -195,39 +249,114 @@ there stay behind it rather than being lost."
   "Apply FAMILY as ROLE's font, now.  A nil FAMILY applies sizes only.
 The settings are not touched, so this is what an audition does: it changes
 what you see without changing what `config.org' says."
+  (setf (alist-get role ps/fonts--current) family)
   (pcase role
     ('mono
      ;; `default' carries the absolute size; `fixed-pitch' takes the family
      ;; only, so that it keeps tracking `default' when the size changes.
      (ps/fonts--set 'default
                     (ps/fonts--face-spec family (ps/fonts--points-to-height ps/font-size)))
-     (ps/fonts--set 'fixed-pitch (ps/fonts--face-spec family nil)))
+     (ps/fonts--set 'fixed-pitch (ps/fonts--face-spec family nil))
+     ;; Leading travels with the family, so an audition shows the font the way
+     ;; it would actually be read rather than at the previous font's spacing.
+     (setq-default line-spacing (ps/fonts--line-spacing family)))
     ('prose
      (ps/fonts--set 'variable-pitch
-                    (ps/fonts--face-spec family ps/font-prose-scale)))))
+                    (ps/fonts--face-spec family ps/font-prose-scale)))
+    ('ui
+     (ps/fonts--set 'ps/font-ui-face
+                    (ps/fonts--face-spec family ps/font-ui-scale)))))
 
 ;;;###autoload
 (defun ps/fonts-apply ()
-  "Apply `ps/font-mono' and `ps/font-prose' to the frame's base faces.
+  "Apply every role in `ps/fonts--roles' to the faces that carry it.
 Never signals: a role whose families are all missing is left as Emacs had it,
-so naming a font this machine does not have cannot break startup.  Returns
-the (MONO . PROSE) families that were actually applied, either of which may
-be nil.
+so naming a font this machine does not have cannot break startup.  Returns an
+alist of ROLE -> the family actually applied, any of which may be nil.
 
 Also the way back from an audition -- it re-reads the settings, so it undoes
 anything `ps/font-try' or the preview buffer applied."
   (interactive)
-  (let ((mono  (ps/fonts--first-available ps/font-mono))
-        (prose (ps/fonts--first-available ps/font-prose)))
+  (let ((resolved (mapcar (lambda (role)
+                            (cons (car role)
+                                  (ps/fonts--first-available (symbol-value (cdr role)))))
+                          ps/fonts--roles)))
     ;; Before any face below opens a font: the rescale factors are consulted
     ;; when a font is opened, not when it is drawn, so setting them here rather
     ;; than leaving it to a caller makes the ordering impossible to get wrong.
     (setq face-font-rescale-alist ps/font-rescale-alist)
-    (ps/fonts--apply-role 'mono mono)
-    (ps/fonts--apply-role 'prose prose)
-    (cons mono prose)))
+    (dolist (role ps/fonts--roles)
+      (ps/fonts--apply-role (car role) (alist-get (car role) resolved)))
+    resolved))
+
+;;;###autoload
+(defun ps/fonts-ui-enable ()
+  "Draw the current buffer in the interface font (`ps/font-ui').
+Applies `ps/font-ui-face', so changing the family later updates this buffer
+along with every other one using it -- no need to revisit them."
+  (buffer-face-set 'ps/font-ui-face))
+
+;;;###autoload
+(defun ps/fonts-ui-setup (hook mode)
+  "Draw MODE buffers in the interface font, now and whenever HOOK runs.
+Adding the hook alone is not enough, and the difference is invisible until it
+bites: a mode hook runs when a buffer is *created*, so a file tree already on
+screen -- from a restored session, or from reloading the config -- keeps its
+old font until something rebuilds it, which looks exactly like the setting
+having no effect."
+  (add-hook hook #'ps/fonts-ui-enable)
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (derived-mode-p mode)
+        (ps/fonts-ui-enable)))))
 
 ;;; Auditioning
+
+(defcustom ps/font-favourites
+  '((mono  . ("Monaco" "Menlo" "IBM Plex Mono" "iA Writer Mono S"))
+    (prose . ("IBM Plex Serif" "Charter" "iA Writer Quattro S"))
+    (ui    . ("IBM Plex Serif" "SF Pro Text" "Inter")))
+  "The fonts worth switching between per role, in the order to try them.
+`ps/font-cycle' steps through the installed ones, so a font can be lived with
+for a few days and swapped without editing anything -- which is the only way
+to tell a font you like from a font you are used to.
+
+Distinct from the role settings (`ps/font-mono' and friends), which are a
+*fallback chain*: there only the first installed family is ever used, so
+listing four there would just mean the first one, always."
+  :type '(alist :key-type symbol :value-type (repeat string))
+  :group 'ps-fonts)
+
+(defun ps/fonts--next (current families)
+  "Return the family after CURRENT in FAMILIES, wrapping at the end.
+Returns the first when CURRENT is absent from FAMILIES -- which is what
+happens on the first cycle, when what is applied came from the settings."
+  (when families
+    (or (cadr (member current families))
+        (car families))))
+
+(defun ps/font-cycle (role)
+  "Switch ROLE to the next installed font in `ps/font-favourites'."
+  (interactive (list (ps/fonts--read-role "Cycle font for role: ")))
+  (let* ((installed (seq-filter #'ps/fonts--available-p
+                                (ps/fonts--candidates
+                                 (alist-get role ps/font-favourites))))
+         (next (ps/fonts--next (alist-get role ps/fonts--current) installed)))
+    (unless next
+      (user-error "No installed font in ps/font-favourites for %s" role))
+    (ps/font-try role next)))
+
+;;;###autoload
+(defun ps/font-cycle-mono ()
+  "Switch the editing font to the next one in `ps/font-favourites'."
+  (interactive)
+  (ps/font-cycle 'mono))
+
+;;;###autoload
+(defun ps/font-cycle-ui ()
+  "Switch the interface font (the file tree) to the next favourite."
+  (interactive)
+  (ps/font-cycle 'ui))
 
 (defun ps/fonts--installed-families ()
   "Return the font families this frame can use, sorted, without duplicates.
@@ -266,17 +395,57 @@ persists."
   (ps/fonts-apply)
   (message "Body text %spt — keep it with:  (setq ps/font-size %s)" points points))
 
+(defconst ps/fonts--role-scales
+  '((prose . ps/font-prose-scale)
+    (ui    . ps/font-ui-scale))
+  "Role -> the setting holding its size relative to `default'.
+`mono' is absent on purpose: it *is* the body size, set in points by
+`ps/font-size' rather than as a multiple of anything.")
+
+;;;###autoload
+(defun ps/font-scale-try (role scale)
+  "Set ROLE's size relative to the body text to SCALE and apply it.
+A proportional face at the same point size as a monospaced one rarely reads
+the same, and the right correction depends on the family -- so this is the
+knob to reach for after switching a prose or interface font, before deciding
+the font itself is wrong."
+  (interactive
+   (let* ((role (intern (completing-read "Scale which role: "
+                                         (mapcar #'car ps/fonts--role-scales)
+                                         nil t nil nil "ui")))
+          (variable (alist-get role ps/fonts--role-scales)))
+     (list role (read-number (format "%s size, relative to body text: " role)
+                             (symbol-value variable)))))
+  (let ((variable (or (alist-get role ps/fonts--role-scales)
+                      (user-error "%s has no relative size; use ps/font-size-try" role))))
+    (set variable (float scale))
+    (ps/fonts--apply-role role (alist-get role ps/fonts--current))
+    (message "%s at %s× — keep it with:  (setq %s %s)"
+             role scale variable (float scale))))
+
 ;;; Preview
 
 (defcustom ps/font-preview-candidates
   '(;; Monospaced -- for `ps/font-mono'
     "Monaco" "Menlo" "SF Mono" "PT Mono"
-    "JetBrains Mono" "Commit Mono" "Iosevka" "IBM Plex Mono"
+    "JetBrains Mono" "Commit Mono" "Iosevka" "IBM Plex Mono" "Cascadia Mono"
+    ;; Monaspace: five monospaced faces sharing one set of metrics, so they can
+    ;; be compared without anything else moving.  Xenon is a slab serif and
+    ;; Radon handwritten -- monospaced faces that deliberately do not read as
+    ;; code, which is the axis this config cares about.
+    "Monaspace Neon" "Monaspace Argon" "Monaspace Xenon" "Monaspace Radon"
+    ;; Between monospaced and proportional, and the closest match to what these
+    ;; files actually are -- prose inside an outline, with tags.  Mono is a
+    ;; plain grid; Duo widens only `m' and `w'; Quattro gives four widths and
+    ;; reads nearly as prose while keeping typewriter spacing between words.
+    "iA Writer Mono S" "iA Writer Duo S" "iA Writer Quattro S"
     ;; Proportional -- for `ps/font-prose'
     "Charter" "Georgia" "Palatino" "Iowan Old Style" "Hoefler Text"
     "Literata" "Source Serif 4" "Spectral" "Merriweather" "Newsreader"
-    "IBM Plex Serif"
-    "Inter" "IBM Plex Sans" "Avenir Next" "Seravek"
+    "IBM Plex Serif" "ETBembo"
+    ;; Interface -- for `ps/font-ui'
+    "SF Pro Text" "Inter" "IBM Plex Sans" "Public Sans" "Atkinson Hyperlegible"
+    "Avenir Next" "Seravek"
     ;; Ships its Mono and Sans variants as *styles* of one family rather than
     ;; as separate families, so naming the family reaches only its default
     ;; instance -- the monospaced half is not selectable this way.
@@ -361,7 +530,7 @@ commands can tell which block point is in without parsing the text back."
   (let ((start (point)))
     (insert (propertize family 'face '(:weight bold :height 1.1)))
     (insert "   ")
-    (dolist (role '(mono prose))
+    (dolist (role (mapcar #'car ps/fonts--roles))
       (insert-text-button (format "[use as %s]" role)
                           'family family
                           'role role
@@ -381,7 +550,17 @@ commands can tell which block point is in without parsing the text back."
                                'face (ps/fonts--preview-kind-face kind family heading))
                    "\n")))))
     (insert "\n")
-    (put-text-property start (point) 'ps-font-family family)))
+    (put-text-property start (point) 'ps-font-family family)
+    ;; Each block shows the family at *its* configured leading, so a font whose
+    ;; entry in `ps/font-line-spacing' gives it more air is compared the way it
+    ;; would actually be read.  `line-spacing' is buffer-wide as a variable but
+    ;; per-line as a text property, and the property belongs on the newline
+    ;; that ends the line it affects.
+    (when-let ((spacing (ps/fonts--line-spacing family)))
+      (save-excursion
+        (goto-char start)
+        (while (search-forward "\n" (point-max) t)
+          (put-text-property (1- (point)) (point) 'line-spacing spacing))))))
 
 (defun ps/fonts--preview-use-button (button)
   "Apply the family BUTTON names to the role it names."
@@ -416,13 +595,20 @@ current font and size, which is the only way to tune them on purpose."
         (families (ps/fonts--preview-families)))
     (erase-buffer)
     (insert (propertize "Font preview\n" 'face '(:weight bold :height 1.2)))
-    (insert "Click a button (or press m / p on a block) to apply a font now — "
+    (insert "Click a button (or press m / p / u on a block) to apply a font now — "
             "nothing is saved.\n")
-    (insert (format "Currently: mono %s · prose %s · %spt.  "
-                    (or (ps/fonts--first-available ps/font-mono) "—")
-                    (or (ps/fonts--first-available ps/font-prose) "—")
-                    ps/font-size))
-    (insert "Keys: m/p apply · s size · g refresh · r revert · q quit\n\n")
+    (insert "Currently: ")
+    (insert (mapconcat (lambda (role)
+                         (format "%s %s" (car role)
+                                 (or (ps/fonts--first-available
+                                      (symbol-value (cdr role)))
+                                     "—")))
+                       ps/fonts--roles " · "))
+    (insert (format " · %spt · leading %s\n"
+                    ps/font-size
+                    (or (default-value 'line-spacing) "none")))
+    (insert "Keys: m/p/u apply · s size · S prose/ui scale · l leading"
+            " · c cycle favourites · g refresh · r revert · q quit\n\n")
     (ps/fonts--preview-insert-ramp)
     (dolist (family (car families))
       (ps/fonts--preview-insert-family family))
@@ -439,19 +625,65 @@ Reads the `ps-font-family' property the block was rendered with; the blank
 line that ends a block carries it too, so point never falls between blocks."
   (get-text-property (point) 'ps-font-family))
 
+(defun ps/font-preview--use (role)
+  "Apply the family point is on as ROLE's font, then redraw.
+The redraw is not cosmetic: the header names the current font per role, and
+each block draws at its own leading, so both go stale the moment one is
+applied."
+  (if-let ((family (ps/fonts--preview-family-at-point)))
+      (prog1 (ps/font-try role family)
+        (ps/font-preview-refresh))
+    (user-error "Point is not inside a font block")))
+
+(defun ps/font-preview-set-size ()
+  "Change the body text size and redraw the preview."
+  (interactive)
+  (call-interactively #'ps/font-size-try)
+  (ps/font-preview-refresh))
+
+(defun ps/font-preview-set-line-spacing ()
+  "Change the current font's leading and redraw the preview."
+  (interactive)
+  (call-interactively #'ps/font-line-spacing-try)
+  (ps/font-preview-refresh))
+
+(defun ps/font-preview-set-scale ()
+  "Change the prose or interface size relative to the body text."
+  (interactive)
+  (call-interactively #'ps/font-scale-try)
+  (ps/font-preview-refresh))
+
 (defun ps/font-preview-use-mono ()
   "Apply the family at point as the monospaced font."
   (interactive)
-  (if-let ((family (ps/fonts--preview-family-at-point)))
-      (ps/font-try 'mono family)
-    (user-error "Point is not inside a font block")))
+  (ps/font-preview--use 'mono))
 
 (defun ps/font-preview-use-prose ()
   "Apply the family at point as the prose font."
   (interactive)
-  (if-let ((family (ps/fonts--preview-family-at-point)))
-      (ps/font-try 'prose family)
-    (user-error "Point is not inside a font block")))
+  (ps/font-preview--use 'prose))
+
+(defun ps/font-preview-use-ui ()
+  "Apply the family at point as the interface font (the file tree).
+Worth doing with the tree on screen: `ps/font-ui-face' is shared, so the tree
+restyles as you press this."
+  (interactive)
+  (ps/font-preview--use 'ui))
+
+(defun ps/font-line-spacing-try (spacing)
+  "Set the leading for the current monospaced family to SPACING and apply it.
+Unlike a font audition this does change `ps/font-line-spacing', since leading
+belongs to the family rather than being a preference of its own -- the echoed
+line is the entry to keep."
+  (interactive (list (read-number "Extra line spacing (0 for none): "
+                                  (or (default-value 'line-spacing) 0))))
+  (let ((family (or (ps/fonts--first-available ps/font-mono)
+                    (user-error "No monospaced font is resolved"))))
+    (setf (alist-get family ps/font-line-spacing nil nil #'equal)
+          (if (> spacing 0) spacing nil))
+    (setq-default line-spacing (ps/fonts--line-spacing family))
+    (message "%s leading %s — keep it with:  (setq ps/font-line-spacing '%S)"
+             family (if (> spacing 0) spacing "none") ps/font-line-spacing)))
 
 (defun ps/font-preview-refresh ()
   "Redraw the preview, keeping point where it is."
@@ -472,7 +704,11 @@ line that ends a block carries it too, so point never falls between blocks."
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "m") #'ps/font-preview-use-mono)
     (define-key map (kbd "p") #'ps/font-preview-use-prose)
-    (define-key map (kbd "s") #'ps/font-size-try)
+    (define-key map (kbd "u") #'ps/font-preview-use-ui)
+    (define-key map (kbd "s") #'ps/font-preview-set-size)
+    (define-key map (kbd "S") #'ps/font-preview-set-scale)
+    (define-key map (kbd "l") #'ps/font-preview-set-line-spacing)
+    (define-key map (kbd "c") #'ps/font-cycle)
     (define-key map (kbd "g") #'ps/font-preview-refresh)
     (define-key map (kbd "r") #'ps/font-preview-revert)
     map)
