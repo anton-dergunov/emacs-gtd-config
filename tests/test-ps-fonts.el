@@ -210,6 +210,44 @@ other size is a multiple of it."
   (should (eq (alist-get 'prose ps/fonts--role-scales) 'ps/font-prose-scale))
   (should (eq (alist-get 'ui ps/fonts--role-scales) 'ps/font-ui-scale)))
 
+;;; Prose in Org buffers
+
+(ert-deftest ps/fonts-test-prose-enable-is-off-by-default ()
+  "With `ps/font-prose-in-org' nil nothing is remapped, whatever the buffer."
+  (let ((ps/font-prose-in-org nil))
+    (with-temp-buffer
+      (ps/fonts-prose-enable)
+      (should (null ps/fonts--prose-cookies)))))
+
+(ert-deftest ps/fonts-test-prose-skips-out-of-scope-buffers ()
+  "A buffer that is not one of the agenda's plan files is left alone even when
+the feature is on -- that is what keeps config.org and the journal monospaced."
+  (let ((ps/font-prose-in-org t))
+    (with-temp-buffer
+      ;; No visited file, so `ps/org-files-in-scope-p' is false.
+      (ps/fonts-prose-enable)
+      (should (null ps/fonts--prose-cookies)))))
+
+(ert-deftest ps/fonts-test-prose-disable-is-idempotent ()
+  "Disabling twice must not signal: the hook can run on a buffer that was
+never enabled."
+  (with-temp-buffer
+    (ps/fonts-prose-disable)
+    (ps/fonts-prose-disable)
+    (should (null ps/fonts--prose-cookies))))
+
+(ert-deftest ps/fonts-test-prose-pins-the-column-aligned-faces ()
+  "The pin list has to cover the islands in a plan file that are still laid
+out by column; losing one of these is how a proportional buffer breaks."
+  (dolist (face '(org-table org-block org-code org-verbatim org-indent))
+    (should (memq face ps/font-prose-fixed-pitch-faces))))
+
+(ert-deftest ps/fonts-test-prose-does-not-pin-line-numbers ()
+  "`ps-line-numbers.el' already remaps `line-number' with its own `:inherit';
+a second relative remap would fight it."
+  (should-not (memq 'line-number ps/font-prose-fixed-pitch-faces))
+  (should-not (memq 'line-number-current-line ps/font-prose-fixed-pitch-faces)))
+
 ;;; Preview rendering
 
 (ert-deftest ps/fonts-test-preview-block-renders ()

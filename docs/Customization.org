@@ -202,6 +202,28 @@ are free and installable in one command, e.g. =brew install --cask
 font-jetbrains-mono=. Note that the name to use is the family name the font
 declares, which isn't always the name of the download.
 
+** A proportional font for plan files
+Plan files are almost entirely prose, so they don't need a monospaced font the
+way the agenda and the schedule ruler do. =M-x ps/font-prose-toggle= (or =t= in
+the font preview) draws them in =ps/font-prose= instead — immediately, in the
+files already open.
+
+It's off by default, since it's a large change to files you read every day. Set
+=ps/font-prose-in-org= to =t= to make it permanent.
+
+Only the plan files the agenda scans are affected — =config.org=,
+=workspace.org=, the journal/archive and every generated view (Agenda, Tasks,
+Calendar, Schedule) stay monospaced, because those genuinely are laid out in
+columns. Inside a plan file the parts that are still column-aligned stay on the
+grid too: tables, code blocks, inline code, the property drawer and
+indentation. That list is =ps/font-prose-fixed-pitch-faces= if you need to add
+to it.
+
+One thing it can't reach: the /body/ of a =#+begin_src= block is coloured by the
+source language's own faces rather than by any Org face, so it follows the prose
+font. If you keep much code in plan files, that's the case to look at before
+turning this on.
+
 ** Live with a font before choosing it
 A preview tells you which fonts to rule out. It doesn't tell you which one you
 want to read all day — that takes actually reading all day in it, and it's easy

@@ -225,8 +225,8 @@ automatically.
   ;;   IBM Plex Mono   iA Writer Mono S   JetBrains Mono   Commit Mono   Iosevka
   (setq ps/font-mono '("Monaco" "Menlo" "Consolas" "monospace"))
 
-  ;; Running text: the `variable-pitch' face. Not used anywhere yet — Org plan
-  ;; files still render in `ps/font-mono'.
+  ;; Running text: the `variable-pitch' face. Used by Org plan files only when
+  ;; `ps/font-prose-in-org' below is on.
   ;;   IBM Plex Serif   Charter (macOS)   Literata   Spectral   Merriweather
   ;;   iA Writer Quattro S / Duo S (between prose and a grid — a good match for
   ;;   plan files, which are prose inside an outline rather than either one)
@@ -238,6 +238,14 @@ automatically.
   ;;   SF Pro Text — the macOS system font, and what VS Code's explorer uses
   ;;   here; needs `brew install --cask font-sf-pro' (a .pkg, asks for sudo)
   (setq ps/font-ui '("IBM Plex Serif" "SF Pro Text" "Inter" "Helvetica Neue"))
+
+  ;; Draw Org plan files in `ps/font-prose' instead of the monospaced font.
+  ;; Off by default — it's a big change to files you read every day. Only the
+  ;; files the agenda scans are affected: config.org, workspace.org, the
+  ;; journal and the generated views stay monospaced regardless. Tables, code
+  ;; blocks, inline code and indentation stay on the grid. Toggle it live with
+  ;; `M-x ps/font-prose-toggle' (or `t' in the font preview).
+  (setq ps/font-prose-in-org nil)
 
   ;; Fonts worth living with for a few days before deciding. `C-c p M' cycles
   ;; the editing font, `C-c p U' the file tree's; both apply immediately and
@@ -1575,6 +1583,15 @@ set in the Reading Width Settings block above.
     :hook (org-mode . ps/prose-width-enable))
 #+end_src
 
+*** Prose font in plan files
+Draws the same set of files — the plan files the agenda scans, nothing else —
+in =ps/font-prose= rather than the monospaced font, keeping tables, code blocks,
+inline code and indentation on the character grid. Off unless
+=ps/font-prose-in-org= is set; =M-x ps/font-prose-toggle= switches it live.
+#+begin_src emacs-lisp
+  (add-hook 'org-mode-hook #'ps/fonts-prose-enable)
+#+end_src
+
 *** Fade and fold DONE tasks
 Logic lives in =lisp/ps-done.el=. The fade color is set in the DONE Tasks
 Settings block above.
@@ -2562,6 +2579,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Preview Fonts…"          ps/font-preview            :keys "C-c p P"]
        ["Next Editing Font"       ps/font-cycle-mono         :keys "C-c p M"]
        ["Next File Tree Font"     ps/font-cycle-ui           :keys "C-c p U"]
+       ["Prose Font in Plan Files" ps/font-prose-toggle
+        :style toggle :selected ps/font-prose-in-org]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])
       ("Help"

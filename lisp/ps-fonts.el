@@ -40,7 +40,9 @@
 ;;; Code:
 
 (require 'seq)
+(require 'face-remap)
 (require 'ps-window)
+(require 'ps-org-files)
 
 ;;; Customization
 
@@ -295,6 +297,90 @@ anything `ps/font-try' or the preview buffer applied."
 Applies `ps/font-ui-face', so changing the family later updates this buffer
 along with every other one using it -- no need to revisit them."
   (buffer-face-set 'ps/font-ui-face))
+
+;;; Prose in Org plan files
+
+(defcustom ps/font-prose-in-org nil
+  "When non-nil, draw Org plan files in `ps/font-prose'.
+Off by default: a proportional font is a large change to how the files you
+work in every day look, and worth turning on deliberately.  Toggle it live
+with `ps/font-prose-toggle'.
+
+Scope is exactly the files the agenda scans (`ps/org-files-in-scope-p'), so
+`config.org', `workspace.org', the journal and every generated view keep the
+monospaced font whatever this is set to."
+  :type 'boolean
+  :group 'ps-fonts)
+
+(defcustom ps/font-prose-fixed-pitch-faces
+  '(org-table
+    org-block org-block-begin-line org-block-end-line
+    org-code org-verbatim
+    org-meta-line org-drawer org-special-keyword org-property-value
+    org-indent org-checkbox)
+  "Faces kept on the character grid inside an otherwise proportional buffer.
+These are the islands in a plan file that are still laid out by column --
+tables above all, but also block delimiters, inline code and the property
+drawer -- plus `org-indent', whose indentation is built from spaces and so
+only lines up under the text if it is measured in the same units.
+
+Each is given `:inherit fixed-pitch' by a buffer-local remap, which is why
+`fixed-pitch' has to name a real monospaced family; `ps/fonts-apply' sets it
+from `ps/font-mono'.
+
+Deliberately absent: `line-number', which `ps-line-numbers.el' already
+remaps -- a second relative remap with its own `:inherit' would fight that
+one.  Also absent: the body of a `#+begin_src' block, which is fontified by
+the *source* mode's faces rather than by any Org face, so it cannot be
+reached from this list."
+  :type '(repeat face)
+  :group 'ps-fonts)
+
+(defvar-local ps/fonts--prose-cookies nil
+  "Face-remap cookies this module applied to the current buffer.")
+
+;;;###autoload
+(defun ps/fonts-prose-enable ()
+  "Draw the current buffer in the prose font, if it is a plan file.
+Does nothing unless `ps/font-prose-in-org' is on and the buffer is one of the
+Org files the agenda scans.  Safe to call twice: any previous remapping is
+removed first."
+  (when (and ps/font-prose-in-org (ps/org-files-in-scope-p))
+    (ps/fonts-prose-disable)
+    ;; `variable-pitch' is a shared face, so auditioning a prose font restyles
+    ;; every plan file at once -- the same reason the UI role goes through a
+    ;; face rather than through each buffer.
+    (buffer-face-set 'variable-pitch)
+    (setq ps/fonts--prose-cookies
+          (mapcar (lambda (face)
+                    (face-remap-add-relative face :inherit 'fixed-pitch))
+                  (seq-filter #'facep ps/font-prose-fixed-pitch-faces)))))
+
+(defun ps/fonts-prose-disable ()
+  "Put the current buffer back on the monospaced font."
+  (mapc #'face-remap-remove-relative ps/fonts--prose-cookies)
+  (setq ps/fonts--prose-cookies nil)
+  (buffer-face-set nil))
+
+;;;###autoload
+(defun ps/font-prose-toggle ()
+  "Turn the prose font in Org plan files on or off, everywhere, now.
+Applies to the buffers already open as well as to ones opened later, so the
+effect is visible without reopening anything."
+  (interactive)
+  (setq ps/font-prose-in-org (not ps/font-prose-in-org))
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (derived-mode-p 'org-mode)
+        (if ps/font-prose-in-org
+            (ps/fonts-prose-enable)
+          (ps/fonts-prose-disable)))))
+  (message "Prose font in plan files: %s%s"
+           (if ps/font-prose-in-org "on" "off")
+           (if ps/font-prose-in-org
+               (format " (%s) — keep it with:  (setq ps/font-prose-in-org t)"
+                       (or (ps/fonts--first-available ps/font-prose) "no font!"))
+             "")))
 
 ;;;###autoload
 (defun ps/fonts-ui-setup (hook mode)
@@ -607,8 +693,17 @@ current font and size, which is the only way to tune them on purpose."
     (insert (format " · %spt · leading %s\n"
                     ps/font-size
                     (or (default-value 'line-spacing) "none")))
-    (insert "Keys: m/p/u apply · s size · S prose/ui scale · l leading"
-            " · c cycle favourites · g refresh · r revert · q quit\n\n")
+    ;; Without this the prose button looks broken: it applies correctly, but
+    ;; nothing is drawn in `variable-pitch' until plan files opt in.
+    (unless ps/font-prose-in-org
+      (insert "The prose font isn't used anywhere yet — press ")
+      (insert-text-button "t"
+                          'follow-link t
+                          'help-echo "Draw Org plan files in the prose font"
+                          'action (lambda (_) (ps/font-preview-toggle-prose)))
+      (insert " to draw Org plan files in it.\n"))
+    (insert "Keys: m/p/u apply · t prose in plan files · s size · S prose/ui scale"
+            " · l leading · c cycle favourites · g refresh · r revert · q quit\n\n")
     (ps/fonts--preview-insert-ramp)
     (dolist (family (car families))
       (ps/fonts--preview-insert-family family))
@@ -651,6 +746,12 @@ applied."
   "Change the prose or interface size relative to the body text."
   (interactive)
   (call-interactively #'ps/font-scale-try)
+  (ps/font-preview-refresh))
+
+(defun ps/font-preview-toggle-prose ()
+  "Turn the prose font in Org plan files on or off, and redraw."
+  (interactive)
+  (ps/font-prose-toggle)
   (ps/font-preview-refresh))
 
 (defun ps/font-preview-use-mono ()
@@ -709,6 +810,7 @@ line is the entry to keep."
     (define-key map (kbd "S") #'ps/font-preview-set-scale)
     (define-key map (kbd "l") #'ps/font-preview-set-line-spacing)
     (define-key map (kbd "c") #'ps/font-cycle)
+    (define-key map (kbd "t") #'ps/font-preview-toggle-prose)
     (define-key map (kbd "g") #'ps/font-preview-refresh)
     (define-key map (kbd "r") #'ps/font-preview-revert)
     map)
