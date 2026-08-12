@@ -166,6 +166,45 @@ on the replacement so RET/TAB and `org-get-at-bol' keep working."
     (should (eq (get-text-property (point-min) 'org-marker) 'MARK))))
 
 ;;; -------------------------------------------------------
+;;; ensure-blank-line
+;;; -------------------------------------------------------
+
+(ert-deftest ps/agenda-layout--ensure-blank-line-inserts-when-missing ()
+  "Inserts a property-less blank line when none follows; point is unmoved."
+  (with-temp-buffer
+    (insert "control row")
+    (let ((after-row (point)))
+      (insert "\nnext line\n")
+      (goto-char after-row)
+      (ps/agenda-layout--ensure-blank-line)
+      (should (= (point) after-row))
+      (goto-char (point-min))
+      (forward-line 1)
+      (should (looking-at-p "^$"))
+      (should (null (text-properties-at (point))))
+      (forward-line 1)
+      (should (equal (buffer-substring-no-properties (point) (line-end-position))
+                     "next line")))))
+
+(ert-deftest ps/agenda-layout--ensure-blank-line-is-idempotent ()
+  "A second pass over an already-blank line inserts nothing further."
+  (with-temp-buffer
+    (insert "control row\n\nnext line\n")
+    (goto-char (point-min))
+    (end-of-line)
+    (let ((before (buffer-string)))
+      (ps/agenda-layout--ensure-blank-line)
+      (should (equal (buffer-string) before)))))
+
+(ert-deftest ps/agenda-layout--ensure-blank-line-noop-at-eob ()
+  "Does not add a trailing blank line when the row is the last line in the buffer."
+  (with-temp-buffer
+    (insert "control row\n")
+    (goto-char (1- (point-max)))
+    (ps/agenda-layout--ensure-blank-line)
+    (should (equal (buffer-string) "control row\n"))))
+
+;;; -------------------------------------------------------
 ;;; state-cols auto-compute
 ;;; -------------------------------------------------------
 

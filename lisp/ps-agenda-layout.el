@@ -1033,6 +1033,28 @@ control row and day sections; this is the Agenda day header.)"
     (put-text-property bol (point) 'ps/date-text text)
     (put-text-property bol (point) 'ps/date-face face)))
 
+(defun ps/agenda-layout--ensure-blank-line ()
+  "Guarantee a real blank line follows the current line; point is left unmoved.
+Called by the Calendar branch of `ps/agenda-layout--apply' right after
+`ps/agenda-layout--reformat-control-row' rewrites the control row, with point
+where that call leaves it -- end of the inserted text, immediately before the
+line's own untouched trailing newline.  A plain `forward-line' from there
+crosses exactly that newline; if the line it lands on is not already blank,
+one is inserted with no text properties, so a later pass never reads it as a
+second `org-agenda-structural-header' line (see `ps/agenda-layout--header-p')
+or as a day section.  A resize re-layout re-runs this same call over the
+already-fixed buffer (the rewritten control row keeps
+`org-agenda-structural-header' as a nav-prop, so `ps/agenda-layout--header-p'
+matches it again) and finds the blank line already there, so this is a no-op
+on every pass after the first.  Mirrors `ps/situations--tidy-header's identical
+fix for the Situation view; that one runs earlier, on
+`org-agenda-finalize-hook', against a gap left by `org-tags-view' rather than
+this one."
+  (save-excursion
+    (forward-line 1)
+    (unless (or (eobp) (looking-at-p "^$"))
+      (insert "\n"))))
+
 (defun ps/agenda-layout--reformat-control-row (bol eol label show-today
                                                    &optional right nav face prefix)
   "Turn the line [BOL, EOL) into a top control row showing LABEL.
@@ -1040,11 +1062,15 @@ SHOW-TODAY, RIGHT, NAV and PREFIX are passed to
 `ps/agenda-layout--centered-controls'; FACE styles LABEL (default
 `ps/agenda-layout-control-label').
 
-The blank line under the row is *not* drawn here.  Org already leaves a real
-empty line after the Calendar's block header, and `ps/situations--tidy-header'
-inserts the same real line for a tag search, which runs straight into its first
-match otherwise.  Overlay strings were tried for this and are not displayed at
-either end of the header line."
+The blank line under the row is *not* drawn here.  For the Calendar, the
+caller guarantees it explicitly right after this call via
+`ps/agenda-layout--ensure-blank-line' -- whether Org's own rendering happens to
+leave a blank line after its block header varies by span and by whether the
+day is empty, so the Calendar no longer assumes one is there.  The Situation
+view still relies on `ps/situations--tidy-header', which inserts the same kind
+of real line ahead of this call, before a tag search's header would otherwise
+run straight into its first match.  Both insert a real newline, not an overlay
+string: those are not displayed at either end of the header line."
   (ps/agenda-layout--replace-line
    bol eol
    (ps/agenda-layout--centered-controls
@@ -1144,7 +1170,8 @@ not in scope during a resize.")
                 (ps/agenda-layout--reformat-control-row
                  bol eol
                  (ps/agenda-layout--span-header-label cal-start cal-span)
-                 show-today (ps/agenda-layout--span-row) t))
+                 show-today (ps/agenda-layout--span-row) t)
+                (ps/agenda-layout--ensure-blank-line))
               (setq control-done t))
              ;; Date headers.
              ((org-get-at-bol 'org-agenda-date-header)
