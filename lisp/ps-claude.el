@@ -115,6 +115,22 @@
 ;; the reflow-glitch suppression itself can be disabled with:
 ;;   (setq claude-code-ide-prevent-reflow-glitch nil)
 ;; The resync hook below is harmless either way and can stay.
+;;
+;; 10. `eat's interactive keymaps redirect most keys straight to the
+;;     underlying process, but their `:ascii' category (see
+;;     `eat-term-make-keymap') only covers the control-character range plus
+;;     a remap of `self-insert-command' -- it never touches Super-modified
+;;     keys. `C-y' is explicitly rebound there to `eat-yank' (send the
+;;     yanked text to the process as real terminal input, honoring
+;;     bracketed paste), but `s-v' is not, so it falls through to the
+;;     *global* map's `s-v' -> `yank' (a stock macOS default from
+;;     `ns-win.el'). Plain `yank' inserts text directly into the Emacs
+;;     buffer instead of feeding it to the pty, and eat's own redraw
+;;     immediately overwrites that insertion -- invisible to the user. That
+;;     is why Cmd-V (typed by hand, or synthesized by a dictation app such
+;;     as Handy) silently does nothing in a Claude Code session while `C-y'
+;;     already works. We bind `s-v' to `eat-yank' in both of eat's
+;;     interactive keymaps so it behaves like `C-y' already does.
 
 ;;; Code:
 
@@ -136,10 +152,13 @@
 (declare-function ps/freeze-log--format-line "ps-freeze-log")
 (defvar eat-query-before-killing-running-terminal)
 (declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
+(declare-function eat-yank "eat")
 (defvar claude-code-ide-window-width)
 (defvar claude-code-ide-window-side)
 (defvar my-org-base-directory)
 (defvar eat-terminal)
+(defvar eat-semi-char-mode-map)
+(defvar eat-char-mode-map)
 
 (defcustom ps/claude-window-width 90
   "Width (in columns) of the Claude Code IDE side window.
@@ -752,8 +771,9 @@ pins the working directory and project key to `my-org-base-directory',
 silences the post-write \"Reread from disk?\" race for unmodified buffers,
 guards eat's output timer against transient `args-out-of-range' glitches,
 docks the panel `right'/`bottom' to match the frame's current shape,
-installs the per-buffer mode line, and stops a running session from
-prompting when Emacs quits.  Idempotent."
+installs the per-buffer mode line, binds Cmd-V to send pasted text to the
+process instead of the buffer, and stops a running session from prompting
+when Emacs quits.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
   (add-hook 'window-size-change-functions #'ps/claude--on-window-size-change)
   (advice-add 'claude-code-ide--get-working-directory
@@ -772,7 +792,9 @@ prompting when Emacs quits.  Idempotent."
               :around #'ps/claude--adaptive-side-advice)
   (advice-add 'save-buffers-kill-emacs
               :before #'ps/claude--clear-exit-queries)
-  (add-hook 'eat-mode-hook #'ps/claude--setup-buffer))
+  (add-hook 'eat-mode-hook #'ps/claude--setup-buffer)
+  (define-key eat-semi-char-mode-map (kbd "s-v") #'eat-yank)
+  (define-key eat-char-mode-map (kbd "s-v") #'eat-yank))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here

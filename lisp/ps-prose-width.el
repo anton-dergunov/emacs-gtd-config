@@ -31,7 +31,7 @@
 (defvar ediff-buffer-A)
 (defvar ediff-buffer-B)
 (defvar ediff-prepare-buffer-hook)
-(defvar ediff-quit-hook)
+(defvar ediff-cleanup-hook)
 
 ;;; Customization
 
@@ -69,8 +69,9 @@ of the actual GTD/plan files the agenda scans, per
 
 (defun ps/prose-width--ediff-restore ()
   "Re-enable margins in the Ediff session's file buffers, if in scope.
-Runs once per session rather than per buffer, since `ediff-quit-hook' does
-not run in each participant buffer the way `ediff-prepare-buffer-hook' does."
+Runs once per session rather than per buffer, since `ediff-cleanup-hook'
+does not run in each participant buffer the way `ediff-prepare-buffer-hook'
+does."
   (when ediff-buffer-A
     (with-current-buffer ediff-buffer-A (ps/prose-width-enable)))
   (when ediff-buffer-B
@@ -78,9 +79,17 @@ not run in each participant buffer the way `ediff-prepare-buffer-hook' does."
 
 ;;;###autoload
 (defun ps/prose-width-setup ()
-  "Keep margins off for the duration of any Ediff session."
+  "Keep margins off for the duration of any Ediff session.
+Restoring runs on `ediff-cleanup-hook', not the more obvious
+`ediff-quit-hook': `ediff-really-quit' runs `ediff-cleanup-hook' before
+`ediff-janitor' before `ediff-quit-hook', and a third-party Ediff caller
+(e.g. `claude-code-ide.el's diff tool) can replace a control buffer's local
+`ediff-quit-hook' outright via `setq-local', silently dropping anything
+added there. `ediff-cleanup-hook' runs earlier in the same teardown and is
+untouched, and `ediff-buffer-A'/`ediff-buffer-B' are still live at that
+point, so nothing else about the restore needs to change."
   (add-hook 'ediff-prepare-buffer-hook #'ps/prose-width--ediff-disable)
-  (add-hook 'ediff-quit-hook #'ps/prose-width--ediff-restore))
+  (add-hook 'ediff-cleanup-hook #'ps/prose-width--ediff-restore))
 
 (provide 'ps-prose-width)
 ;;; ps-prose-width.el ends here
