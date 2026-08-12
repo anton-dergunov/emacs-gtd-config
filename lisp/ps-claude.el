@@ -793,8 +793,11 @@ when Emacs quits.  Idempotent."
   (advice-add 'save-buffers-kill-emacs
               :before #'ps/claude--clear-exit-queries)
   (add-hook 'eat-mode-hook #'ps/claude--setup-buffer)
-  (define-key eat-semi-char-mode-map (kbd "s-v") #'eat-yank)
-  (define-key eat-char-mode-map (kbd "s-v") #'eat-yank))
+  ;; `eat' is `:defer t' -- its keymaps do not exist yet at this point, only
+  ;; its autoloads do, so binding into them has to wait for the real load.
+  (with-eval-after-load 'eat
+    (define-key eat-semi-char-mode-map (kbd "s-v") #'eat-yank)
+    (define-key eat-char-mode-map (kbd "s-v") #'eat-yank)))
 
 (provide 'ps-claude)
 ;;; ps-claude.el ends here
