@@ -2540,6 +2540,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :style toggle
         :selected (not (and (boundp 'ps/git-sync-paused) ps/git-sync-paused))
         :keys "C-c p s"]
+       ["Show Sync Log"     ps/git-sync-show-log t]
        ["Magit Status"      magit-status       :keys "C-x g"])
       ("Layout & Navigation"
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]
@@ -2598,13 +2599,13 @@ calendar boundary containing the start day (e.g. the whole current week)."
 
 ** Automatic git sync for org files
 Logic lives in =lisp/ps-git-sync.el=. The interval is set in =* Settings / Git sync=
-above. =ps/git-sync-resume= clears the paused state after you resolve a merge
-conflict.
+above. =ps/git-sync-toggle= clears the paused state after you resolve a merge
+conflict; =ps/git-sync-show-log= shows recent failures with their git output.
 
 Set the =PS_GIT_SYNC_DISABLE= environment variable (done by
 =scripts/run_emacs_dev.sh=) to skip starting the sync timer entirely. This is
 more robust than relying on =ps/git-sync-paused=, which can be cleared during
-a session (by =ps/git-sync-resume=, a menu toggle, or conflict handling).
+a session (by =ps/git-sync-toggle=, a menu toggle, or conflict handling).
 #+begin_src emacs-lisp
   (unless (getenv "PS_GIT_SYNC_DISABLE")
     (ps/git-sync-start my-org-base-directory))

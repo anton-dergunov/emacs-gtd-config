@@ -12,8 +12,9 @@ If your Org base directory is a Git repository, this config syncs it in the
 background: it commits your changes and pushes/pulls on a timer, so your tasks
 stay in step across devices without you running any Git commands.
 
-- A small *mode-line indicator* shows sync status. Hover it to see when the last
-  successful sync happened (the date is included when it wasn't today).
+- A small *mode-line indicator* in the file tree shows sync status. Hover it to
+  see when the last successful sync happened (the date is included when it
+  wasn't today), and click it to open the sync log.
 - Turn it on or off with =C-c p s= (Productivity → Sync & Version Control → Git
   Sync Enabled). Turning it back on resyncs immediately.
 - For manual control, =C-x g= opens [[https://magit.vc/][Magit]], the full Git interface.
@@ -23,6 +24,34 @@ recovers on its own: if a sync is ever interrupted (for example, your laptop
 sleeps mid-pull), the indicator clears the stuck state and resumes by itself.
 (Sync is disabled automatically when running the dev launcher — see
 [[file:Developing.org][Developing & extending]].)
+
+** When a sync fails
+The indicator distinguishes trouble that will pass from trouble that needs you:
+
+| Indicator         | Meaning                                       |
+|-------------------+-----------------------------------------------|
+| =✓ Sync=          | The last sync succeeded.                      |
+| =↻ Syncing=       | A sync is running right now.                  |
+| =⊘ Sync Off=      | You turned syncing off.                       |
+| =⚠ Sync Retrying= | Out of your hands — it will try again shortly |
+| =⚠ Sync Failed=   | Needs you before syncing can continue         |
+
+/Sync Retrying/ (orange) means the remote server returned an error or the
+network is unreachable. Your work is already committed locally and the next
+attempt will push it, so there is nothing to do but wait.
+
+/Sync Failed/ (red) means a merge conflict, credentials the remote refused, or
+a push rejected because another device got there first. A merge conflict also
+pauses syncing and opens the sync log with instructions; resolve it (=C-x g=
+for Magit), then re-enable syncing.
+
+Failures are reported *once*, as a single line at the bottom of the frame — a
+server outage lasting an hour interrupts you one time, not once a minute. The
+indicator carries the state from then on, and its tooltip shows what failed and
+how long it has been failing. You are told once more when syncing recovers.
+
+For the full Git output, open the sync log: click the indicator, or Productivity
+→ Sync & Version Control → Show Sync Log.
 
 * Auto-save and auto-revert
 You rarely need to press save:
@@ -187,9 +216,11 @@ one changed, saving takes an explicit confirmation.
   headings must be to count as the same one, and the =ps/blank-lines-ancestor-...=
   limits and step ladder how far back to look).
 - Git sync: =lisp/ps-git-sync.el=; behavior is configured in =config.org= →
-  /Package Management → Git sync/ (=ps/git-sync-interval= and the stuck-sync
+  /Settings → Git sync/ (=ps/git-sync-interval= and the stuck-sync
   =ps/git-sync-timeout=). Turn it off with the =PS_GIT_SYNC_DISABLE= env var or
-  =ps/git-sync-paused=.
+  =ps/git-sync-paused=. Failures are sorted into classes by
+  =ps/git-sync--failure-patterns=, which decides whether one shows as /Sync
+  Retrying/ or /Sync Failed/; =ps/git-sync-show-log= opens the log.
 - Auto-save/revert, sessions, and backups: =config.org= → /Session & Backups/
   and /Org Mode → Behavior → Auto-save .../. Reverts are driven by filesystem
   notifications rather than polling; =lisp/ps-file-notify.el= keeps a
