@@ -109,8 +109,8 @@ for an obsidian: target anyway.")
 Runs from an async `url-retrieve' callback that deletes a placeholder link
 and inserts the final one outside the command loop. That invalidates
 org-appear's cached at-point element (`org-appear--prev-elem'), which still
-points at the deleted placeholder; the `ps/org-appear--reassert-reveal'
-advice on `org-activate-links' would otherwise re-reveal that stale region
+points at the deleted placeholder; the `ps/appear--reassert-reveal' advice on
+`font-lock-default-fontify-region' would otherwise re-reveal that stale region
 during refontification, leaving the new link half-folded (only the trailing
 \"]]\" hidden) until the cursor moves. Clear that cache first, then force the
 new link's fontification (Org link folding) and an immediate redisplay.

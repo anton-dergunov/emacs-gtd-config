@@ -111,6 +111,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-heading-stars)
   (require 'ps-scrollbar)
   (require 'ps-emphasis)
+  (require 'ps-appear)
   (require 'ps-tags)
   (require 'ps-file-notify)
 
@@ -1494,8 +1495,10 @@ function cell can't satisfy a runtime function call.
 *** Show formatting markup only at point (=org-appear=)
 Hides emphasis markers, link brackets, entities, and sub/superscripts until
 point enters them, revealing the raw syntax for editing — Obsidian-style live
-preview. The read-only docs viewer (=ps/help--setup-doc-buffer=) keeps markers
-statically hidden and is excluded below.
+preview. The raw syntax stays up for as long as point is inside it, typing
+included (=lisp/ps-appear.el=); it collapses back only once point leaves. The
+read-only docs viewer (=ps/help--setup-doc-buffer=) keeps markers statically
+hidden and is excluded below.
 #+begin_src emacs-lisp
   ;; Master switches org-appear toggles dynamically; off by default in Emacs,
   ;; on here so editing buffers render clean except right at point.
@@ -1507,23 +1510,6 @@ statically hidden and is excluded below.
   ;; typing, tag edits and promotion/demotion alike.  Off, tags stay exactly
   ;; where they are typed, and that is exactly how they are displayed.
   (setq org-auto-align-tags nil)
-
-  ;; Flicker fix for editing inside a link.  While the cursor is in a link,
-  ;; org-appear reveals its raw syntax; but the typo checker re-marks the edited
-  ;; line, so on the next redisplay Org's own link fontification (`org-activate-
-  ;; links') re-folds the link — re-hiding it for a frame on every keystroke.
-  ;; Re-assert org-appear's reveal right after that re-fold, in the same
-  ;; fontification pass, so the screen never shows the collapsed form mid-edit.
-  ;; Use org-appear's tracked element (the cursor's), since during fontification
-  ;; `point' is font-lock's scan position, not the user's cursor.
-  (defun ps/org-appear--reassert-reveal (&rest _)
-    "Re-reveal the link/markup org-appear is showing for the cursor.
-Added as :after advice to `org-activate-links' to cancel the re-fold that Org's
-link fontification applies on every refontification while editing inside a link."
-    (when (and (bound-and-true-p org-appear-mode)
-               (bound-and-true-p org-appear--elem-toggled)
-               (bound-and-true-p org-appear--prev-elem))
-      (ignore-errors (org-appear--show-invisible org-appear--prev-elem))))
 
   (use-package org-appear
     :ensure t
@@ -1537,7 +1523,10 @@ link fontification applies on every refontification while editing inside a link.
           org-appear-autoentities    t   ; \alpha, \rightarrow
           org-appear-autokeywords    t   ; items in `org-hidden-keywords'
           org-appear-inside-latex    t)  ; entities/sub-superscript inside $...$
-    (advice-add 'org-activate-links :after #'ps/org-appear--reassert-reveal))
+    ;; Keep that reveal up while the markup is being *typed in*, not just while
+    ;; the cursor rests on it: any refontification of the line re-hides the
+    ;; markers behind org-appear's back.  Mechanism in lisp/ps-appear.el.
+    (ps/appear-setup))
 #+end_src
 
 *** Re-enable the org-element cache for live Org buffers

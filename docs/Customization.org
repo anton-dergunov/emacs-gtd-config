@@ -353,9 +353,11 @@ Org markup — =*bold*=, =/italic/=, =_underline_=, =+strikethrough+=, =code=,
 =~verbatim~=, link brackets, entities like =\alpha=, and sub/superscripts like
 =x_1= — renders clean, with the markup symbols hidden, like a live preview.
 Move point onto a marked-up bit of text and the raw syntax reappears so you
-can edit it; move away and it hides again. This applies everywhere except the
-read-only documentation viewer (these pages), which always keeps markers
-hidden since you're not editing there.
+can edit it. It stays visible for as long as point is inside it — typing
+included, so the markers never flicker away mid-word — and hides again once
+you move out. This applies everywhere except the read-only documentation
+viewer (these pages), which always keeps markers hidden since you're not
+editing there.
 
 While you type the leading stars of a new heading, they show exactly as typed
 (=*=, =**=, =***=) — plain, never bold, and without disturbing the bullet on the
@@ -421,8 +423,9 @@ The design rationale is in =design-docs/typo-checker.md=.
 - Line-number size and colour in Org buffers: =lisp/ps-line-numbers.el=, wired in
   =config.org= → /Editor & UI → Line numbers/; settings in =config.org= →
   /Settings → Line numbers/ (=ps/line-numbers-scale=, =ps/line-numbers-face=).
-- Live markup preview: the =org-appear= package, wired in =config.org= →
-  /Appearance → Show formatting markup only at point/.
+- Live markup preview: the =org-appear= package plus =lisp/ps-appear.el= (which
+  keeps the raw syntax up while you type in it), both wired in =config.org= →
+  /Appearance → Show formatting markup only at point/. No settings.
 - Literal heading stars while typing: =lisp/ps-heading-stars.el=, wired in
   =config.org= → /Appearance → Keep heading stars visible while typing them/.
 - Material icons: =lisp/ps-material-icons.el= (+ =ps-agenda-icons.el=,
