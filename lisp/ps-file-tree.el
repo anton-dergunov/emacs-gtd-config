@@ -884,6 +884,53 @@ Call once from the treemacs `:config' block."
   (advice-add 'treemacs-find-file-node :before-until
               #'ps/file-tree--find-rendered-node))
 
+;;; Deferred annotations for nodes that have been re-rendered since
+
+(defun ps/file-tree--node-rendered-p (btn buffer)
+  "Return non-nil if position BTN in BUFFER is still a rendered tree node.
+A node is drawn as text properties on its line, so it is live exactly when
+the `:depth' property treemacs writes is still there.  Read with
+`get-text-property' rather than `treemacs-button-get' only so that this stays
+testable without treemacs loaded -- the latter is that call, inlined."
+  (and (buffer-live-p buffer)
+       (integer-or-marker-p btn)
+       (with-current-buffer buffer
+         (and (<= (point-min) btn (point-max))
+              (get-text-property btn :depth)
+              t))))
+
+(defun ps/file-tree--annotations-guard (btn _path buffer &rest _)
+  "Return non-nil when BTN is still worth applying deferred annotations to.
+Installed as `:before-while' advice on `treemacs--apply-annotations-deferred'.
+
+Expanding a directory arms a 0.5 second timer holding the *buffer position*
+of the node expanded.  Nothing re-checks that the node survived, so any
+re-render inside that window leaves the timer pointing at a line that is no
+longer a node: `:depth' reads back nil and treemacs's own
+`(1+ (treemacs-button-get btn :depth))' signals
+
+    (wrong-type-argument number-or-marker-p nil)
+
+once per node that had been expanded.  A vault switch provokes this every
+time -- it collapses and re-expands the tree and then re-roots it several
+times over three seconds -- but so does any refresh landing within half a
+second of an expand.
+
+Skipping costs nothing here: the annotations are the git-status decorations,
+and `treemacs-git-mode' is off in this configuration, so the pass applies an
+empty table to nodes that have since been redrawn anyway.  The guard stays
+correct if treemacs starts checking the node itself, so it is safe to leave
+in place."
+  (ps/file-tree--node-rendered-p btn buffer))
+
+;;;###autoload
+(defun ps/file-tree-annotations-setup ()
+  "Stop deferred annotations erroring on nodes that were re-rendered meanwhile.
+Call once from the treemacs `:config' block."
+  (when (fboundp 'treemacs--apply-annotations-deferred)
+    (advice-add 'treemacs--apply-annotations-deferred :before-while
+                #'ps/file-tree--annotations-guard)))
+
 ;;; Collapse / expand toggle button
 
 (defconst ps/file-tree--collapse-icon "unfold_less"

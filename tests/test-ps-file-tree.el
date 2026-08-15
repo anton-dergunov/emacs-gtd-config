@@ -647,4 +647,74 @@ searches the buffer text for the file name, which is no longer there."
   (ps/file-tree-test--with-rendered-tree '(("Notes A" . "/org/Notes_A.org"))
     (should-not (ps/file-tree--find-rendered-node '("/org/Notes_A.org" "Heading")))))
 
+
+;;; -------------------------------------------------------
+;;; Deferred annotations on re-rendered nodes
+;;; -------------------------------------------------------
+
+(defmacro ps/file-tree-test--with-node (&rest body)
+  "Bind `buffer' to a buffer holding one node line, and `pos' to its position.
+A treemacs node is nothing more than text carrying a `:depth' property, so a
+plain buffer reproduces the state the deferred timer sees -- which is what
+lets this run without treemacs installed."
+  (declare (indent 0))
+  `(let ((buffer (generate-new-buffer " *ps-file-tree-test*")))
+     (unwind-protect
+         (with-current-buffer buffer
+           (insert (propertize "Notes" :depth 1))
+           (let ((pos (point-min)))
+             ,@body))
+       (kill-buffer buffer))))
+
+(ert-deftest ps/file-tree--node-rendered-p-accepts-a-live-node ()
+  "A node still drawn in the buffer is worth annotating."
+  (ps/file-tree-test--with-node
+    (should (ps/file-tree--node-rendered-p pos buffer))))
+
+(ert-deftest ps/file-tree--node-rendered-p-rejects-a-re-rendered-node ()
+  "Once the line has been redrawn, the position is no longer a node.
+This is the state a queued annotation timer finds after a refresh or a vault
+switch, and acting on it is what raises `wrong-type-argument'."
+  (ps/file-tree-test--with-node
+    (with-current-buffer buffer (erase-buffer) (insert "something else"))
+    (should-not (ps/file-tree--node-rendered-p pos buffer))))
+
+(ert-deftest ps/file-tree--node-rendered-p-rejects-a-position-past-the-end ()
+  "A shorter tree leaves stale positions outside the buffer entirely."
+  (ps/file-tree-test--with-node
+    (let ((beyond (1+ (point-max))))
+      (with-current-buffer buffer (erase-buffer))
+      (should-not (ps/file-tree--node-rendered-p beyond buffer)))))
+
+(ert-deftest ps/file-tree--node-rendered-p-rejects-a-dead-buffer ()
+  "The tree buffer may be gone by the time the timer fires."
+  (let ((buffer (generate-new-buffer " *ps-file-tree-test*")))
+    (with-current-buffer buffer (insert (propertize "Notes" :depth 1)))
+    (kill-buffer buffer)
+    (should-not (ps/file-tree--node-rendered-p 1 buffer))))
+
+(ert-deftest ps/file-tree--node-rendered-p-rejects-a-non-position ()
+  "Nothing is assumed about what the timer captured."
+  (ps/file-tree-test--with-node
+    (should-not (ps/file-tree--node-rendered-p nil buffer))))
+
+(ert-deftest ps/file-tree--annotations-guard-matches-the-upstream-signature ()
+  "The guard takes the arguments treemacs passes, and gates on the node.
+`:before-while' advice is called with the advised function's own arguments
+\(BTN PATH BUFFER GIT-FUTURE), so a mismatch here would signal rather than
+skip."
+  (ps/file-tree-test--with-node
+    (should (ps/file-tree--annotations-guard pos "/org/" buffer nil))
+    (with-current-buffer buffer (erase-buffer))
+    (should-not (ps/file-tree--annotations-guard pos "/org/" buffer nil))))
+
+(ert-deftest ps/file-tree--annotations-guard-blocks-the-upstream-error ()
+  "What the guard prevents: treemacs's own arithmetic on a missing `:depth'.
+Reproduces the failing expression rather than the whole function, so the test
+says what the workaround is for without needing treemacs installed."
+  (ps/file-tree-test--with-node
+    (with-current-buffer buffer (erase-buffer) (insert "redrawn"))
+    (should-error (1+ (get-text-property pos :depth buffer))
+                  :type 'wrong-type-argument)))
+
 ;;; test-ps-file-tree.el ends here

@@ -2042,6 +2042,13 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     ;; text no longer spells the name out. Look nodes up by path instead.
     (ps/file-tree-node-lookup-setup)
 
+    ;; Expanding a directory schedules annotation work half a second later,
+    ;; against the node's buffer position, and never rechecks that the node
+    ;; survived. Any re-render inside that window — a refresh, or a vault
+    ;; switch, which re-renders several times — makes it error once per
+    ;; expanded node. Skip the ones that have been redrawn since.
+    (ps/file-tree-annotations-setup)
+
     ;; treemacs's own follow-mode expands directories and re-roots the view to
     ;; reveal the current file. Ours only moves the highlight, and only when the
     ;; file is already on screen, so the tree never shifts under you.
