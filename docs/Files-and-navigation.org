@@ -81,6 +81,12 @@ folder that is genuinely empty on disk still shows.
 File sets are defined per Org folder in =workspace.org= — see
 [[file:Customization.org][Customization & appearance]].
 
+* The vault name
+The name at the tree's top left is the *vault* you are in — the folder all of
+this is showing. Click it for a drop-down of your vaults and switch between
+them, or add and remove them. It is kept short so it stays out of the way; if a
+name is cut off, widen the limit with =ps/vault-chip-max-width=. See [[file:Vaults.org][Vaults]].
+
 * Collapsing the whole tree
 A small button in the tree's top-right corner collapses everything, and turns
 into an expand button once it has. =M-+= and =M--= inside the tree do the same

@@ -951,23 +951,31 @@ mouse-1."
                 'local-map map)))
 
 (defun ps/file-tree--header-line ()
-  "Return the tree's header line: right-aligned refresh and collapse/expand buttons."
-  (when ps/file-tree-show-toggle-button
-    (let ((expanded (ps/file-tree--any-expanded-p)))
-      (list
-       ;; Refresh button, one slot left of the collapse/expand button.
-       (propertize " " 'display '(space :align-to (- right 6)))
-       (ps/file-tree--header-line-button
-        ps/file-tree--refresh-icon "R" "mouse-1: refresh the file tree"
-        #'ps/file-tree--refresh-button-click)
-       ;; Push the collapse/expand button to the right edge, leaving room for
-       ;; the glyph itself.
-       (propertize " " 'display '(space :align-to (- right 3)))
-       (ps/file-tree--header-line-button
-        (if expanded ps/file-tree--collapse-icon ps/file-tree--expand-icon)
-        (if expanded "-" "+")
-        (if expanded "mouse-1: collapse everything" "mouse-1: expand everything")
-        #'ps/file-tree--toggle-button-click)))))
+  "Return the tree's header line: the vault chip left, tree buttons right.
+The buttons are positioned with `:align-to' from the right edge, so whatever
+the chip renders on the left cannot push them out of place -- provided it stays
+narrower than the window, which `ps/vault-chip-max-width' is there to ensure."
+  (append
+   ;; Optional dependency, like the git-sync segment in `ps/file-tree--modeline'
+   ;; below: the tree keeps working on its own.
+   (when (fboundp 'ps/vault--chip)
+     (list (ps/vault--chip)))
+   (when ps/file-tree-show-toggle-button
+     (let ((expanded (ps/file-tree--any-expanded-p)))
+       (list
+        ;; Refresh button, one slot left of the collapse/expand button.
+        (propertize " " 'display '(space :align-to (- right 6)))
+        (ps/file-tree--header-line-button
+         ps/file-tree--refresh-icon "R" "mouse-1: refresh the file tree"
+         #'ps/file-tree--refresh-button-click)
+        ;; Push the collapse/expand button to the right edge, leaving room for
+        ;; the glyph itself.
+        (propertize " " 'display '(space :align-to (- right 3)))
+        (ps/file-tree--header-line-button
+         (if expanded ps/file-tree--collapse-icon ps/file-tree--expand-icon)
+         (if expanded "-" "+")
+         (if expanded "mouse-1: collapse everything" "mouse-1: expand everything")
+         #'ps/file-tree--toggle-button-click))))))
 
 ;;; Multi-root project setup
 

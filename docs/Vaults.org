@@ -1,0 +1,125 @@
+#+TITLE: Vaults
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+A *vault* is one folder of Org files. Your agenda, file tree, journal, searches
+and situations all come from a single vault at a time, and you can keep as many
+as you like — work and personal, a shared project, an archive you dip into —
+and switch between them without restarting Emacs.
+
+If you have used Obsidian, this is the same idea and works the same way.
+
+* Switching vaults
+Three ways in, all doing the same thing:
+
+- The *vault name* at the top left of the file tree. Click it for a drop-down
+  of your vaults, with the open one marked, plus the entries for adding and
+  removing them.
+- *Productivity → Vault*, the first entry in the menu.
+- =C-c p V=, then one more key.
+
+| Key         | Does                                              |
+|-------------+---------------------------------------------------|
+| =C-c p V V= | Switch to another vault                           |
+| =C-c p V n= | Create a new vault                                |
+| =C-c p V o= | Open a folder you already have as a vault         |
+| =C-c p V r= | Rename this vault in the list                     |
+| =C-c p V k= | Remove a vault from the list (the folder is kept) |
+
+Switching takes a moment. Everything that reads from the vault is re-pointed at
+the new one: the agenda, the file tree, the journal folder, category icons,
+your situations and tags, git sync, and the context file the AI assistant reads.
+Files open from the old vault are saved and closed, so nothing is left behind
+half-showing the folder you just left.
+
+Your vaults and the one you had open are remembered, so Emacs reopens where you
+were.
+
+* Creating your first vault
+If no vault is set up yet, Emacs opens on a welcome screen offering to *create a
+new vault* or *open an existing folder*. Pick any folder you like — a folder
+inside Dropbox, iCloud, or another sync service keeps your notes available on
+every device.
+
+Creating a vault writes three things into the folder and nothing else:
+
+- =workspace.org= — this vault's own settings, ready to edit (see below).
+- =Inbox.org= — a starter file with one task, so the agenda is not empty.
+- =.ps/state.el= — small machine-written state; you never edit this.
+
+An existing folder full of Org files works as a vault as it is. Nothing is moved
+or rewritten; open it and it appears in the agenda and the tree.
+
+* Where settings live
+Settings split into two kinds, and knowing which is which saves a lot of
+confusion later.
+
+** System settings — the same in every vault
+Everything about /how things look and behave/: color theme, fonts, window and
+scroll behaviour, the agenda layout, reading width, spell-check languages, the
+AI assistant. These live in =config.org= under =* Settings=, one block per
+feature. Open it with =C-c p C= (or =F10=) and reload with =C-c p R=.
+
+** Vault settings — belonging to one folder
+Everything about /how this folder's content is organised/: your category icons,
+your file sets and their order, your context tags and situations, and whether
+this vault syncs. These live in =workspace.org= inside the vault, so they travel
+with the folder — copy the vault to another machine and its settings come with
+it. Open it with =C-c p W= and reload with =C-c p w=.
+
+Because they are per vault, switching resets them: a category icon you defined
+in one vault does not follow you into the next, and neither do its tags or
+situations.
+
+Alongside =workspace.org= there is =.ps/state.el=, which Emacs writes itself. It
+remembers small things the interface toggles — the active file set, whether it
+also restricts the agenda — so each vault keeps its own. There is no reason to
+edit it by hand.
+
+* Git sync per vault
+Whether a vault syncs is *detected*, not configured: a vault syncs when its
+folder is itself a Git repository. To turn syncing on for a vault, set it up as
+one yourself:
+
+#+begin_src bash
+cd /path/to/your/vault
+git init
+git remote add origin git@github.com:you/your-notes.git
+#+end_src
+
+From then on that vault commits and pushes in the background, and the file
+tree's mode line shows its status. A vault with no =.git= folder is simply left
+alone, and its indicator says so.
+
+A vault kept /inside/ a larger repository does not sync. That is deliberate:
+syncing it would commit and push the enclosing repository on the vault's behalf,
+which is almost never what you meant.
+
+To override the detection for one vault, uncomment the setting in its
+=workspace.org=:
+
+#+begin_src elisp
+;; Never sync this vault, even though it is a repository:
+(setq ps/vault-git-sync nil)
+
+;; Always sync it, every 300 seconds:
+(setq ps/vault-git-sync 300)
+#+end_src
+
+See [[file:Sync-and-backups.org][Sync & backups]] for what the sync actually does and how failures are reported.
+
+* Things that stay shared
+A few things live with Emacs rather than with a vault, and are shared across all
+of them: your kill ring and minibuffer history, the recent-files list, and the
+color theme and fonts. Each vault does get its own restored session, so the
+files you had open in one do not reappear in another.
+
+* Under the hood
+- Registry and per-vault state: =lisp/ps-vault.el=; the vault list is
+  =vaults.eld= in the config directory.
+- Switching, the name chip and the menu: =lisp/ps-vault-switch.el=.
+- The welcome screen: =lisp/ps-vault-welcome.el=.
+- Settings block: =config.org= → =* Settings= → =** Vault (ps-vault.el)=
+  (=ps/vault-git-sync=, =ps/vault-chip-max-width=).

@@ -64,9 +64,11 @@ case "$EMACS_VARIANT" in
     ;;
 esac
 
+# Seeds the first vault on a fresh checkout.  Once vaults.eld exists, the saved
+# vault list decides and this file is ignored.
 LOCAL_EL="$REPO_DIR/local.el"
 if [ ! -f "$LOCAL_EL" ]; then
-  echo "Creating $LOCAL_EL pointing to samples/realistic/"
+  echo "Creating $LOCAL_EL seeding the first vault from samples/realistic/"
   cat > "$LOCAL_EL" <<'EOF'
 (setq my-org-base-directory
       (expand-file-name "samples/realistic/" user-emacs-directory))
@@ -90,11 +92,17 @@ fi
 # the sync timer from ever starting; ps/git-sync-paused is a runtime fallback.
 export PS_GIT_SYNC_DISABLE=1
 
-# PS_ORG_BASE points the session at a different org directory than local.el
-# names.  Needed to try anything that reads the org files' *git history*: by
-# default my-org-base-directory is samples/realistic/, which lives inside this
+# PS_ORG_BASE pins the session to one vault, ignoring the saved vault list --
+# and, while pinned, ps-vault.el refuses to write that list, so a dev run can't
+# disturb the real one.  Needed to try anything that reads the org files' *git
+# history*: the default vault is samples/realistic/, which lives inside this
 # repo, so history there is this config repo's own.  See
 # scripts/make_blank_line_playground.sh.
+#
+# It has to reach Emacs as an environment variable rather than as --eval:
+# --eval runs before init.el, so a setq there is overwritten during bootstrap,
+# and every setting derived from the org directory at load time (the journal
+# folder, the file tree root, git sync) would still point at the old one.
 #
 # Note: the always-present --eval seeds EMACS_ARGS, so the array is never
 # empty -- macOS ships bash 3.2, where "${arr[@]}" on an empty array counts as
@@ -105,8 +113,8 @@ if [ -n "${PS_ORG_BASE:-}" ]; then
     echo "PS_ORG_BASE is not a directory: $PS_ORG_BASE" >&2
     exit 1
   fi
-  EMACS_ARGS+=(--eval "(setq my-org-base-directory \"$PS_ORG_BASE/\")")
-  echo "Org base: $PS_ORG_BASE"
+  export PS_ORG_BASE
+  echo "Org base: $PS_ORG_BASE (pinned; the saved vault list is left alone)"
 fi
 
 if $SANDBOX; then

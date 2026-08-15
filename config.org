@@ -63,13 +63,20 @@ file needs. Do not move it.
   (setq use-package-always-ensure t)
 #+end_src
 
-** Load local configuration
-Sets =my-org-base-directory=. Copy =local.el.template= → =local.el= on first run.
+** Open a vault
+Sets =my-org-base-directory= to the vault last in use, from the registry in
+=vaults.eld=. On a first run there is no vault yet and it stays nil — the welcome
+screen then offers to create one. An existing =local.el= is migrated into the
+registry once, so upgrading needs no action.
+
+This runs before packages and before every other module, so it must not fail:
+=ps/vault-bootstrap= falls back to =local.el= on any error and leaves
+=default-directory= pointing somewhere real either way.
 #+begin_src emacs-lisp
-  (let ((local-file (expand-file-name "local.el" user-emacs-directory)))
-    (if (file-exists-p local-file)
-        (load local-file)
-      (user-error "Missing required local config file: %s" local-file)))
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  (setq load-prefer-newer t)
+  (require 'ps-vault)
+  (ps/vault-bootstrap)
 #+end_src
 
 ** Load local modules
@@ -81,6 +88,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
   (require 'ps-fonts)
+  (require 'ps-vault)        ; already loaded by Bootstrap; listed for completeness
+  (require 'ps-vault-switch)
+  (require 'ps-vault-welcome)
   (require 'ps-org-files)
   (require 'ps-prose-width)
   (require 'ps-line-numbers)
@@ -136,6 +146,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
 
   ;; Keep reading-width margins off for the duration of any Ediff session.
   (ps/prose-width-setup)
+
+  ;; Write the vault's own state file on exit, not only when switching away.
+  (ps/vault-state-setup)
 #+end_src
 
 ** Auto-tangle this config on save
@@ -283,6 +296,29 @@ automatically.
           ("Apple Symbols"     . 0.9)
           ("Zapf Dingbats"     . 0.9)
           ("Apple Braille"     . 0.9)))
+#+end_src
+
+** Vault (ps-vault.el)
+A *vault* is one Org folder — the directory everything here reads from. Switch
+between them from the file tree's header line, from =Productivity → Vault=, or
+with =C-c p V=. The list of known vaults lives in =vaults.eld= beside this file;
+which one is open is remembered across restarts.
+
+Settings split in two. *System* settings — fonts, theme, layout, everything about
+how things look — live here in =* Settings= and apply to every vault. *Vault*
+settings — icons, file sets, situations, git sync — live in each vault's own
+=workspace.org= (hand-authored, so it travels with the folder) and =.ps/state.el=
+(machine-written, holding what the UI toggles). See =docs/Vaults.org=.
+
+Git sync is *detected*, not configured: a vault syncs when it is itself a git
+working tree, so =git init= in a vault (and adding your own remote) is what turns
+it on. Set =ps/vault-git-sync= to nil to never sync, or to an interval in seconds
+to always sync; a vault overrides it in its own =workspace.org=.
+#+begin_src emacs-lisp
+  (setq ps/vault-git-sync 'auto)
+  (setq ps/vault-chip-max-width 14)
+  (setq ps/vault-registry-file "vaults.eld")
+  (setq ps/vault-state-file ".ps/state.el")
 #+end_src
 
 ** Org files (ps-org-files.el)
@@ -735,15 +771,19 @@ changes never conflicts. It is loaded artifact-free: its elisp is tangled to a
 throwaway file in the system temp dir, never inside your Org folder.
 #+begin_src emacs-lisp
   (defun ps/workspace-config-file ()
-    "Return the path to this Org folder's workspace.org."
-    (expand-file-name "workspace.org" my-org-base-directory))
+    "Return the path to this vault's workspace.org, or nil when none is open.
+Deliberately nil rather than a guess: `expand-file-name' against a nil
+directory silently resolves against `default-directory', which would load some
+other folder's settings."
+    (when (ps/vault-configured-p)
+      (expand-file-name "workspace.org" my-org-base-directory)))
 
   (defun ps/load-workspace-config ()
     "Load emacs-lisp from workspace.org, if it exists.
 Tangles its blocks to a temp .el in the system temp dir (never the Org dir),
 loads it, then deletes it. Silently does nothing when the file is absent."
     (let ((file (ps/workspace-config-file)))
-      (when (file-exists-p file)
+      (when (and file (file-exists-p file))
         (require 'ob-tangle)
         (let ((el (make-temp-file "ps-workspace-" nil ".el")))
           (unwind-protect
@@ -755,18 +795,21 @@ loads it, then deletes it. Silently does nothing when the file is absent."
   (defun ps/icons-reapply ()
     "Re-apply agenda and file-tree icons from the current maps."
     (ps/agenda-icons-apply)
-    (when (and ps/file-tree-use-custom-icons (featurep 'treemacs))
+    (when (and ps/file-tree-use-custom-icons (featurep 'treemacs)
+               (ps/vault-configured-p))
       (ps/file-tree-icons-apply my-org-base-directory)
       (when (fboundp 'ps/file-tree-refresh) (ps/file-tree-refresh))))
 
   (defun ps/open-workspace-config ()
-    "Open this Org folder's workspace.org (a fresh buffer if it doesn't exist)."
+    "Open this vault's workspace.org (a fresh buffer if it doesn't exist)."
     (interactive)
+    (unless (ps/vault-configured-p) (user-error "No vault is open"))
     (find-file (ps/workspace-config-file)))
 
   (defun ps/reload-workspace-config ()
     "Reload workspace.org and re-apply icons, file sets and situations."
     (interactive)
+    (ps/vault-restore-defaults)
     (ps/load-workspace-config)
     (ps/icons-reapply)
     ;; Re-derive org-tag-alist, the agenda commands and the C-c p S keymap from
@@ -775,7 +818,13 @@ loads it, then deletes it. Silently does nothing when the file is absent."
     (when (fboundp 'ps/agenda-files-refresh) (ps/agenda-files-refresh))
     (message "Workspace config reloaded"))
 
-  ;; Apply this folder's overrides now, before icons are built below.
+  ;; Snapshot the `* Settings' values of everything a vault may override, while
+  ;; only `* Settings' has run. This is what a vault switch resets to, so the
+  ;; outgoing vault's icons, file sets, tags and situations cannot leak into the
+  ;; incoming one. Capturing rather than restating them keeps the two in step.
+  (ps/vault-capture-defaults)
+
+  ;; Apply this vault's overrides now, before icons are built below.
   (ps/load-workspace-config)
 #+end_src
 
@@ -1766,8 +1815,12 @@ aligned in a single column the way =comment-region= does.
   (setq org-journal-file-format "%Y-%m-%d.org"
         org-extend-today-until 4
         org-journal-file-type 'weekly
-        org-journal-date-format "%A, %d %B %Y"
-        org-journal-dir (concat my-org-base-directory "Journal/")))
+        org-journal-date-format "%A, %d %B %Y")
+  ;; The journal lives inside the vault, so it moves when the vault does --
+  ;; `ps/vault-apply' re-derives this the same way.  Guarded because there may
+  ;; be no vault open yet on a first run.
+  (when (ps/vault-configured-p)
+    (setq org-journal-dir (expand-file-name "Journal/" my-org-base-directory))))
 #+end_src
 
 *** Calendar starts week on Monday
@@ -1907,7 +1960,10 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
 * Files & Navigation
 ** Default directory
 #+begin_src emacs-lisp
-  (setq default-directory my-org-base-directory)
+  ;; Never nil: with no vault open, a nil `default-directory' breaks nearly
+  ;; every file operation, in ways that give no hint where the problem is.
+  (setq default-directory (or my-org-base-directory
+                              (file-name-as-directory user-emacs-directory)))
 #+end_src
 
 ** Workaround for unsupported =ls --dired= on macOS
@@ -1928,7 +1984,7 @@ The ignore list and category icons live in =lisp/ps-file-tree.el= and
     :config
     (ps/file-tree-setup-ignore)
     (ps/file-tree--ensure-valid-set)
-    (if ps/file-tree-use-custom-icons
+    (if (and ps/file-tree-use-custom-icons (ps/vault-configured-p))
         (ps/file-tree-icons-apply my-org-base-directory)
       (treemacs-load-theme "Default"))
 
@@ -2124,18 +2180,18 @@ in place while choosing; it is restored after the agenda is built either way."
           (apply orig-fn args)))))
 
 
-  ;; Open the file tree at `my-org-base-directory' on startup, laid out per
+  ;; Open the file tree at the current vault on startup, laid out per
   ;; `ps/file-tree-root-mode' and fully expanded. treemacs expands directories
-  ;; asynchronously (git-status/flatten-dirs subprocesses), so re-run the
-  ;; idempotent setup a few times to ride out late-arriving updates.
+  ;; asynchronously (git-status/flatten-dirs subprocesses), so the idempotent
+  ;; setup is re-run a few times to ride out late-arriving updates. A vault
+  ;; switch runs the same ladder, which is why it lives in ps-vault-switch.el
+  ;; rather than inline here — its timers have to be cancellable.
   (add-hook 'emacs-startup-hook
     (lambda ()
-      (require 'treemacs)
-      (save-selected-window
-        (treemacs-select-window)
-        (let ((base (treemacs-canonical-path my-org-base-directory)))
-          (dolist (delay '(0 0.3 0.8 1.5 3))
-            (run-with-timer delay nil #'ps/file-tree-init base))))))
+      (if (ps/vault-configured-p)
+          (ps/vault-file-tree-init-later my-org-base-directory t)
+        ;; No vault yet: offer to make one rather than showing an empty frame.
+        (ps/vault-welcome-maybe-show))))
 #+end_src
 
 * AI Assistant
@@ -2448,6 +2504,16 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key c (kbd "m") #'ps/show-calendar-month)   ; c m → Month
     (define-key c (kbd "y") #'ps/show-calendar-year))   ; c y → Year
 
+  ;; Sub-keymap so C-c p V V switches vault and C-c p V n/o/r/k manage the list.
+  (defvar ps/vault-keymap (make-sparse-keymap)
+    "Prefix keymap for the vault commands, bound at `C-c p V'.")
+  (let ((v ps/vault-keymap))
+    (define-key v (kbd "V") #'ps/vault-switch)             ; V V → switch Vault
+    (define-key v (kbd "n") #'ps/vault-create)             ; V n → New vault
+    (define-key v (kbd "o") #'ps/vault-open-existing)      ; V o → Open a folder
+    (define-key v (kbd "r") #'ps/vault-rename)             ; V r → Rename
+    (define-key v (kbd "k") #'ps/vault-forget))            ; V k → remove (kill) from list
+
   ;; Productivity prefix keymap (mnemonic suffixes under C-c p).
   (defvar ps/productivity-keymap (make-sparse-keymap)
     "Prefix keymap for project commands, bound at `C-c p'.")
@@ -2484,6 +2550,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "F") #'ps/file-tree-cycle-file-set)  ; F → File set (cycle)
     (define-key m (kbd "g") #'ps/file-tree-toggle-agenda-filter) ; g → aGenda filter toggle
     ;; Config
+    (define-key m (kbd "V") ps/vault-keymap)                ; V → Vault sub-keymap
     (define-key m (kbd "C") #'ps/open-config-file)          ; C → global Config
     (define-key m (kbd "R") #'ps/reload-config)             ; R → Reload global config
     (define-key m (kbd "W") #'ps/open-workspace-config)     ; W → open Workspace config
@@ -2509,6 +2576,9 @@ calendar boundary containing the start day (e.g. the whole current week)."
   (easy-menu-define ps/productivity-menu global-map
     "Productivity tools menu (Org planning, links, sync, etc.)."
     '("Productivity"
+      ;; First, because it is the widest-scoped thing here: every other entry
+      ;; acts on whichever vault this one has chosen.
+      ("Vault" :filter ps/vault--menu-filter)
       ("Plan & Review" :filter ps/productivity--plan-review-filter)
       ("Schedule View"
        ["Timeline" (ps/schedule-view-set-style 'timeline)
@@ -2524,7 +2594,7 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Store Link"          org-store-link           :keys "C-c p l"]
        ["Open Notes Folder"
         (lambda () (interactive) (dired my-org-base-directory))
-        t])
+        :active (ps/vault-configured-p)])
       ("Insert Links"
        ["URL with Auto-title"        ps/org-insert-link-async                 :keys "C-c p u   /   F6"]
        ["Obsidian Link — clipboard"  ps/insert-obsidian-link-from-clipboard   :keys "C-c p o   /   F4"]
@@ -2536,9 +2606,12 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["Recover Blank Lines…"  ps/blank-lines-recover     :keys "C-c p r   /   F7"]
        ["Shift Timezones…"      ps/shift-timezone          :keys "C-c p t"])
       ("Sync & Version Control"
+       ;; Greyed out in a vault that is not a git repo: there is nothing to
+       ;; toggle there, and a live tick would claim sync was running.
        ["Git Sync Enabled" ps/git-sync-toggle
         :style toggle
         :selected (not (and (boundp 'ps/git-sync-paused) ps/git-sync-paused))
+        :active (ps/vault-git-repo-p)
         :keys "C-c p s"]
        ["Show Sync Log"     ps/git-sync-show-log t]
        ["Magit Status"      magit-status       :keys "C-x g"])
@@ -2598,37 +2671,47 @@ calendar boundary containing the start day (e.g. the whole current week)."
 #+end_src
 
 ** Automatic git sync for org files
-Logic lives in =lisp/ps-git-sync.el=. The interval is set in =* Settings / Git sync=
-above. =ps/git-sync-toggle= clears the paused state after you resolve a merge
-conflict; =ps/git-sync-show-log= shows recent failures with their git output.
+Logic lives in =lisp/ps-git-sync.el=. Whether a vault syncs is *detected*: it
+syncs when the vault folder is itself a git working tree, so =git init= there
+(and adding your own remote) is what turns it on, and a vault with no =.git= is
+simply left alone. Override per vault with =ps/vault-git-sync= in its
+=workspace.org=; the interval default is in =* Settings / Git sync= above.
+=ps/git-sync-toggle= clears the paused state after you resolve a merge conflict;
+=ps/git-sync-show-log= shows recent failures with their git output.
+
+Detection deliberately does not climb to an enclosing repository the way
+=git rev-parse --show-toplevel= does: a vault kept inside a larger checkout
+would otherwise have that outer repository committed and pushed on its behalf.
 
 Set the =PS_GIT_SYNC_DISABLE= environment variable (done by
 =scripts/run_emacs_dev.sh=) to skip starting the sync timer entirely. This is
 more robust than relying on =ps/git-sync-paused=, which can be cleared during
 a session (by =ps/git-sync-toggle=, a menu toggle, or conflict handling).
 #+begin_src emacs-lisp
-  (unless (getenv "PS_GIT_SYNC_DISABLE")
-    (ps/git-sync-start my-org-base-directory))
+  (ps/git-sync-maybe-start my-org-base-directory)
 #+end_src
 
 ** Save and restore sessions
 #+begin_src emacs-lisp
   ;; Save and restore the Emacs session (buffers, history, etc.)
   ;; https://emacs.stackexchange.com/questions/639/how-can-i-restart-emacs-and-preserve-my-open-buffers-and-interactive-history
+  ;; One desktop file per vault: the desktop restores buffers by absolute path,
+  ;; so a single shared one would reopen the previous vault's files after a
+  ;; switch. It stays under `user-emacs-directory' — machine state does not
+  ;; belong inside a folder that gets synced between machines.
+  (ps/vault-desktop-setup)
   (desktop-save-mode 1)
   (savehist-mode 1)
 
-  ;; Save the kill-ring to the history
+  ;; Save the kill-ring to the history. This one really is system-wide; the
+  ;; file-tree set and its agenda toggle used to live here too and have moved
+  ;; to each vault's own state file, since a set named in one vault means
+  ;; nothing in another.
   (add-to-list 'savehist-additional-variables 'kill-ring)
+  (ps/vault-state-apply)
 
-  ;; Persist the selected file-tree file set across restarts
-  (add-to-list 'savehist-additional-variables 'ps/file-tree-current-set)
-
-  ;; Persist whether the file-tree set also restricts the agenda
-  (add-to-list 'savehist-additional-variables 'ps/file-tree-set-applies-to-agenda)
-
-  ;; Re-apply the agenda file-set filter using the persisted set/toggle
-  ;; values, which savehist-mode has just restored above.
+  ;; Re-apply the agenda file-set filter using the set/toggle values the vault
+  ;; state has just restored above.
   (ps/agenda-files-refresh)
 
   ;; Reload desktop without asking

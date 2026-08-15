@@ -16,9 +16,10 @@ missing optional dependency or a path that needs setting.
   restarting Emacs.
 
 * The agenda is empty
-- Check =my-org-base-directory= in =local.el= points at the right folder. Every
-  =.org= file under it is scanned, at any depth (see [[file:Planning-setup.org][Planning setup]]) — except
-  =Journal/=, =Archive/=, dotted folders, =init.org= and =workspace.org=.
+- Check which *vault* is open — its name is at the top left of the file tree.
+  Switch with =C-c p V V= (see [[file:Vaults.org][Vaults]]). Every =.org= file under the vault is
+  scanned, at any depth (see [[file:Planning-setup.org][Planning setup]]) — except =Journal/=, =Archive/=,
+  dotted folders, =init.org= and =workspace.org=.
 - If you've turned on *file-set filtering* (=C-c p g=), the agenda only shows the
   active set — toggle it off to see everything.
 - If it went empty part-way through a session, check =custom.el= in your config

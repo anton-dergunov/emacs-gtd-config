@@ -43,6 +43,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
   page title fetched for you.
 
 * Organizing & Navigating
+- [[file:Vaults.org][Vaults]] — keep several Org folders and switch between them, Obsidian-style;
+  which settings belong to a vault and which are the same everywhere.
 - [[file:Files-and-navigation.org][Files & navigation]] — the file tree, named file sets, scoping the agenda,
   window management, and jumping around.
 

@@ -571,6 +571,88 @@ This is the toggle the dev script relies on to disable sync during testing."
   (ps/git-sync-test--with-non-repo
     (should-not (ps/git-sync--inside-repo-p))))
 
+(ert-deftest ps/git-sync--inside-repo-false-in-a-subdirectory ()
+  "A vault nested inside a repo does not sync -- that repo is not its own.
+Syncing it would commit and push the enclosing checkout on the vault's behalf."
+  (ps/git-sync-test--with-repo
+    (let ((ps/git-sync--directory (expand-file-name "notes/" ps/git-sync--directory)))
+      (make-directory ps/git-sync--directory t)
+      (should-not (ps/git-sync--inside-repo-p)))))
+
+;;; -------------------------------------------------------
+;;; start / stop
+;;; -------------------------------------------------------
+
+(ert-deftest ps/git-sync-stop-clears-every-sticky-variable ()
+  "Stopping leaves nothing describing the old repo behind.
+Each variable is named here on purpose: a new piece of sticky state added
+without a matching reset would silently show the next vault as broken."
+  (let ((ps/git-sync--timer nil)
+        (ps/git-sync--directory "/tmp/old/")
+        (ps/git-sync--interval 300)
+        (ps/git-sync--running t)
+        (ps/git-sync--process nil)
+        (ps/git-sync--start-time (current-time))
+        (ps/git-sync-paused t)
+        (ps/git-sync--last-success-time (current-time))
+        (ps/git-sync--failure-signature '(auth . "denied"))
+        (ps/git-sync--failure-count 7)
+        (ps/git-sync--failure-since (current-time))
+        (ps/git-sync--log '((nil auth "denied" "")))
+        (ps/git-sync--state 'error))
+    (ps/git-sync-stop)
+    (should-not ps/git-sync--timer)
+    (should-not ps/git-sync--directory)
+    (should-not ps/git-sync--interval)
+    (should-not ps/git-sync--running)
+    (should-not ps/git-sync--process)
+    (should-not ps/git-sync--start-time)
+    (should-not ps/git-sync-paused)
+    (should-not ps/git-sync--last-success-time)
+    (should-not ps/git-sync--failure-signature)
+    (should (= ps/git-sync--failure-count 0))
+    (should-not ps/git-sync--failure-since)
+    (should-not ps/git-sync--log)
+    (should (eq ps/git-sync--state 'off))))
+
+(ert-deftest ps/git-sync-maybe-start-syncs-a-repo ()
+  "A vault that is a git working tree starts syncing."
+  (ps/git-sync-test--with-repo
+    (let ((dir ps/git-sync--directory)
+          (process-environment (cons "PS_GIT_SYNC_DISABLE" process-environment))
+          (ps/git-sync--timer nil))
+      (setenv "PS_GIT_SYNC_DISABLE" nil)
+      (unwind-protect
+          (progn
+            (ps/git-sync-maybe-start dir)
+            (should (equal ps/git-sync--directory dir))
+            (should (timerp ps/git-sync--timer))
+            ;; Not left saying whatever the previous vault said: the first
+            ;; tick is ten seconds out and the indicator is on screen now.
+            (should (eq ps/git-sync--state 'ok)))
+        (when (timerp ps/git-sync--timer) (cancel-timer ps/git-sync--timer))))))
+
+(ert-deftest ps/git-sync-maybe-start-explains-a-non-repo ()
+  "A vault with no .git is left alone, and the mode line says why."
+  (ps/git-sync-test--with-non-repo
+    (let ((dir ps/git-sync--directory)
+          (process-environment (cons "PS_GIT_SYNC_DISABLE" process-environment))
+          (ps/git-sync--timer nil)
+          (ps/git-sync--state 'ok))
+      (setenv "PS_GIT_SYNC_DISABLE" nil)
+      (ps/git-sync-maybe-start dir)
+      (should (eq ps/git-sync--state 'off))
+      (should-not ps/git-sync--timer)
+      (should (string-match-p "git init" ps/git-sync--last-message)))))
+
+(ert-deftest ps/git-sync-maybe-start-without-a-vault ()
+  "With no vault open there is nothing to sync, and no error either."
+  (let ((ps/git-sync--timer nil)
+        (ps/git-sync--state 'ok))
+    (ps/git-sync-maybe-start nil)
+    (should (eq ps/git-sync--state 'off))
+    (should-not ps/git-sync--timer)))
+
 (ert-deftest ps/git-sync--root-nil-without-directory ()
   "root returns nil when no directory has been configured."
   (let ((ps/git-sync--directory nil))

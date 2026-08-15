@@ -42,7 +42,19 @@ The key after =C-c p S= is the situation's own =:key= — the set is yours, so s
 | =C-c p o= / =F4= | =ps/insert-obsidian-link-from-clipboard= | Obsidian link (clipboard) |
 | =C-c p O= / =F5= | =ps/insert-obsidian-link-prompt=         | Obsidian link (prompt)    |
 
-* Edit Org
+* Vaults
+| Key         | Command                  | Action                        |
+|-------------+--------------------------+-------------------------------|
+| =C-c p V V= | =ps/vault-switch=        | switch to another vault       |
+| =C-c p V n= | =ps/vault-create=        | create a new vault            |
+| =C-c p V o= | =ps/vault-open-existing= | open a folder as a vault      |
+| =C-c p V r= | =ps/vault-rename=        | rename this vault in the list |
+| =C-c p V k= | =ps/vault-forget=        | remove a vault from the list  |
+
+The vault name at the top left of the file tree does the same thing with the
+mouse. See [[file:Vaults.org][Vaults]].
+
+* Config & appearance
 | Key                   | Command                            | Action                        |
 |-----------------------+------------------------------------+-------------------------------|
 | =C-c p C= / =F10=     | =ps/open-config-file=              | open =config.org=             |

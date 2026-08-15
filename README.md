@@ -30,6 +30,9 @@ setup or borrow pieces for your own.
   conflicts, and shift timestamps between timezones.
 - **A file tree with icons** — browse your Org areas, switch between named file
   sets, and optionally scope the agenda to the set you're viewing.
+- **Vaults** — keep several Org folders (work, personal, a shared project) and
+  switch between them from the file tree, Obsidian-style. Each vault carries its
+  own icons, file sets and situations, and syncs to its own Git remote.
 - **Capture and link** — quick capture, journaling, Obsidian-style links, and
   one-key insertion of a web link with its page title fetched automatically.
 - **Many themes** — switch the entire look with one setting, or audition themes
@@ -64,11 +67,10 @@ setup or borrow pieces for your own.
    git clone https://github.com/anton-dergunov/emacs-gtd-config.git ~/.emacs.d
    ```
    (On Windows this is usually `C:\Users\<USER>\AppData\Roaming\.emacs.d`.)
-3. Tell it where your Org files live: copy `local.el.template` to `local.el` and
-   set `my-org-base-directory`. To explore first, point it at the bundled
-   `samples/realistic/` example.
-4. Start Emacs. Packages download on first launch; then press **`C-c p a`** to
-   open the agenda.
+3. Start Emacs. Packages download on first launch, then it offers to create a
+   **vault** — the folder your Org files live in. To explore first, open the
+   bundled `samples/realistic/` example instead.
+4. Press **`C-c p a`** to open the agenda.
 
 For the prettiest result, also install the **Material Symbols** icon font — see
 [docs/Installation.org](docs/Installation.org).
@@ -158,6 +160,8 @@ Jump straight to:
 - [The Agenda](docs/Agenda.org) — the heart of the system
 - [Situations](docs/Situations.org) — context tags and the saved searches over
   them
+- [Vaults](docs/Vaults.org) — several Org folders, switching between them, and
+  which settings belong to which
 - [Customization & appearance](docs/Customization.org) — themes, fonts, icons,
   and settings
 - [AI integration (Claude Code)](docs/AI-integration.org) — the optional

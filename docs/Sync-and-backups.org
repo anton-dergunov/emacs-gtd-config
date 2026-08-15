@@ -8,15 +8,32 @@ Your Org files are valuable — this config works to keep them saved, synced
 across machines, and recoverable.
 
 * Automatic Git sync
-If your Org base directory is a Git repository, this config syncs it in the
-background: it commits your changes and pushes/pulls on a timer, so your tasks
-stay in step across devices without you running any Git commands.
+If your vault is a Git repository, this config syncs it in the background: it
+commits your changes and pushes/pulls on a timer, so your tasks stay in step
+across devices without you running any Git commands.
+
+Syncing is *detected, not configured*. To turn it on for a vault, make that
+folder a repository yourself:
+
+#+begin_src bash
+cd /path/to/your/vault
+git init
+git remote add origin git@github.com:you/your-notes.git
+#+end_src
+
+A vault with no =.git= folder is simply left alone, and its indicator says so.
+Each vault decides independently, so you can sync work notes and keep a personal
+vault local. A vault kept /inside/ a larger repository does not sync either —
+syncing it would commit and push that enclosing repository on the vault's
+behalf. To override the detection for one vault, set =ps/vault-git-sync= in its
+=workspace.org= (see [[file:Vaults.org][Vaults]]).
 
 - A small *mode-line indicator* in the file tree shows sync status. Hover it to
   see when the last successful sync happened (the date is included when it
   wasn't today), and click it to open the sync log.
-- Turn it on or off with =C-c p s= (Productivity → Sync & Version Control → Git
-  Sync Enabled). Turning it back on resyncs immediately.
+- Pause and resume with =C-c p s= (Productivity → Sync & Version Control → Git
+  Sync Enabled). Resuming resyncs immediately. The entry is greyed out in a
+  vault that is not a repository, since there is nothing there to pause.
 - For manual control, =C-x g= opens [[https://magit.vc/][Magit]], the full Git interface.
 
 The sync is intentionally quiet and won't commit while you're mid-edit. It also
@@ -28,13 +45,13 @@ sleeps mid-pull), the indicator clears the stuck state and resumes by itself.
 ** When a sync fails
 The indicator distinguishes trouble that will pass from trouble that needs you:
 
-| Indicator         | Meaning                                       |
-|-------------------+-----------------------------------------------|
-| =✓ Sync=          | The last sync succeeded.                      |
-| =↻ Syncing=       | A sync is running right now.                  |
-| =⊘ Sync Off=      | You turned syncing off.                       |
-| =⚠ Sync Retrying= | Out of your hands — it will try again shortly |
-| =⚠ Sync Failed=   | Needs you before syncing can continue         |
+| Indicator         | Meaning                                           |
+|-------------------+---------------------------------------------------|
+| =✓ Sync=          | The last sync succeeded.                          |
+| =↻ Syncing=       | A sync is running right now.                      |
+| =⊘ Sync Off=      | This vault is not a repository, or you paused it. |
+| =⚠ Sync Retrying= | Out of your hands — it will try again shortly     |
+| =⚠ Sync Failed=   | Needs you before syncing can continue             |
 
 /Sync Retrying/ (orange) means the remote server returned an error or the
 network is unreachable. Your work is already committed locally and the next

@@ -1,2 +1,7 @@
-;; Path to the base directory for org mode files
+;; Machine-local settings, loaded before everything else. Copy to local.el.
+;;
+;; You do not normally need this file: vaults are chosen from the UI
+;; (Productivity → Vault, or the chip in the file tree's header line) and
+;; remembered in vaults.eld. Setting my-org-base-directory here seeds the very
+;; first vault, and is ignored once the registry exists.
 (setq my-org-base-directory "<please provide the path here>")

@@ -42,9 +42,17 @@
 
 (ert-deftest ps/claude-test-working-directory-uses-org-base ()
   "Always returns the expanded `my-org-base-directory', not the project root."
-  (let ((my-org-base-directory "~/org/"))
-    (should (equal (ps/claude--working-directory)
-                   (expand-file-name "~/org/")))))
+  (let ((dir (file-name-as-directory (make-temp-file "ps-claude-" t))))
+    (unwind-protect
+        (let ((my-org-base-directory dir))
+          (should (equal (ps/claude--working-directory) (expand-file-name dir))))
+      (delete-directory dir t))))
+
+(ert-deftest ps/claude-test-working-directory-without-a-vault ()
+  "With no vault open, Claude starts in `default-directory' rather than erroring."
+  (let ((my-org-base-directory nil)
+        (default-directory "/tmp/"))
+    (should (equal (ps/claude--working-directory) "/tmp/"))))
 
 ;;; Buffer project key for selection / active-buffer tracking
 

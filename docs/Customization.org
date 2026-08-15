@@ -12,15 +12,26 @@ sections and the mode line, are covered in [[file:Agenda.org][The Agenda]].)
 * Where settings live
 There are two layers, modelled on an editor's *User* vs *Workspace* settings:
 
-- =config.org= — the shared, public configuration. Its /Settings/ section
-  (right after the bootstrap) is the single place to adjust defaults: there's a
-  block per feature (Appearance, Availability, Conflicts, Mode line, Task
-  count, Material icons, File Tree, …).
-- =workspace.org= — settings tied to /your/ Org data folder (your category
-  icons, your file-tree sets). It lives beside your Org files, loads *after*
-  =config.org=, and overrides it. This keeps your personal categories out of the
-  public repo and means pulling upstream changes never conflicts with your
-  customizations.
+- =config.org= — *system* settings, the same in every vault. Its /Settings/
+  section (right after the bootstrap) is the single place to adjust defaults:
+  there's a block per feature (Appearance, Fonts, Availability, Conflicts, Mode
+  line, Task count, Material icons, File Tree, …). Everything about how things
+  /look and behave/ belongs here.
+- =workspace.org= — *vault* settings, belonging to one Org folder: your category
+  icons, your file sets and their order, your context tags and situations, and
+  whether that vault syncs. It lives beside your Org files, loads *after*
+  =config.org=, and overrides it. Everything about how /this folder's content is
+  organised/ belongs here. Keeping it in the vault means it travels with your
+  notes, stays out of the public repo, and never conflicts when you pull
+  upstream changes.
+
+Switching vaults resets the vault settings and loads the new vault's, so a
+category icon or situation defined in one does not follow you into another. See
+[[file:Vaults.org][Vaults]].
+
+Beside =workspace.org= sits =.ps/state.el=, which Emacs writes itself: it
+remembers what the interface toggles (the active file set, whether it also
+restricts the agenda) per vault. There is no reason to edit it by hand.
 
 Open them from *Productivity → Config*: =C-c p C= opens =config.org= (=F10=
 too), =C-c p W= opens =workspace.org=; the lower-case =C-c p R= / =C-c p w=

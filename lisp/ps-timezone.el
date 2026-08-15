@@ -1,6 +1,9 @@
 ;;; ps-timezone.el --- Org timestamp timezone shifting -*- lexical-binding: t; -*-
 
 (require 'cl-lib)
+(require 'ps-vault)
+
+(defvar my-org-base-directory)
 
 ;;; Faces
 
@@ -262,9 +265,7 @@ Returns the number of files written."
                          "(mixed)"))
            (to-label (format "%s (%s)" ps/timezone--cur-to-tz
                              (ps/timezone--utc-offset-label ps/timezone--cur-to-tz)))
-           (base-dir (if (boundp 'my-org-base-directory)
-                         my-org-base-directory
-                       "")))
+           (base-dir (or (ps/vault-current) "")))
       (insert "Shift Org Timezones\n\n")
       (insert (format "From: %s  →  To: %s\n\n" from-label to-label))
       (insert (format "Files to update (%d):\n" (length ps/timezone--cur-files)))
@@ -302,8 +303,8 @@ Scans `my-org-base-directory' for org files with #+TIMEZONE: headers,
 prompts for the target timezone, then shows a preview buffer.
 Press a or RET (or click Apply) to apply; q to cancel."
   (interactive)
-  (unless (boundp 'my-org-base-directory)
-    (user-error "my-org-base-directory is not set"))
+  (unless (ps/vault-configured-p)
+    (user-error "No vault is open"))
   (let ((files (ps/timezone--find-files my-org-base-directory)))
     (if (null files)
         (message "No org files with #+TIMEZONE: found in %s" my-org-base-directory)

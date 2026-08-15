@@ -145,27 +145,31 @@ see [[file:Developing.org][Developing & extending]].
 #+end_quote
 
 * 4. Point it at your Org files
-All of your tasks and notes live in one base directory that you choose.
+All of your tasks and notes live in one folder that you choose — a *vault*. You
+pick it on first launch, so there is nothing to configure now.
 
-1. Copy =local.el.template= to =local.el= in the config directory.
-2. Set =my-org-base-directory= to where you want your Org files. A folder inside
-   Dropbox, iCloud, or another sync service keeps them available on every
-   device.
+A folder inside Dropbox, iCloud, or another sync service keeps your notes
+available on every device. You can keep several vaults and switch between them
+at any time; see [[file:Vaults.org][Vaults]].
 
-To explore before committing to a layout, point it at the bundled example:
-
-#+begin_src elisp
-(setq my-org-base-directory
-      (expand-file-name "samples/realistic/" user-emacs-directory))
-#+end_src
-
-Every =.org= file under that directory feeds the agenda, at any depth, so you
-are free to organize it however you like. See [[file:Planning-setup.org][Planning setup]] for a suggested
-layout and for the handful of names that are skipped.
+Every =.org= file under a vault feeds the agenda, at any depth, so you are free
+to organize it however you like. See [[file:Planning-setup.org][Planning setup]] for a suggested layout and
+for the handful of names that are skipped.
 
 * 5. First launch
 Start Emacs. On the first run it downloads its packages into =elpa/= (this takes
-a minute). When it settles, press =C-c p a= to open the agenda.
+a minute).
+
+It then opens on a welcome screen, because no vault is set up yet. Choose:
+
+- *Create a new vault* — pick a folder, and it is set up with a starter
+  =Inbox.org= and its own settings file.
+- *Open an existing folder* — use a folder of Org files you already have.
+
+To explore before committing to a layout, open the bundled example folder
+=samples/realistic/= inside this config directory.
+
+Once a vault is open, press =C-c p a= for the agenda.
 
 Optionally pre-download packages from the command line instead:
 

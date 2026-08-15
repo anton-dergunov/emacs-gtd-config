@@ -30,6 +30,7 @@
 
 (require 'subr-x)
 (require 'seq)
+(require 'ps-vault)
 
 ;;; Customization
 
@@ -178,6 +179,10 @@ the truncation `message-truncate-lines' applies on a narrow frame.")
 
 (defvar ps/git-sync--directory nil
   "Working directory (a git repo) the sync runs in. Set by `ps/git-sync-start'.")
+(defvar ps/git-sync--interval nil
+  "Interval this vault syncs at, overriding `ps/git-sync-interval', or nil.
+Set by `ps/git-sync-start'; a vault names it in its workspace.org or state
+file (see `ps/vault-git-sync').")
 (defvar ps/git-sync--timer nil)
 (defvar ps/git-sync--running nil)
 (defvar ps/git-sync--process nil
@@ -286,10 +291,12 @@ Rendered inside the file-tree mode line (see `ps/file-tree--modeline')."
         "git rev-parse --show-toplevel 2>/dev/null")))))
 
 (defun ps/git-sync--inside-repo-p ()
-  "Return non-nil if `ps/git-sync--directory' is inside a git repo."
-  (let ((root (ps/git-sync--root)))
-    (and root
-         (not (string-empty-p root)))))
+  "Return non-nil if `ps/git-sync--directory' is itself a git working tree.
+Note \"itself\": syncing must not climb to an enclosing repository the way
+`ps/git-sync--root' does, or a vault kept inside a larger checkout would have
+that outer repository committed and pushed on its behalf.  Being a repo is
+also what *enables* sync at all -- see `ps/git-sync-maybe-start'."
+  (ps/vault-git-repo-p ps/git-sync--directory))
 
 (defun ps/git-sync--set-status (state message)
   "Set the modeline STATE and help-echo MESSAGE, then refresh the mode line."
@@ -527,16 +534,67 @@ Emacs restart."
     (when ps/git-sync--timer
       (cancel-timer ps/git-sync--timer))
     (setq ps/git-sync--timer
-          (run-with-timer 10 ps/git-sync-interval #'ps/git-sync--run))))
+          (run-with-timer 10 (or ps/git-sync--interval ps/git-sync-interval)
+                          #'ps/git-sync--run))))
 
-(defun ps/git-sync-start (directory)
-  "Begin background git sync in DIRECTORY (a path inside a git repo).
-Starts the periodic timer.  The status indicator is rendered in the file
-tree mode line (see `ps/file-tree--modeline'); it is intentionally not
+(defun ps/git-sync-start (directory &optional interval)
+  "Begin background git sync in DIRECTORY, a git working tree.
+Starts the periodic timer, every INTERVAL seconds when given and
+`ps/git-sync-interval' otherwise.  The status indicator is rendered in the
+file tree mode line (see `ps/file-tree--modeline'); it is intentionally not
 injected into `global-mode-string', so it does not appear in every window."
-  (setq ps/git-sync--directory directory)
+  (setq ps/git-sync--directory directory
+        ps/git-sync--interval interval)
   (when (ps/git-sync--inside-repo-p)
-    (ps/git-sync--ensure-timer)))
+    (ps/git-sync--ensure-timer)
+    ;; State the indicator honestly straight away.  The first tick is ten
+    ;; seconds out, and until it lands the status is whatever the previous
+    ;; vault left behind -- after a switch that reads "Git sync stopped" for a
+    ;; vault that is, in fact, syncing.
+    (ps/git-sync--set-status 'ok "Git sync enabled")))
+
+(defun ps/git-sync-stop ()
+  "Stop syncing and clear every trace of the outgoing repository.
+The teardown half of a vault switch.  Cancelling the timer is the easy part:
+the failure signature, attempt count and log all describe a *particular* repo,
+and carrying them into the next vault would show its sync as broken for
+reasons that have nothing to do with it."
+  (when (timerp ps/git-sync--timer)
+    (cancel-timer ps/git-sync--timer))
+  (setq ps/git-sync--timer nil)
+  ;; Kills or disowns a sync still running against the old repo.
+  (ps/git-sync--reap-stale)
+  (setq ps/git-sync--directory nil
+        ps/git-sync--interval nil
+        ps/git-sync--running nil
+        ps/git-sync--process nil
+        ps/git-sync--start-time nil
+        ps/git-sync-paused nil
+        ps/git-sync--last-success-time nil
+        ps/git-sync--failure-signature nil
+        ps/git-sync--failure-count 0
+        ps/git-sync--failure-since nil
+        ps/git-sync--log nil)
+  (ps/git-sync--set-status 'off "Git sync stopped"))
+
+(defun ps/git-sync-maybe-start (directory)
+  "Start syncing DIRECTORY if it should, and say why in the mode line if not.
+Whether a vault syncs is *detected*, not configured: it syncs when it is
+itself a git working tree, so `git init' in a vault (and adding a remote) is
+what turns this on.  `ps/vault-git-sync' can override that per vault."
+  (let ((interval (and directory (ps/vault-git-sync-interval directory))))
+    (cond
+     ((getenv "PS_GIT_SYNC_DISABLE")
+      (ps/git-sync--set-status 'off "Git sync disabled by PS_GIT_SYNC_DISABLE"))
+     ((null directory)
+      (ps/git-sync--set-status 'off "No vault is open"))
+     (interval
+      (ps/git-sync-start directory interval))
+     ((not (ps/vault-git-repo-p directory))
+      (ps/git-sync--set-status
+       'off "Not a git repository — run `git init' in this vault to sync it"))
+     (t
+      (ps/git-sync--set-status 'off "Git sync turned off for this vault")))))
 
 (defun ps/git-sync-toggle ()
   "Toggle automatic git sync on/off by flipping `ps/git-sync-paused'.

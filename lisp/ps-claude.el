@@ -135,6 +135,7 @@
 ;;; Code:
 
 (require 'seq)
+(require 'ps-vault)
 
 (declare-function claude-code-ide--sync-terminal-dimensions "claude-code-ide")
 (declare-function claude-code-ide--get-working-directory "claude-code-ide")
@@ -545,8 +546,11 @@ so repeated motion events cannot lose it.  Arms a bounded watchdog (see
   "Always use `my-org-base-directory' as the Claude Code IDE working directory.
 Overrides `claude-code-ide--get-working-directory', whose default
 (current project root) would resolve to this config's own source tree
-for any buffer in this repo."
-  (expand-file-name my-org-base-directory))
+for any buffer in this repo.  With no vault open there is nothing better to
+offer than `default-directory'."
+  (if (ps/vault-configured-p)
+      (expand-file-name my-org-base-directory)
+    default-directory))
 
 ;;; Selection / active-buffer project key (fix #4)
 

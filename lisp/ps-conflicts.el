@@ -4,6 +4,7 @@
 (require 'calendar)
 (require 'ps-file-tree)
 (require 'ps-org-files)
+(require 'ps-vault)
 (require 'ps-window)
 (require 'ps-mode-line)
 
@@ -427,7 +428,7 @@ Press RET or click on any task to jump to it in its org file."
 
 (defun ps/conflicts--agenda-check ()
   "Recompute the scheduling-conflict count for the agenda mode line."
-  (when (and (boundp 'my-org-base-directory)
+  (when (and (ps/vault-configured-p)
              (buffer-live-p (get-buffer org-agenda-buffer-name)))
     (let* ((directory (ps/org-files-root))
            (result (ps/conflicts--find-all
