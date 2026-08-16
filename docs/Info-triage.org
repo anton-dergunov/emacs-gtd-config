@@ -136,6 +136,9 @@ so does =^=; =‹= on the mode line retraces the folders you actually opened,
 which after a few steps is somewhere else entirely. Both are useful, which is
 why they are separate.
 
+The path across the top is clickable folder by folder, so you can jump several
+levels up in one click rather than pressing =^= repeatedly.
+
 * Under the hood / Customize
 
 - The Triage menu lives under Productivity and is =config.org= → /Productivity

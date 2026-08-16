@@ -176,7 +176,9 @@ Clicking a file opens it by the rules above; clicking a folder goes into it,
 reusing the same window rather than opening a new one each time.
 
 =..= at the top of the listing goes to the parent folder, and so does =^=. That
-is a different move from =‹=, which retraces where you have been.
+is a different move from =‹=, which retraces where you have been. The path
+across the top is clickable folder by folder, for jumping several levels at
+once.
 
 * What the window title says
 The window title and the mode line name the file you are editing without its

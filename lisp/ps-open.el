@@ -218,20 +218,46 @@ the buffer it was called from asked to be kept; see `ps/open--visit'."
 ;;; The two places a click on a file name comes from
 
 (declare-function dired-get-file-for-visit "dired")
+(declare-function dired-get-filename "dired" (&optional localp no-error-if-not-filep))
 (declare-function markdown-link-url "markdown-mode")
 (declare-function markdown-enter-key "markdown-mode")
 
 ;;;###autoload
+(defun ps/open--dired-header-directory ()
+  "Return the folder named by the header component at point, or nil.
+
+Dired's header line spells the current folder out one component at a time and
+makes each its own click target, so clicking `anton' in
+`/Users/anton/info-triage-inbox:' goes to `/Users/anton'.  The path is simply
+the line up to the end of the component under point.
+
+Read here rather than left to the keymap Dired puts on that text, which binds
+only mouse-2 -- Emacs reaches it by rewriting a click, and this configuration
+turns that rewrite off (see `ps/open-setup-click').  Going through
+`ps/open--visit' also means the header obeys the same window rule, and lands
+in the same navigation trail, as every other way of opening a folder."
+  (when (and (get-text-property (point) 'mouse-face)
+             (null (dired-get-filename nil t)))
+    (let* ((end (next-single-property-change (point) 'mouse-face nil (pos-eol)))
+           (path (string-trim (buffer-substring-no-properties (pos-bol) end))))
+      (and (file-directory-p path) path))))
+
 (defun ps/open-dired-thing ()
   "Open the file or folder at point in Dired, in this window.
 Files go through `ps/open-file'; folders stay in Dired.  Bound over Dired's
 own commands because the stock ones open in *another* window, which is what
-turns walking one folder into a ping-pong between two of them."
+turns walking one folder into a ping-pong between two of them.
+
+On the header line there is no file, but there is a folder: see
+`ps/open--dired-header-directory'."
   (interactive)
-  (let ((target (dired-get-file-for-visit)))
-    (if (file-directory-p target)
-        (ps/open--visit target)
-      (ps/open-file target))))
+  (if (dired-get-filename nil t)
+      (let ((target (dired-get-file-for-visit)))
+        (if (file-directory-p target)
+            (ps/open--visit target)
+          (ps/open-file target)))
+    (ps/open--visit (or (ps/open--dired-header-directory)
+                        (user-error "Nothing to open on this line")))))
 
 ;;;###autoload
 (defun ps/open-dired-thing-at-mouse (event)
@@ -327,12 +353,8 @@ around it still just moves point."
 
 (defun ps/open--clickable-event-p (event)
   "Non-nil when EVENT was pressed on something this buffer follows.
-
-Answered from `event-start', which the press and both kinds of release all
-carry, so the press and the release always agree without a flag between them.
-Read in the buffer of the window that was clicked rather than the current one:
-by the time the release arrives, following the link has usually selected a
-different buffer already."
+Read in the buffer of the window that was clicked rather than the current one,
+since a press can arrive while some other buffer is selected."
   (let* ((start (and (consp event) (event-start event)))
          (window (and start (posn-window start)))
          (position (and start (posn-point start))))
@@ -341,6 +363,29 @@ different buffer already."
          (with-current-buffer (window-buffer window)
            (and ps/open-follow-function
                 (ps/open--clickable-at-p position))))))
+
+(defvar ps/open--press-followed nil
+  "Non-nil when the `down-mouse-1' now in progress followed a link.
+
+Remembered rather than worked out again when the release arrives, and that is
+load-bearing.  A release carries the position its press started at but not the
+buffer that was there, and following a link routinely replaces the buffer in
+that very window -- so asking the *new* buffer whether the press landed on a
+link gets an answer about the wrong text.  It said no, and the release went on
+to do its ordinary work: `mouse-set-region' from the press position to the
+release position, drawing a stray selection across whatever had just opened.
+Clicking Dired's `..' showed it every time, because going up always replaces
+the listing.
+
+Global rather than buffer-local for the same reason -- the buffer the press
+happened in is often not the one the release is read in.")
+
+(defun ps/open--take-press-followed ()
+  "Return whether the press this release ends followed a link, and forget it.
+Cleared on the way out so a release that arrives with no press of ours before
+it -- a click begun in another frame -- cannot inherit a stale answer."
+  (prog1 ps/open--press-followed
+    (setq ps/open--press-followed nil)))
 
 ;;;###autoload
 (defun ps/open-follow-at-event (event)
@@ -359,7 +404,8 @@ Point staying put is the whole mechanism -- see this section's commentary."
 Bound to `down-mouse-1': acting here rather than on the release is what makes
 one click enough."
   (interactive "e")
-  (if (ps/open--clickable-event-p event)
+  (setq ps/open--press-followed (ps/open--clickable-event-p event))
+  (if ps/open--press-followed
       (ps/open-follow-at-event event)
     (mouse-drag-region event)))
 
@@ -368,7 +414,7 @@ one click enough."
   "Set point from EVENT, unless the press it ends already followed a link.
 Bound to `mouse-1'; the work is done by `ps/open-down-click'."
   (interactive "e")
-  (unless (ps/open--clickable-event-p event)
+  (unless (ps/open--take-press-followed)
     (mouse-set-point event)))
 
 ;;;###autoload
@@ -377,7 +423,7 @@ Bound to `mouse-1'; the work is done by `ps/open-down-click'."
 Bound to `drag-mouse-1'; a hand that wobbled over a link has already opened
 it, so there is nothing left to select."
   (interactive "e")
-  (unless (ps/open--clickable-event-p event)
+  (unless (ps/open--take-press-followed)
     (mouse-set-region event)))
 
 (defun ps/open-bind-click (map)

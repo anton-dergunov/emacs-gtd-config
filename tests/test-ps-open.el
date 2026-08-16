@@ -237,19 +237,88 @@ point-never-moves guarantee, or select the link it just followed."
           (selected 0))
       (insert (propertize "link" 'mouse-face 'highlight))
       (setq-local ps/open-follow-function #'ignore)
-      (cl-letf (((symbol-function 'mouse-set-point)
+      (cl-letf (((symbol-function 'mouse-drag-region) #'ignore)
+                ((symbol-function 'mouse-set-point)
                  (lambda (_event) (setq pointed (1+ pointed))))
                 ((symbol-function 'mouse-set-region)
                  (lambda (_event) (setq selected (1+ selected)))))
+        (ps/open-down-click (test-ps-open--press link))
         (ps/open-click (test-ps-open--click link))
+        (ps/open-down-click (test-ps-open--press link))
         (ps/open-drag-click (test-ps-open--drag link link))
         (should (= pointed 0))
         (should (= selected 0))
         ;; Off a link both releases do their ordinary work.
+        (ps/open-down-click (test-ps-open--press (point-min)))
         (ps/open-click (test-ps-open--click (point-min)))
+        (ps/open-down-click (test-ps-open--press (point-min)))
         (ps/open-drag-click (test-ps-open--drag (point-min) 3))
         (should (= pointed 1))
         (should (= selected 1))))))
+
+(ert-deftest ps/open-release-remembers-the-press-across-a-buffer-change ()
+  "Following a link routinely replaces the buffer in the very window that was
+clicked, so a release cannot ask that window whether its own press landed on a
+link -- it would be asking about different text.  It said no, and drew a
+selection across whatever had just opened.  Dired's `..' showed it every time."
+  (test-ps-open--with-clicked-buffer
+    (insert (propertize "link" 'mouse-face 'highlight))
+    (let ((selected 0)
+          (replacement (generate-new-buffer " ps-open-test-opened")))
+      (unwind-protect
+          (progn
+            (setq-local ps/open-follow-function
+                        (lambda ()
+                          (interactive)
+                          ;; What opening something in this window looks like.
+                          (set-window-buffer (selected-window) replacement)))
+            (cl-letf (((symbol-function 'mouse-set-region)
+                       (lambda (_event) (setq selected (1+ selected)))))
+              (ps/open-down-click (test-ps-open--press (point-min)))
+              ;; The clicked window now shows plain text with no `mouse-face'.
+              (should-not (ps/open--clickable-event-p (test-ps-open--press (point-min))))
+              (ps/open-drag-click (test-ps-open--drag (point-min) 3))
+              (should (= selected 0))))
+        (kill-buffer replacement)))))
+
+(ert-deftest ps/open--take-press-followed-does-not-outlive-one-release ()
+  "A release with no press of ours before it must not inherit a stale answer."
+  (let ((ps/open--press-followed t))
+    (should (ps/open--take-press-followed))
+    (should-not (ps/open--take-press-followed))))
+
+(ert-deftest ps/open--dired-header-directory-reads-the-component-at-point ()
+  "Dired's header spells the folder out one clickable component at a time.
+Emacs reaches those by rewriting a click into a mouse-2, which is turned off
+in these buffers -- so clicking one silently did nothing while still showing a
+pointing hand."
+  (require 'dired)
+  (let* ((root (make-temp-file "ps-open-header" t))
+         (child (expand-file-name "inner" root))
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (make-directory child)
+          (setq buffer (dired-noselect child))
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            ;; Only the ancestors are clickable -- clicking the folder already
+            ;; being shown would go nowhere -- so the last clickable component
+            ;; of `root/inner' is `root', which is where clicking it lands.
+            (let ((last nil) (pos (pos-bol)) (end (pos-eol)))
+              (while (< pos end)
+                (when (get-text-property pos 'mouse-face) (setq last pos))
+                (setq pos (1+ pos)))
+              (should last)
+              (goto-char last)
+              (should (equal (file-truename (ps/open--dired-header-directory))
+                             (file-truename root))))
+            ;; A file line is not the header, whatever else it carries.
+            (goto-char (point-min))
+            (forward-line 2)
+            (should-not (ps/open--dired-header-directory))))
+      (when buffer (kill-buffer buffer))
+      (delete-directory root t))))
 
 (ert-deftest ps/open-bind-click-binds-the-press-and-both-releases ()
   "Binding the press without the releases leaves Emacs setting point after the
