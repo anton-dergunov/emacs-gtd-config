@@ -55,6 +55,36 @@ file needs. Do not move it.
   (unless package-archive-contents
     (package-refresh-contents))
 
+  ;; ...but "if needed" above only covers having *no* index at all, and that is
+  ;; not the failure that actually happens.  MELPA rebuilds continuously and
+  ;; deletes the previous tarballs, so a cached index does not go merely old, it
+  ;; goes wrong: it names a version the server no longer has.  Adding any new
+  ;; package to this file then fails on every machine that already had an index,
+  ;; with a 404 that reads as the package having disappeared:
+  ;;
+  ;;   Failed to install markdown-mode: .../markdown-mode-20260425.954.tar: Not found
+  ;;
+  ;; A stale index cannot be detected without asking the server, so refresh in
+  ;; response to the failure rather than in anticipation of it: once per session,
+  ;; and only when an install has actually failed.
+  (defvar ps/package--refreshed nil
+    "Non-nil once this session has re-fetched the archives after a failed install.")
+
+  (defun ps/package-install-retry-once (original &rest args)
+    "Around-advice for `package-install': refresh the archives once and retry."
+    (condition-case failure
+        (apply original args)
+      (error
+       (when ps/package--refreshed
+         (signal (car failure) (cdr failure)))
+       (setq ps/package--refreshed t)
+       (message "Package install failed (%s); refreshing archives and retrying…"
+                (error-message-string failure))
+       (package-refresh-contents)
+       (apply original args))))
+
+  (advice-add 'package-install :around #'ps/package-install-retry-once)
+
   ;; Install use-package if missing
   (unless (package-installed-p 'use-package)
     (package-install 'use-package))
