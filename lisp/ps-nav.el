@@ -268,17 +268,43 @@ assumed."
 
 ;;; Mode line
 
+(defun ps/nav--click (event direction)
+  "Go DIRECTION in the window whose mode line EVENT clicked.
+
+That window, not the selected one.  Every window draws its own pair from its
+own trail, so a pair belongs to the window it sits under -- and clicking a
+mode line is also how you move to that window everywhere else in Emacs.
+Acting on the selected window instead meant clicking `‹' under the pane you
+were reading sent a *different* pane backwards, whenever the frame's idea of
+the selected window had drifted from what you were looking at."
+  (let ((window (posn-window (event-start event))))
+    (when (windowp window)
+      (select-window window)))
+  (ps/nav--go direction))
+
+;;;###autoload
+(defun ps/nav-back-click (event)
+  "Go back in the window whose mode line EVENT clicked."
+  (interactive "e")
+  (ps/nav--click event 'back))
+
+;;;###autoload
+(defun ps/nav-forward-click (event)
+  "Go forward in the window whose mode line EVENT clicked."
+  (interactive "e")
+  (ps/nav--click event 'forward))
+
 (defvar ps/nav--back-map
   (let ((map (make-sparse-keymap)))
     ;; mouse-1 only: mouse-2 and mouse-3 are disabled across the mode line by
     ;; `ps/mode-line--disable-destructive-mouse'.
-    (define-key map [mode-line mouse-1] #'ps/nav-back)
+    (define-key map [mode-line mouse-1] #'ps/nav-back-click)
     map)
   "Keymap on the mode line's back button.")
 
 (defvar ps/nav--forward-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [mode-line mouse-1] #'ps/nav-forward)
+    (define-key map [mode-line mouse-1] #'ps/nav-forward-click)
     map)
   "Keymap on the mode line's forward button.")
 

@@ -390,12 +390,28 @@ it -- a click begun in another frame -- cannot inherit a stale answer."
 ;;;###autoload
 (defun ps/open-follow-at-event (event)
   "Follow whatever EVENT pressed on, without moving point.
-Point staying put is the whole mechanism -- see this section's commentary."
+
+Two things are load-bearing here, and they pull in opposite directions.
+
+Point must not move: that is what stops `org-appear' revealing the link's raw
+text and sliding the rest of the line out from under the pointer -- see this
+section's commentary.  Hence `save-excursion' around the whole follow.
+
+But the window selection must be left wherever the follow put it.  The clicked
+window is selected first, exactly as `mouse-set-point' used to do it, and the
+`ps/window-*' helpers then select whatever pane they opened into.  Wrapping
+this in `with-selected-window' looked equivalent and was not: it puts the old
+selection back, so you ended up reading a pane the frame did not consider
+selected, and the mode line's `‹' -- which walks the *selected* window's trail
+-- sent some other window backwards instead."
   (interactive "e")
-  (let ((start (event-start event)))
-    (with-selected-window (posn-window start)
+  (let* ((start (event-start event))
+         (window (posn-window start))
+         (position (posn-point start)))
+    (select-window window)
+    (with-current-buffer (window-buffer window)
       (save-excursion
-        (goto-char (posn-point start))
+        (goto-char position)
         (call-interactively ps/open-follow-function)))))
 
 ;;;###autoload

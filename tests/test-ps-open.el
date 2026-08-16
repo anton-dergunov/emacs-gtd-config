@@ -203,6 +203,45 @@ nothing a click could do, so the press must fall through to a normal drag."
     (insert (propertize "link" 'mouse-face 'highlight))
     (should-not (ps/open--clickable-event-p (test-ps-open--press (point-min))))))
 
+(ert-deftest ps/open-follow-at-event-leaves-the-selection-where-the-follow-put-it ()
+  "The `ps/window-*' helpers all select the pane they opened into, and that has
+to survive.  Putting the old selection back left you reading a pane the frame
+did not consider selected, so the mode line's `‹' -- which walks the selected
+window's trail -- sent some other window backwards."
+  (let ((origin (selected-window))
+        (other nil))
+    (unwind-protect
+        (progn
+          (setq other (split-window origin))
+          (select-window origin)
+          (with-current-buffer (window-buffer origin)
+            (let ((ps/open-follow-function
+                   (lambda () (interactive) (select-window other))))
+              (ps/open-follow-at-event
+               (list 'down-mouse-1 (list origin (point-min) '(0 . 0) 0)))
+              (should (eq (selected-window) other)))))
+      (when (window-live-p other) (delete-window other))
+      (select-window origin))))
+
+(ert-deftest ps/open-follow-at-event-selects-the-window-it-was-aimed-at ()
+  "Clicking in a window is how you move to it; `mouse-set-point' did that as a
+side effect and this has to keep doing it deliberately."
+  (let ((origin (selected-window))
+        (other nil))
+    (unwind-protect
+        (progn
+          (setq other (split-window origin))
+          (select-window origin)
+          (with-current-buffer (window-buffer other)
+            (let* ((seen nil)
+                   (ps/open-follow-function
+                    (lambda () (interactive) (setq seen (selected-window)))))
+              (ps/open-follow-at-event
+               (list 'down-mouse-1 (list other (point-min) '(0 . 0) 0)))
+              (should (eq seen other)))))
+      (when (window-live-p other) (delete-window other))
+      (select-window origin))))
+
 (ert-deftest ps/open-down-click-follows-on-the-press-without-moving-point ()
   "Point staying put is the mechanism, not a detail: moving it into the link is
 what makes org-appear reveal the raw syntax and slide the rest of the line out

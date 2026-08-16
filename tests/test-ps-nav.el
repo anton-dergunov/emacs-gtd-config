@@ -137,6 +137,36 @@ button that leads nowhere looks exactly like one that does."
                                   (get-text-property 0 'help-echo glyph)))))
     (set-window-parameter (selected-window) 'ps/nav-back nil)))
 
+(ert-deftest ps/nav-click-moves-the-window-whose-mode-line-was-clicked ()
+  "Every window draws its own pair from its own trail, so a pair belongs to the
+window it sits under.  Acting on the selected window instead sent a different
+pane backwards whenever the frame's selected window had drifted from the one
+being read."
+  (let ((frame-window (selected-window))
+        (other nil))
+    (unwind-protect
+        (progn
+          (setq other (split-window frame-window))
+          (should-not (eq other frame-window))
+          (select-window frame-window)
+          (let ((moved nil))
+            (cl-letf (((symbol-function 'ps/nav--go)
+                       (lambda (direction) (setq moved (cons (selected-window) direction)))))
+              (ps/nav-back-click (list 'mouse-1 (list other 1 '(0 . 0) 0)))
+              (should (equal moved (cons other 'back)))
+              (select-window frame-window)
+              (ps/nav-forward-click (list 'mouse-1 (list other 1 '(0 . 0) 0)))
+              (should (equal moved (cons other 'forward))))))
+      (when (window-live-p other) (delete-window other))
+      (select-window frame-window))))
+
+(ert-deftest ps/nav-mode-line-buttons-are-bound-to-the-click-commands ()
+  "Bound to the plain commands, the buttons read the selected window instead
+of their own -- which is the bug above, not a detail of wiring."
+  (should (eq (lookup-key ps/nav--back-map [mode-line mouse-1]) #'ps/nav-back-click))
+  (should (eq (lookup-key ps/nav--forward-map [mode-line mouse-1])
+              #'ps/nav-forward-click)))
+
 (ert-deftest ps/nav-mode-line-add-is-idempotent ()
   "Reloading config.org must not stack a second pair of arrows."
   (let* ((once (ps/nav-mode-line-add '("%b")))
