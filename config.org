@@ -167,6 +167,10 @@ All self-contained logic lives in =lisp/ps-*.el=.
 
   ;; Install the planning-focused mode line and frame title (org-mode-hook,
   ;; org-agenda-mode-hook, frame-title-format) before any Org buffer loads.
+  ;; This also replaces the stock default mode line for everything that is not
+  ;; a plan file, so it needs `ps-org-files' (loaded above) to tell the two
+  ;; apart.  Its order relative to `ps/nav-setup' below does not matter: both
+  ;; add the same back/forward element and both are idempotent about it.
   (ps/mode-line-setup)
 
   ;; Feeds the mode line's task-count segment (ps-mode-line.el's
@@ -432,11 +436,16 @@ the colour of the name. =(= shows the full =ls= listing whenever it is wanted.
 #+end_src
 
 ** Navigation history (ps-nav.el)
-Back and forward, per window, shown as =‹ ›= at the left of the mode line.
+Back and forward, per window, shown as =‹ ›= at the left of the mode line. An
+arrow pointing where you cannot go is drawn dim and does nothing when clicked.
+=ps/nav-disabled-color= is only the fallback for a theme whose =shadow= face
+names no colour; it has to be a colour rather than a face because the arrow is
+an image wherever the icon font is installed.
 #+begin_src emacs-lisp
-  (setq ps/nav-history-limit 30
-        ps/nav-back-glyph    "‹"
-        ps/nav-forward-glyph "›")
+  (setq ps/nav-history-limit  30
+        ps/nav-back-glyph     "‹"
+        ps/nav-forward-glyph  "›"
+        ps/nav-disabled-color "gray50")
 #+end_src
 
 ** Info triage (ps-info-triage.el)
@@ -543,9 +552,23 @@ Remove once the root cause is found.
 #+end_src
 
 ** Mode line (ps-mode-line.el)
-Separator placed between mode-line components (filename · position · heading).
+Two shapes. A *plan file* — one this config scans for the agenda, see /Org
+files/ above — shows its short name, its open task count, how far through it
+you are, and the heading you are under. *Everything else* shows the path to
+the file it is displaying, with =~= for your home folder, and how far through
+it you are: a Markdown note, an image (no position — a picture has none), a
+rendered page, the capture queue, this documentation. Emacs's own default
+line, with its lighters and internal flags, is replaced everywhere; the
+agenda, the file tree and the Claude panel keep the lines they set for
+themselves.
+
+=ps/mode-line-modified-indicator= marks unsaved changes. Plan files are saved
+for you and never show it; nothing saves a Markdown note, so an edit there
+would otherwise sit unwritten with no sign of it anywhere. Set it to =""= to
+turn it off.
 #+begin_src emacs-lisp
-  (setq ps/mode-line-separator " · ")
+  (setq ps/mode-line-separator          " · "
+        ps/mode-line-modified-indicator " •")
 #+end_src
 
 ** Task count (ps-task-count.el)
@@ -2123,10 +2146,10 @@ listing back at any time.
     (add-hook 'dired-mode-hook #'dired-hide-details-mode)
     (add-hook 'dired-mode-hook #'ps/open-dired-setup-click)
     (ps/dired-setup)
-    ;; A click opens what it landed on, in this window.  mouse-2 is what
-    ;; `mouse-1-click-follows-link' rewrites a click into; mouse-1 is bound
-    ;; directly as well, because that rewrite gives up on a click that drifted
-    ;; a few pixels — see `ps/open-click'.
+    ;; A click opens what it landed on, in this window.  mouse-2 is kept for a
+    ;; middle click; the plain click is handled on the press by
+    ;; `ps/open-bind-click', which is what makes one click enough — see
+    ;; `ps/open-down-click'.
     (define-key dired-mode-map (kbd "RET") #'ps/open-dired-thing)
     (define-key dired-mode-map [mouse-2]   #'ps/open-dired-thing-at-mouse)
     (ps/open-bind-click dired-mode-map)
@@ -2200,7 +2223,7 @@ navigate in place like Org links.
                 #'ps/open-markdown-thing)
     (define-key markdown-mode-map (kbd "RET") #'ps/open-markdown-thing)
     ;; And a plain click, which `mouse-1-click-follows-link' alone does not
-    ;; reliably deliver — see `ps/open-click'.
+    ;; reliably deliver — see `ps/open-down-click'.
     (ps/open-bind-click markdown-mode-map)
     ;; A wide table cannot be made to fit a narrow window: wrapping destroys its
     ;; columns and there is nothing to align once a row spans two screen lines.
@@ -2498,6 +2521,12 @@ calls it a /drag/ as soon as the pointer moved more than =double-click-fuzz=
 trackpad, so an aimed click became a drag that selected nothing — while a
 quick double tap, which barely moves, worked. Eight pixels is still well
 inside a deliberate drag.
+
+This is the setting for the rest of Emacs. The three places this configuration
+clicks in most — the folder listing, a Markdown note and the capture queue —
+handle the press themselves and switch it off locally, because even a delivered
+rewrite arrives too late for a link that is displayed shorter than it is
+written; see =lisp/ps-open.el=.
 #+begin_src emacs-lisp
   (setq mouse-1-click-follows-link t
         double-click-fuzz 8)

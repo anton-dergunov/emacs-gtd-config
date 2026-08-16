@@ -41,6 +41,9 @@ translation (which moves point on the down-click and only follows on a later
 event — the source of the \"first click reveals raw syntax, second click
 opens\" bug). Point is never moved into the link, so org-appear's on-point
 reveal is never triggered and the pencil+title rendering survives the click.
+`ps/open-down-click' generalises the same mechanism to every other link this
+configuration clicks; this map predates it and stays because it hangs off the
+link text itself rather than off a mode.
 Standalone map (not layered on `org-mouse-map'): follow-link/mouse-2 are
 intentionally absent to avoid double-opening, which also means mouse-3
 (`org-find-file-at-mouse') is not available on these links — not meaningful

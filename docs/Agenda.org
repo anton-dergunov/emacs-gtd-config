@@ -110,11 +110,13 @@ below.
 
 * The mode line
 The mode line (the status strip at the bottom of each window) is tuned for this
-planning environment rather than left at the Emacs default: it shows the file
-name, an open-task count, your position, and the current heading path,
-separated by a thin =·=. The heading path is shown as plain text — links
-collapse to their name (an =obsidian:= link shows just its note title) and
-emphasis markers like =*bold*= are dropped. Like
+planning environment rather than left at the Emacs default. In a file that is
+part of your planning set it shows the file name, an open-task count, your
+position, and the current heading path, separated by a thin =·=. Any other file
+names itself by its path instead and carries no heading path — see
+[[file:Files-and-navigation.org][Files and navigation]]. The heading path is
+shown as plain text — links collapse to their name (an =obsidian:= link shows
+just its note title) and emphasis markers like =*bold*= are dropped. Like
 =org-super-agenda= grouping and the layout pills, it's part of making the
 planning view readable — not a cosmetic theme choice. Its colors follow whatever
 [[file:Customization.org][theme]] you pick.
@@ -160,7 +162,8 @@ view; switching to Calendar or Tasks clears it.
 - Which sections start folded: =ps/agenda-fold-default-collapsed= in =config.org=
   → /Agenda fold/.
 - The mode line is =lisp/ps-mode-line.el=; its separator is
-  =ps/mode-line-separator= in =config.org= → /Mode line/. The view-switcher
+  =ps/mode-line-separator= in =config.org= → /Mode line/, and which files get
+  the planning shape is =ps/mode-line--plan-file-p=. The view-switcher
   popup is =ps/mode-line--agenda-click=, in the same file.
 - The task count is =lisp/ps-task-count.el=; =ps/task-count-idle-delay= in
   =config.org= → /Task count/ controls how long it waits after an edit before

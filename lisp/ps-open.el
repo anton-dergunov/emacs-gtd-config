@@ -275,24 +275,45 @@ does nothing instead."
 
 ;;; Following on a plain click
 
-;; Emacs already has a mechanism for this -- `mouse-1-click-follows-link', which
-;; rewrites a mouse-1 into a mouse-2 over anything that answers to the
-;; `follow-link' event.  It is set to t here, and it is still not enough: the
-;; rewrite only fires for a release event of type `mouse-1', and Emacs calls the
-;; release a *drag* as soon as the pointer moved more than `double-click-fuzz'
-;; pixels between press and release.  An aimed click on a trackpad drifts more
-;; than that, which is exactly why a link seemed to need two clicks and then
-;; opened on the second.
+;; A link must open on ONE click, and the two obvious ways to arrange that both
+;; fail on a link whose displayed form is shorter than its text.
 ;;
-;; So the three buffers this workflow actually clicks in bind the mouse
-;; themselves.  Both paths end in the same command, and the rewrite replaces the
-;; event rather than duplicating it, so nothing can open twice.
+;; Emacs's own mechanism is `mouse-1-click-follows-link', which rewrites a
+;; mouse-1 into a mouse-2 over anything answering to the `follow-link' event.
+;; The rewrite only fires for a release event of type `mouse-1', and Emacs calls
+;; the release a *drag* as soon as the pointer moved more than
+;; `double-click-fuzz' pixels between press and release -- less than a hand on a
+;; trackpad.
+;;
+;; Binding `mouse-1' directly is not enough either, and this is the subtle one.
+;; The press is a command of its own (`mouse-drag-region'), so it moves point
+;; and its `post-command-hook' runs before the release is ever read.  In an Org
+;; buffer that hook is where `org-appear' reveals the link under point:
+;; `[[file:2026-08-16_167/index.md][index]]' replaces `index', the rest of the
+;; line slides right, and the release -- whose buffer position is resolved
+;; against the layout as it stands when the event is read -- lands somewhere
+;; else entirely.  That is the "first click reveals the raw syntax, second click
+;; opens" bug, and `ps/obsidian-link-map' in ps-links.el already worked around
+;; it for one link type.
+;;
+;; So the fix is to act on the PRESS and never move point: nothing reveals,
+;; nothing shifts, and there is no second event to get wrong.  Off a link the
+;; press falls through to `mouse-drag-region', which sets point and drags a
+;; region exactly as it always did.  The release bindings then have to decline
+;; the work they would normally do -- both `mouse-1' and `drag-mouse-1' carry
+;; the press position in their `event-start', so whether the press followed a
+;; link is recomputed from the event rather than remembered in a variable.
+;;
+;; `mouse-1-click-follows-link' is turned off buffer-locally wherever this is
+;; installed (see `ps/open-setup-click').  Left on, Emacs would still rewrite
+;; the release into a mouse-2, and in the Info Triage queue that reaches
+;; `org-mouse-map's `org-open-at-mouse' -- opening the item a second time.
 
 (defvar-local ps/open-follow-function nil
   "What a plain click in this buffer follows, or nil to only move point.
-Buffer-local so that `ps/open-click' can be one named command across Dired,
-Markdown and the Info Triage queue -- `C-h k' on a click names something
-readable, which an anonymous closure in a keymap would not.")
+Buffer-local so that `ps/open-down-click' can be one named command across
+Dired, Markdown and the Info Triage queue -- `C-h k' on a click names
+something readable, which an anonymous closure in a keymap would not.")
 
 (defun ps/open--clickable-at-p (position)
   "Non-nil when POSITION carries something a click should act on.
@@ -304,49 +325,87 @@ around it still just moves point."
        (get-char-property position 'mouse-face)
        t))
 
-(defun ps/open--event-stationary-p (event)
-  "Non-nil when EVENT is a drag that never left the position it started at.
-That is a click the pointer wobbled during, not a selection: the buffer
-position is the same at both ends, so there is nothing to select."
-  (let ((start (event-start event))
-        (end (event-end event)))
-    (and (eq (posn-window start) (posn-window end))
-         (equal (posn-point start) (posn-point end)))))
+(defun ps/open--clickable-event-p (event)
+  "Non-nil when EVENT was pressed on something this buffer follows.
+
+Answered from `event-start', which the press and both kinds of release all
+carry, so the press and the release always agree without a flag between them.
+Read in the buffer of the window that was clicked rather than the current one:
+by the time the release arrives, following the link has usually selected a
+different buffer already."
+  (let* ((start (and (consp event) (event-start event)))
+         (window (and start (posn-window start)))
+         (position (and start (posn-point start))))
+    (and (windowp window)
+         (buffer-live-p (window-buffer window))
+         (with-current-buffer (window-buffer window)
+           (and ps/open-follow-function
+                (ps/open--clickable-at-p position))))))
+
+;;;###autoload
+(defun ps/open-follow-at-event (event)
+  "Follow whatever EVENT pressed on, without moving point.
+Point staying put is the whole mechanism -- see this section's commentary."
+  (interactive "e")
+  (let ((start (event-start event)))
+    (with-selected-window (posn-window start)
+      (save-excursion
+        (goto-char (posn-point start))
+        (call-interactively ps/open-follow-function)))))
+
+;;;###autoload
+(defun ps/open-down-click (event)
+  "Follow the link EVENT pressed on, or press normally when there is none.
+Bound to `down-mouse-1': acting here rather than on the release is what makes
+one click enough."
+  (interactive "e")
+  (if (ps/open--clickable-event-p event)
+      (ps/open-follow-at-event event)
+    (mouse-drag-region event)))
 
 ;;;###autoload
 (defun ps/open-click (event)
-  "Set point from EVENT, and follow the link there if there is one."
+  "Set point from EVENT, unless the press it ends already followed a link.
+Bound to `mouse-1'; the work is done by `ps/open-down-click'."
   (interactive "e")
-  (mouse-set-point event)
-  (when (and ps/open-follow-function
-             (ps/open--clickable-at-p (posn-point (event-end event))))
-    (call-interactively ps/open-follow-function)))
+  (unless (ps/open--clickable-event-p event)
+    (mouse-set-point event)))
 
 ;;;###autoload
 (defun ps/open-drag-click (event)
-  "Treat EVENT as a click when it selected nothing, otherwise as a drag.
-Bound to `drag-mouse-1' so a click the hand wobbled during still follows the
-link under it, while a real selection is left to `mouse-set-region'."
+  "Select the region EVENT covers, unless its press already followed a link.
+Bound to `drag-mouse-1'; a hand that wobbled over a link has already opened
+it, so there is nothing left to select."
   (interactive "e")
-  (if (ps/open--event-stationary-p event)
-      (ps/open-click event)
+  (unless (ps/open--clickable-event-p event)
     (mouse-set-region event)))
 
 (defun ps/open-bind-click (map)
-  "Bind a plain click in MAP to `ps/open-click'.
-The buffer says what a click follows, through `ps/open-follow-function'."
+  "Bind a plain click in MAP to follow whatever it landed on.
+All three mouse events are bound together: the press does the work, and the
+two releases have to decline it.  The buffer says what a click follows,
+through `ps/open-follow-function'."
+  (define-key map [down-mouse-1] #'ps/open-down-click)
   (define-key map [mouse-1]      #'ps/open-click)
   (define-key map [drag-mouse-1] #'ps/open-drag-click))
 
 ;;;###autoload
+(defun ps/open-setup-click (follow-function)
+  "Make a click in this buffer follow what it landed on via FOLLOW-FUNCTION.
+Also turns off `mouse-1-click-follows-link' here, so Emacs cannot rewrite the
+release into a second, independent way of opening the same thing."
+  (setq-local ps/open-follow-function follow-function)
+  (setq-local mouse-1-click-follows-link nil))
+
+;;;###autoload
 (defun ps/open-dired-setup-click ()
   "Make a click in this Dired buffer open what it landed on."
-  (setq-local ps/open-follow-function #'ps/open-dired-thing))
+  (ps/open-setup-click #'ps/open-dired-thing))
 
 ;;;###autoload
 (defun ps/open-markdown-setup-click ()
   "Make a click in this Markdown buffer follow the link it landed on."
-  (setq-local ps/open-follow-function #'ps/open-markdown-thing))
+  (ps/open-setup-click #'ps/open-markdown-thing))
 
 (provide 'ps-open)
 ;;; ps-open.el ends here

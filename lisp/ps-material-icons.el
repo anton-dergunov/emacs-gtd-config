@@ -149,11 +149,15 @@ baseline y=0 fills the box.  COLOR defaults to `ps/material-icons-color'."
      (or color ps/material-icons-color)
      ps/material-icons-font-family codepoint)))
 
-(defun ps/material-icons-image (name &optional ascent height)
+(defun ps/material-icons-image (name &optional ascent height color)
   "Return an image rendering icon NAME, or nil if NAME is unknown.
 ASCENT sets the image vertical alignment (integer 0-100 or `center', default
-`center').  HEIGHT overrides the pixel height (default `ps/material-icons--pixel-height')."
-  (when-let ((svg (ps/material-icons-svg name)))
+`center').  HEIGHT overrides the pixel height, which otherwise comes from
+`ps/material-icons--pixel-height'.  COLOR overrides `ps/material-icons-color';
+it has to be passed here rather than left to a face, because a face cannot
+recolour an image -- which is how a dimmed icon ends up looking exactly like a
+live one."
+  (when-let ((svg (ps/material-icons-svg name color)))
     (create-image svg 'svg t
                   :height (or height (ps/material-icons--pixel-height))
                   :ascent (or ascent 'center))))

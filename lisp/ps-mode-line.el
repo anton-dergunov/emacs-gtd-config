@@ -1,10 +1,17 @@
 ;;; ps-mode-line.el --- Planning-focused mode line -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; A compact, planning-oriented mode line for Org buffers and the agenda.
+;; A compact, planning-oriented mode line.
 ;;
-;; Org buffers show:   <file> · <pct>% · <heading breadcrumb>
+;; Plan files show:     <file> [· <tasks>] · <pct>% · <heading breadcrumb>
 ;; Agenda buffers show: <view title> [· <pct>%]
+;; Everything else:     <~/abbreviated/path> [•] [· <pct>%]
+;;
+;; "Plan file" means one the agenda scans (`ps/org-files-in-scope-p'), not
+;; merely one in Org mode: the capture queue and this repository's own docs are
+;; Org too, and a heading path through a generated list is not something anyone
+;; reads.  What those need naming is which file they are, which is why the third
+;; shape shows a path where the first shows a short name.
 ;;
 ;; The filename drops its ".org" extension, and gains its folder as a prefix
 ;; ("Personal/Inbox") when two open files share a name; the position is a
@@ -14,8 +21,10 @@
 ;; ellipsized individually, longest first, while the filename and position are
 ;; always preserved.
 ;;
-;; Save state, minor-mode lighters, and the git-sync indicator are intentionally
-;; omitted from Org/agenda windows (git-sync lives in the file-tree mode line).
+;; Minor-mode lighters and the git-sync indicator are intentionally omitted
+;; everywhere (git-sync lives in the file-tree mode line).  So is save state,
+;; for a plan file -- those are saved for you -- but not for anything else: a
+;; Markdown note nothing auto-saves gets a `•' until it is written.
 
 ;;; Code:
 
@@ -25,6 +34,11 @@
 ;; helpers are testable in isolation.
 (declare-function ps/file-tree--normalize-display-name "ps-file-tree" (name))
 (declare-function ps/claude--session-buffer-p "ps-claude" (buffer-or-name))
+(declare-function ps/org-files-in-scope-p "ps-org-files" (&optional file root))
+(declare-function url-unhex-string "url-util" (str &optional allow-newlines))
+;; Set by eww in its own buffers; read defensively so this file loads without it.
+(defvar eww-current-url)
+(defvar eww-data)
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-up-heading-safe "org" ())
@@ -66,6 +80,14 @@
 
 (defcustom ps/mode-line-separator " · "
   "Separator placed between mode-line components."
+  :type 'string
+  :group 'ps-mode-line)
+
+(defcustom ps/mode-line-modified-indicator " •"
+  "Marker shown after the file name when a non-plan buffer has unsaved changes.
+Empty or nil to show nothing.  Plan files never need one -- they are saved for
+you -- but nothing saves a Markdown note, so an edit there would otherwise sit
+unwritten with no sign of it anywhere."
   :type 'string
   :group 'ps-mode-line)
 
@@ -254,6 +276,163 @@ for a hover tooltip without implying an action that doesn't exist."
                        (ps/mode-line--truncate-segments titles avail))))
           (concat prefix sep crumb))
       prefix)))
+
+;;; Everything that is not a plan file
+
+;; The planning line above answers "where am I in this plan": a short name, how
+;; many tasks are open, and the heading path.  None of that means anything for a
+;; Markdown note, a photo, or a generated queue -- and Emacs's own default line
+;; answers a different question again, in `U:%%- index.md<2026-08-16_167> Top
+;; (14,14) (Markdown WK Projectile[-] ivy ElDoc Wrap)'.  What a file that is not
+;; a plan actually needs naming is WHICH file it is, and there are several
+;; `index.md' open at once, so the answer is its path.
+;;
+;; Two shapes, then, and one rule deciding between them: a file the agenda scans
+;; gets the planning line, everything else gets `~/some/where/index.md · 14%'.
+
+(defun ps/mode-line--buffer-file ()
+  "Return the file this buffer is showing, or nil.
+Falls back to the base buffer's file so that an indirect buffer -- which is
+what `org-capture' edits a plan file through -- is still recognised as one."
+  (or buffer-file-name
+      (and (buffer-base-buffer) (buffer-file-name (buffer-base-buffer)))))
+
+(defun ps/mode-line--plan-file-p ()
+  "Non-nil when this buffer holds one of the files the agenda scans.
+The one gate between the two mode lines.  Stated as a predicate on the scan
+rather than as a list of exceptions, so a file stops being a plan the moment
+it moves out of the vault and nothing here has to be told about it."
+  (and (fboundp 'ps/org-files-in-scope-p)
+       (when-let* ((file (ps/mode-line--buffer-file)))
+         (and (ps/org-files-in-scope-p file) t))))
+
+(defun ps/mode-line--shorten-path (path width)
+  "Return PATH shortened to at most WIDTH columns.
+
+Leading directories go first, replaced by a single ellipsis, and the file name
+is only ever cut when it does not fit on its own.  Deliberately not
+`ps/mode-line--truncate-segments', which trims every segment a little and
+would render this as `~/pro…/pro…/lis…' -- unreadable, and unreadable in
+exactly the identity the path is here to give.  Truncating from the left is
+what a shell prompt does, and for the same reason.
+
+WIDTH of zero or less returns PATH untouched: no room is not a reason to
+show nothing."
+  (if (or (<= width 0) (<= (string-width path) width))
+      path
+    (let ((segments (split-string path "/")))
+      (or (catch 'fitted
+            ;; Drop leading segments one at a time; stop as soon as what is left
+            ;; fits.  The last segment is the file name and is never dropped.
+            (while (cdr segments)
+              (setq segments (cdr segments))
+              (let ((candidate (concat "…/" (string-join segments "/"))))
+                (when (<= (string-width candidate) width)
+                  (throw 'fitted candidate))))
+            nil)
+          ;; Even the bare file name overflows: cut it, keeping its tail, since
+          ;; that is where an extension and a distinguishing suffix live.
+          (let ((name (car (last segments))))
+            (if (<= width 1)
+                "…"
+              (concat "…" (substring name (max 0 (- (length name) (1- width)))))))))))
+
+(defun ps/mode-line--file-url-path (url)
+  "Return the local path URL names, or nil when it names none.
+`eww' visits a local page through a `file://' URL, and a page read as a
+rendering should say the same thing about itself as the same file read as
+source."
+  (when (and (stringp url) (string-match "\\`file://\\(?:localhost\\)?\\(/.*\\)\\'" url))
+    (url-unhex-string (match-string 1 url))))
+
+(defun ps/mode-line--eww-label ()
+  "Return what an `eww' buffer should call itself.
+A local file by its path, a page by its title, and a page that has not
+reported one by its address minus the scheme -- the part nobody reads."
+  (let* ((url (and (boundp 'eww-current-url) eww-current-url))
+         (local (ps/mode-line--file-url-path url))
+         (title (and (boundp 'eww-data) (plist-get eww-data :title))))
+    (cond
+     (local (abbreviate-file-name local))
+     ((and (stringp title) (not (string-empty-p title))) title)
+     ((stringp url) (replace-regexp-in-string "\\`https?://" "" url))
+     (t (buffer-name)))))
+
+(defun ps/mode-line--identity ()
+  "Return what this buffer should call itself in the generic mode line."
+  (let ((file (ps/mode-line--buffer-file)))
+    (cond
+     (file (abbreviate-file-name file))
+     ((derived-mode-p 'eww-mode) (ps/mode-line--eww-label))
+     ((derived-mode-p 'dired-mode)
+      (abbreviate-file-name (directory-file-name (expand-file-name default-directory))))
+     (t (buffer-name)))))
+
+(defun ps/mode-line--show-position-p ()
+  "Non-nil when point's position through the buffer is worth showing.
+An image has no reading position, and the number Emacs shows for one is the
+frame counter of an animation -- which for a photo is always 1 and always
+noise."
+  (not (derived-mode-p 'image-mode)))
+
+(defun ps/mode-line--modified-marker ()
+  "Return the unsaved-changes marker for this buffer, or \"\".
+Org buffers are auto-saved and so never need one; nothing auto-saves a
+Markdown note, so an edit there can sit unwritten with no sign of it
+anywhere."
+  (if (and ps/mode-line-modified-indicator
+           (ps/mode-line--buffer-file)
+           (buffer-modified-p)
+           (not buffer-read-only))
+      ps/mode-line-modified-indicator
+    ""))
+
+(defun ps/mode-line--generic-render ()
+  "Return the mode-line string for a buffer that is not a plan file.
+
+Guarded, unlike `ps/mode-line--render': this one is drawn in every window in
+the frame, so an error inside it is a configuration that looks broken
+everywhere rather than in one kind of buffer.
+
+Does no file I/O by design -- `abbreviate-file-name' is string work.  A `stat'
+per window per redisplay over a synchronised folder is the freeze this
+configuration already has a log for."
+  (condition-case nil
+      (let* ((sep ps/mode-line-separator)
+             (marker (ps/mode-line--modified-marker))
+             (pct (and (ps/mode-line--show-position-p) (ps/mode-line--percent)))
+             (tail (concat marker (if pct (concat sep pct) "")))
+             ;; Width math uses the unescaped strings; escaping does not widen.
+             (identity (ps/mode-line--shorten-path
+                        (ps/mode-line--identity)
+                        (- (window-body-width) 1 (string-width tail))))
+             (directory (file-name-directory identity)))
+        (concat " "
+                (if directory (ps/mode-line--escape directory) "")
+                (propertize (ps/mode-line--escape (file-name-nondirectory identity))
+                            'face 'mode-line-emphasis)
+                (ps/mode-line--escape tail)))
+    (error (ps/mode-line--escape (buffer-name)))))
+
+(defun ps/mode-line--process-segment ()
+  "Return this buffer's `mode-line-process' construct, or nil.
+
+The one thing worth keeping from the default line this replaces: a
+compilation's `run'/`exit [0]' and a shell's status are live state, not a
+lighter.  Suppressed for a file buffer, which has no process, and for
+`image-mode', whose `mode-line-process' is the animation frame counter."
+  (and mode-line-process
+       (not (ps/mode-line--buffer-file))
+       (not (derived-mode-p 'image-mode))
+       mode-line-process))
+
+(defconst ps/mode-line-generic-format
+  '((:eval (ps/mode-line--generic-render))
+    (:eval (ps/mode-line--process-segment)))
+  "Mode-line format for every buffer that is not a plan file or a planning view.
+A `defconst' so that reloading config.org installs the same list rather than
+an equal-looking new one, which is what keeps `ps/nav-mode-line-add'
+idempotent over it.")
 
 ;;; Agenda mode line
 
@@ -486,17 +665,23 @@ window-parameter cache set by `ps/mode-line--render-window-cached'."
     (force-mode-line-update)))
 
 (defun ps/mode-line--org-setup ()
-  "Install the planning mode line in the current Org buffer."
-  (set-window-parameter nil 'ps-ml-bol (pos-bol))
-  (set-window-parameter nil 'ps-ml-name (buffer-name))
-  (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
-  (set-window-parameter nil 'ps-ml-str (ps/mode-line--render))
-  ;; Outside the cached renderer, deliberately: it caches per window on a key
-  ;; (line, buffer name, task-count generation) that navigation does not touch,
-  ;; so a cached arrow would keep pointing at the buffer you already left.
-  (setq-local mode-line-format
-              (ps/mode-line--with-nav '((:eval (ps/mode-line--render-window-cached)))))
-  (add-hook 'post-command-hook #'ps/mode-line--maybe-refresh nil t))
+  "Install the planning mode line, when this Org buffer is a plan file.
+
+Not every Org buffer is one: the capture queue, this repository's own
+documentation and `config.org' are all Org and none of them has a task count
+or a heading path worth reading.  They fall through to
+`ps/mode-line-generic-format', which names the file instead."
+  (when (ps/mode-line--plan-file-p)
+    (set-window-parameter nil 'ps-ml-bol (pos-bol))
+    (set-window-parameter nil 'ps-ml-name (buffer-name))
+    (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
+    (set-window-parameter nil 'ps-ml-str (ps/mode-line--render))
+    ;; Outside the cached renderer, deliberately: it caches per window on a key
+    ;; (line, buffer name, task-count generation) that navigation does not touch,
+    ;; so a cached arrow would keep pointing at the buffer you already left.
+    (setq-local mode-line-format
+                (ps/mode-line--with-nav '((:eval (ps/mode-line--render-window-cached)))))
+    (add-hook 'post-command-hook #'ps/mode-line--maybe-refresh nil t)))
 
 ;;;###autoload
 (defun ps/mode-line-setup ()
@@ -504,6 +689,19 @@ window-parameter cache set by `ps/mode-line--render-window-cached'."
   (add-hook 'org-mode-hook #'ps/mode-line--org-setup)
   ;; Negative depth: run before the emoji/layout finalize hooks.
   (add-hook 'org-agenda-finalize-hook #'ps/mode-line--agenda-finalize -90)
+  ;; The default rather than a hook per mode: what is left over here is
+  ;; "everything that is not a plan file or a planning view", and a list of
+  ;; modes would be wrong again the first time an unlisted one is opened.  Every
+  ;; buffer this configuration styles deliberately -- the agenda, the file tree,
+  ;; the Claude panel, the availability and conflict views -- sets its own
+  ;; `mode-line-format' buffer-locally, and a buffer-local value always wins.
+  ;;
+  ;; Built from the constant rather than from the current default so that
+  ;; reloading config.org cannot stack anything, and wrapped in
+  ;; `ps/mode-line--with-nav' so the back/forward buttons survive whichever of
+  ;; this and `ps/nav-setup' runs second.
+  (setq-default mode-line-format
+                (ps/mode-line--with-nav ps/mode-line-generic-format))
   (ps/mode-line--disable-destructive-mouse)
   (setq frame-title-format '(:eval (ps/mode-line--frame-title))))
 

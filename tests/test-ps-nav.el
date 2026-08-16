@@ -102,6 +102,30 @@ pair that says which way you can actually go."
     (should (eq (get-text-property 0 'face glyph) 'shadow))
     (should-not (get-text-property 0 'local-map glyph))))
 
+(ert-deftest ps/nav--button-dims-the-glyph-itself-not-only-its-face ()
+  "The `shadow' face above is the *text* fallback's dim.  When the glyph is an
+icon it is an image, and a face cannot recolour an image -- so the dead
+direction has to reach `ps/nav--glyph' and be drawn in the dim colour, or a
+button that leads nowhere looks exactly like one that does."
+  (let ((asked nil))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+              ((symbol-function 'ps/material-icons-image)
+               (lambda (_name &optional _ascent _height color)
+                 (setq asked (cons color asked))
+                 ;; A stand-in for the image; only the colour matters here.
+                 '(image :type svg))))
+      (set-window-parameter (selected-window) 'ps/nav-back nil)
+      (ps/nav--button 'back)
+      (should (car asked))
+      (unwind-protect
+          (progn
+            (setq asked nil)
+            (set-window-parameter (selected-window) 'ps/nav-back
+                                  (list (cons temporary-file-directory 1)))
+            (ps/nav--button 'back)
+            (should-not (car asked)))
+        (set-window-parameter (selected-window) 'ps/nav-back nil)))))
+
 (ert-deftest ps/nav--button-is-live-and-named-when-there-is-somewhere-to-go ()
   (unwind-protect
       (progn

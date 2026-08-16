@@ -23,8 +23,8 @@ machine, the Triage menu is not shown at all and nothing here applies.
    time, and tells the server about anything you dropped here.
 2. *Productivity → Triage → Open Inbox* (=C-c p I=). The queue opens as one
    line per item, oldest first.
-3. Read down the list. Click an item's =index= to see what was captured, or its
-   =directory= to look through the files themselves.
+3. Read down the list. Click an item's label to see what was captured, or its
+   =directory= to look through the files themselves. One click is enough.
 4. Press =d= on anything not worth keeping. It goes to the Trash, and the list
    renumbers.
 5. Switch to Claude Code and type =/route triage=. It reads the *other* generated
@@ -36,23 +36,30 @@ machine, the Triage menu is not shown at all and nothing here applies.
 
 * The queue
 
-Each item is one heading and one line of links:
+Items are grouped by the day they arrived, oldest day first:
 
-: * 21 · 2026-08-16 · post · Ever noticed the coloured tags on the ancient trees…
-:   index · directory · source
+: * 2026-08-16
+:
+: ** 20 · Strong Model Collapse                                          :paper:
+:    directory · source
+: ** 21 · Ever noticed the coloured tags on the ancient trees…            :post:
+:    directory · source
 
-The number is what you quote to =/route=. It is positional and is renumbered
-every time the list is rebuilt, so it always matches what Claude Code reads.
+The number is what you quote to =/route=. It runs straight through the days
+rather than restarting under each one: it is positional, renumbered every time
+the list is rebuilt, and it always matches what Claude Code reads.
 
-After the number come the capture date, the kind of thing it is, and a one-line
-label. Most captured items have no title of their own — an Instagram post has
-nothing worth calling one — so the label is derived from the item's own caption,
-on-screen text or transcript.
+The label itself is the link — click it to see what was captured. Most captured
+items have no title of their own (an Instagram post has nothing worth calling
+one), so the label is derived from the item's own caption, on-screen text or
+transcript. The kind of thing it is sits at the right-hand edge as a tag, which
+leaves the whole width of the window for the label.
 
-Two things appear only when there is something to say. An item you added a note
-to when forwarding it shows that note in italics on its own line. An item whose
-extraction fell short is tagged =:partial:= or =:none:= at the right-hand edge; a
-clean item is not tagged at all.
+An item you added a note to when forwarding it shows that note in italics
+between the label and the links.
+
+The =·= line beneath carries the rest: =directory= opens the item's folder, and
+=source= opens the page it came from in your browser.
 
 ** Keys in the queue
 
@@ -62,7 +69,7 @@ anything typed into it would be lost — which leaves single keys free:
 | Key         | Does                                                     |
 |-------------+----------------------------------------------------------|
 | =RET=, click  | follow the link at point                                 |
-| =n= / =p=       | next / previous item                                     |
+| =n= / =p=       | next / previous item (day headings are stepped over)      |
 | =d=           | drop the item at point (asks first; goes to the Trash)    |
 | =s=           | sync                                                     |
 | =g=           | renumber both lists without syncing                      |
@@ -80,7 +87,14 @@ adding another one, so the frame never grows past two.
 
 The =‹ ›= buttons at the left of the mode line walk back and forward along the
 trail you took, and so do =C-c <left>= and =C-c <right>=. Going back never adds
-a window.
+a window. An arrow with nowhere to go is drawn dim and does nothing when
+clicked, so the pair says which way you can actually move.
+
+The mode line beside them names the file you are looking at by its path, with
+=~= for your home folder, and how far through it you are — so the several
+=index.md= files a triage session opens are told apart at a glance. An image
+shows its path alone. See [[file:Files-and-navigation.org][Files and
+navigation]].
 
 To work one window at a time instead, with =‹= to get back to the list, turn
 =ps/info-triage-open-beside= off.
@@ -151,10 +165,15 @@ why they are separate.
   =ps/dired-decorate-listing= and =ps/dired-size-width= in =config.org= →
   /Settings/ → /Folder listing/. The icons are the file tree's own, so a folder
   looks the same in both.
-- A single click follows a link because of two settings in =config.org= →
-  /One click follows a link/: =mouse-1-click-follows-link= and
-  =double-click-fuzz=, which is how far the pointer may drift during a click
-  before Emacs calls it a drag.
+- A single click follows a link because the queue acts on the press of the
+  button rather than its release (=ps/open-down-click= in =lisp/ps-open.el=).
+  Waiting for the release does not work here: the press moves the cursor into
+  the link, Org answers by showing the link's raw text, and the line grows out
+  from under the pointer before the release arrives — which is why a link used
+  to want two clicks.
+- Which files the mode line gives a heading path to is =ps/mode-line--plan-file-p=
+  in =lisp/ps-mode-line.el=. The queue is an Org file but not one of your plans,
+  so it names itself by path like any other.
 - The two generated lists, and the sync script itself, belong to the
   =info-triage= project — see its =docs/EMACS.md=. Nothing in this
   configuration writes to them.

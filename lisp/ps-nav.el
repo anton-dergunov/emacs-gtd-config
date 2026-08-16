@@ -68,6 +68,16 @@ deliberately absent -- going back out of them is exactly the point."
   :type 'string
   :group 'ps/nav)
 
+(defcustom ps/nav-disabled-color "gray50"
+  "Colour of a mode-line arrow pointing where you cannot go.
+
+Only consulted when the `shadow' face names no foreground of its own, which
+the theme normally does.  It is stated as a colour rather than left to a face
+because the arrow is drawn as an *image* wherever the icon font is available,
+and no face can recolour an image."
+  :type 'color
+  :group 'ps/nav)
+
 (defcustom ps/nav-icon-height 18
   "Height in pixels of the mode-line back/forward icons.
 A bare `‹' is a couple of pixels of ink and a miserable mouse target; this is
@@ -272,18 +282,33 @@ assumed."
     map)
   "Keymap on the mode line's forward button.")
 
-(defun ps/nav--glyph (direction)
+(defun ps/nav--disabled-color ()
+  "Return the colour a dead direction's icon is drawn in.
+The `shadow' face first, so the dim follows the theme the way the text
+fallback's `face' property already does -- and `ps/nav-disabled-color' when
+that face names no foreground, which is not a theoretical case: it is
+unspecified in a bare Emacs.  Falling back to nil there would leave a dead
+button drawn in the live colour, which is the whole bug."
+  (or (face-foreground 'shadow nil t) ps/nav-disabled-color))
+
+(defun ps/nav--glyph (direction &optional disabled)
   "Return the display string for DIRECTION's button.
 A Material Symbols chevron where the font is there to draw one, and the plain
 `‹'/`›' text otherwise -- the same two names and the same fallbacks the agenda
 header already uses for its date arrows.  An unknown icon name resolves to nil
-rather than signalling, so the text path stays live."
+rather than signalling, so the text path stays live.
+
+DISABLED asks for the dimmed form, and it has to be asked for *here*: the
+`shadow' face `ps/nav--button' puts on the label recolours the text fallback
+but cannot touch an image, so an icon-drawn button looked live whichever way
+it was propertized."
   (let ((fallback (if (eq direction 'back) ps/nav-back-glyph ps/nav-forward-glyph)))
     (or (and (display-graphic-p)
              (fboundp 'ps/material-icons-image)
              (when-let* ((image (ps/material-icons-image
                                  (if (eq direction 'back) "chevron_left" "chevron_right")
-                                 ps/nav-icon-ascent ps/nav-icon-height)))
+                                 ps/nav-icon-ascent ps/nav-icon-height
+                                 (and disabled (ps/nav--disabled-color)))))
                (propertize " " 'display image)))
         fallback)))
 
@@ -296,9 +321,11 @@ The padding is inside the propertized run on purpose: spaces added outside it
 would widen the gap without widening the target, which is the difference
 between a button that looks bigger and one that is."
   (let* ((pad (make-string (max 0 ps/nav-button-padding) ?\s))
-         (label (concat pad (ps/nav--glyph direction) pad))
+         ;; Where we could go decides how the glyph is *drawn*, so it has to be
+         ;; known before the glyph is asked for -- see `ps/nav--glyph'.
          (place (car (seq-drop-while (lambda (p) (not (ps/nav--reachable-p p)))
-                                     (ps/nav--stack (selected-window) direction)))))
+                                     (ps/nav--stack (selected-window) direction))))
+         (label (concat pad (ps/nav--glyph direction (null place)) pad)))
     (if (null place)
         (propertize label 'face 'shadow)
       (propertize label

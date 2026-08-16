@@ -493,5 +493,143 @@ binding, reused by Availability/Conflicts as well as the agenda views."
 buffers (Availability, Conflicts) that need nothing more in the mode line."
   (should (string-match-p "Conflicts ▾" (ps/mode-line--simple-view-render "Conflicts"))))
 
+;;; -------------------------------------------------------
+;;; Everything that is not a plan file
+;;; -------------------------------------------------------
+
+(ert-deftest ps/mode-line--shorten-path-drops-directories-before-the-name ()
+  "Left-truncation, the way a shell prompt does it: the file name is the part
+that identifies the buffer, so it is the last thing to go."
+  (let ((path "~/info-triage-inbox/2026-08-16_167/index.md"))
+    (should (equal (ps/mode-line--shorten-path path 100) path))
+    ;; Zero width is no room, not a reason to show nothing.
+    (should (equal (ps/mode-line--shorten-path path 0) path))
+    (should (equal (ps/mode-line--shorten-path path 30)
+                   "…/2026-08-16_167/index.md"))
+    (should (equal (ps/mode-line--shorten-path path 15) "…/index.md"))))
+
+(ert-deftest ps/mode-line--shorten-path-cuts-the-name-only-as-a-last-resort ()
+  "And keeps its tail, where the extension is."
+  (should (equal (ps/mode-line--shorten-path "/a/very-long-file-name.md" 8)
+                 "…name.md"))
+  (should (<= (string-width (ps/mode-line--shorten-path "/a/very-long-name.md" 8)) 8))
+  (should (equal (ps/mode-line--shorten-path "/a/b.md" 1) "…")))
+
+(ert-deftest ps/mode-line--file-url-path-recovers-a-local-page ()
+  "A page read as a rendering must call itself what the same file calls itself
+read as source, and eww visits a local file through a `file://' URL."
+  (should (equal (ps/mode-line--file-url-path "file:///Users/a/page.html")
+                 "/Users/a/page.html"))
+  (should (equal (ps/mode-line--file-url-path "file:///Users/a/my%20page.html")
+                 "/Users/a/my page.html"))
+  (should-not (ps/mode-line--file-url-path "https://example.com/"))
+  (should-not (ps/mode-line--file-url-path nil)))
+
+(ert-deftest ps/mode-line--eww-label-names-the-page-it-is-showing ()
+  (with-temp-buffer
+    (setq-local eww-current-url "file:///Users/a/page.html")
+    (setq-local eww-data nil)
+    (should (equal (ps/mode-line--eww-label)
+                   (abbreviate-file-name "/Users/a/page.html"))))
+  (with-temp-buffer
+    (setq-local eww-current-url "https://example.com/a/b")
+    (setq-local eww-data '(:title "A page"))
+    (should (equal (ps/mode-line--eww-label) "A page")))
+  (with-temp-buffer
+    ;; A page that reported no title falls back to its address, minus the
+    ;; scheme -- the part of a URL nobody reads.
+    (setq-local eww-current-url "https://example.com/a/b")
+    (setq-local eww-data '(:title ""))
+    (should (equal (ps/mode-line--eww-label) "example.com/a/b"))))
+
+(ert-deftest ps/mode-line--generic-render-names-the-file-and-the-position ()
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/notes/index.md")
+    (insert "hello")
+    (goto-char (point-min))
+    (let ((rendered (ps/mode-line--generic-render)))
+      (should (string-match-p "index\\.md" rendered))
+      ;; A `:eval' result is re-scanned for %-constructs, so the percentage has
+      ;; to arrive doubled.
+      (should (string-match-p "0%%" rendered)))))
+
+(ert-deftest ps/mode-line--generic-render-escapes-a-percent-in-the-name ()
+  "A path is user data.  An unescaped % swallows itself and the character
+after it, so the file would be named something it is not."
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/100%done.md")
+    (should (string-match-p "100%%done" (ps/mode-line--generic-render)))))
+
+(ert-deftest ps/mode-line--generic-render-gives-an-image-no-position ()
+  "A picture has no reading position, and the number Emacs shows for one is an
+animation's frame counter -- for a photo, always 1 and always noise."
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/photo.jpg")
+    (setq major-mode 'image-mode)
+    (let ((rendered (ps/mode-line--generic-render)))
+      (should (string-match-p "photo\\.jpg" rendered))
+      (should-not (string-match-p "%" rendered))
+      (should-not (string-match-p ps/mode-line-separator rendered)))))
+
+(ert-deftest ps/mode-line--generic-render-falls-back-to-the-buffer-name ()
+  "This one is drawn in every window in the frame, so an error inside it is a
+configuration that looks broken everywhere rather than in one buffer."
+  (with-temp-buffer
+    (rename-buffer "*a buffer*" t)
+    (cl-letf (((symbol-function 'ps/mode-line--identity)
+               (lambda () (error "boom"))))
+      (should (string-match-p "a buffer" (ps/mode-line--generic-render))))))
+
+(ert-deftest ps/mode-line--identity-names-a-bufferless-buffer-by-its-name ()
+  (with-temp-buffer
+    (rename-buffer "*Messages*" t)
+    (should (equal (ps/mode-line--identity) (buffer-name)))))
+
+(ert-deftest ps/mode-line--modified-marker-only-where-nothing-auto-saves ()
+  (with-temp-buffer
+    (should (equal (ps/mode-line--modified-marker) ""))   ; no file
+    (setq buffer-file-name "/tmp/notes.md")
+    (set-buffer-modified-p nil)
+    (should (equal (ps/mode-line--modified-marker) ""))
+    (insert "x")
+    (should (equal (ps/mode-line--modified-marker) ps/mode-line-modified-indicator))
+    ;; A read-only buffer cannot have been edited here, whatever the flag says.
+    (setq buffer-read-only t)
+    (should (equal (ps/mode-line--modified-marker) ""))))
+
+(ert-deftest ps/mode-line--buffer-file-sees-through-an-indirect-buffer ()
+  "`org-capture' edits a plan file through an indirect buffer, whose own
+`buffer-file-name' is nil -- without this it would lose its heading path."
+  (let* ((base (get-buffer-create " ps-ml-base"))
+         (indirect nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer base (setq buffer-file-name "/tmp/plan.org"))
+          (setq indirect (make-indirect-buffer base " ps-ml-indirect"))
+          (with-current-buffer indirect
+            (should (equal (ps/mode-line--buffer-file) "/tmp/plan.org"))))
+      (when indirect (kill-buffer indirect))
+      (kill-buffer base))))
+
+(ert-deftest ps/mode-line--org-setup-leaves-a-non-plan-org-buffer-alone ()
+  "The capture queue, the docs and config.org are all Org and none of them has
+a task count or a heading path worth reading; they take the generic line."
+  (with-temp-buffer
+    (setq buffer-file-name "/tmp/triage.org")
+    (cl-letf (((symbol-function 'ps/org-files-in-scope-p) (lambda (&rest _) nil)))
+      (ps/mode-line--org-setup)
+      (should-not (local-variable-p 'mode-line-format)))
+    (cl-letf (((symbol-function 'ps/org-files-in-scope-p) (lambda (&rest _) t)))
+      (ps/mode-line--org-setup)
+      (should (local-variable-p 'mode-line-format)))))
+
+(ert-deftest ps/mode-line-generic-format-keeps-the-nav-buttons-outside-the-render ()
+  "The arrows must be a sibling of the `:eval', never inside a string it
+returns -- and they must survive whichever of the two setups runs second."
+  (let ((format (ps/mode-line--with-nav ps/mode-line-generic-format)))
+    (should (member '(:eval (ps/mode-line--generic-render)) format))
+    (when (fboundp 'ps/nav-mode-line-add)
+      (should (equal format (ps/nav-mode-line-add format))))))
+
 (provide 'test-ps-mode-line)
 ;;; test-ps-mode-line.el ends here

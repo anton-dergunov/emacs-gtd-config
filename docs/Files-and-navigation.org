@@ -189,6 +189,29 @@ are open — close one and the other goes back to plain /Inbox/. If the folder
 name is still not enough to tell them apart, as much of the path as it takes is
 shown.
 
+* The mode line outside your plans
+A short name works for a plan, which you know by name. It does not work for
+anything else: half a dozen captured items all call their notes =index.md=, and
+what you need to know is which one you are reading. So every file that is /not/
+part of your planning set names itself by its path instead, with =~= standing in
+for your home folder, followed by how far through it you are:
+
+: ~/info-triage-inbox/2026-08-16_167/index.md · 14%
+
+An image shows its path alone — a picture has no reading position. A page
+opened in the browser shows its title, or its path when it came from a file on
+disk. A folder listing shows the folder. Narrow the window and the leading
+folders drop away before the file name does, so the name never disappears.
+
+A =•= after the name means unsaved changes. Plans never show one — they are
+saved for you — but nothing saves a Markdown note you have edited, so there it
+is worth having.
+
+The heading path, and the open-task count beside it, stay where they mean
+something: files that are part of your planning set. The documentation you are
+reading, =config.org= and the capture queue are all Org files and none of them
+gets one.
+
 * Jumping around
 - =C-c p f= — open a *recent file* (=recentf=).
 - =C-c p i= — *imenu*: jump to a heading in the current file by name.
@@ -230,11 +253,13 @@ shown.
   Markdown reading view are =config.org= → /Browsing a folder/ and /Reading
   Markdown/, with the listing's icons and sizes in =lisp/ps-dired.el=
   (=ps/dired-decorate-listing=, =ps/dired-size-width=).
-- That one click follows a link — rather than two — is =config.org= → /One
-  click follows a link/: =mouse-1-click-follows-link= says a click follows at
-  all, and =double-click-fuzz= says how far the pointer may drift during one
-  before Emacs decides it was a drag.
-- The window title and mode line are =lisp/ps-mode-line.el=; the name itself is
-  built by =ps/mode-line--display-name=, and =ps/mode-line-separator= sets the
-  separator. How same-named files are told apart is Emacs's
+- That one click follows a link — rather than two — is =ps/open-down-click= in
+  =lisp/ps-open.el=: the folder listing, a Markdown note and the capture queue
+  act on the press of the button rather than its release. =config.org= → /One
+  click follows a link/ covers the rest of Emacs.
+- The window title and mode line are =lisp/ps-mode-line.el=. A plan's short name
+  is built by =ps/mode-line--display-name= and everything else by
+  =ps/mode-line--generic-render=; =ps/mode-line-separator= sets the separator and
+  =ps/mode-line-modified-indicator= the unsaved marker, both in =config.org= →
+  /Settings/ → /Mode line/. How same-named files are told apart is Emacs's
   =uniquify-buffer-name-style=, pinned in =config.org= → /Package Management/.

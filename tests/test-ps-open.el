@@ -144,8 +144,12 @@ did."
 ;;; -------------------------------------------------------
 
 (defun test-ps-open--posn (position)
-  "Return a position list naming POSITION in the current buffer's window."
+  "Return a position list naming POSITION in the selected window."
   (list (selected-window) position '(0 . 0) 0))
+
+(defun test-ps-open--press (position)
+  "Return a `down-mouse-1' event at POSITION."
+  (list 'down-mouse-1 (test-ps-open--posn position)))
 
 (defun test-ps-open--click (position)
   "Return a `mouse-1' event at POSITION."
@@ -154,6 +158,16 @@ did."
 (defun test-ps-open--drag (from to)
   "Return a `drag-mouse-1' event from FROM to TO."
   (list 'drag-mouse-1 (test-ps-open--posn from) (test-ps-open--posn to)))
+
+(defmacro test-ps-open--with-clicked-buffer (&rest body)
+  "Run BODY in a temporary buffer that the selected window is showing.
+The click predicates answer in the buffer of the window the event names, so a
+buffer that no window shows cannot be clicked in even in a test."
+  (declare (indent 0) (debug t))
+  `(save-window-excursion
+     (with-temp-buffer
+       (set-window-buffer (selected-window) (current-buffer))
+       ,@body)))
 
 (ert-deftest ps/open--clickable-at-p-answers-for-a-mouse-face ()
   "The one marker Org, Markdown and Dired all put on the text a click is aimed
@@ -167,56 +181,93 @@ at -- and only on that text, so the padding around it stays inert."
       (should-not (ps/open--clickable-at-p (point-min)))
       (should-not (ps/open--clickable-at-p (1- (point-max)))))))
 
-(ert-deftest ps/open--event-stationary-p-tells-a-wobble-from-a-selection ()
-  "A drag that never left the position it started at is a click the hand moved
-during, and Emacs reports one of those whenever the pointer drifts more than
-`double-click-fuzz' pixels."
-  (should (ps/open--event-stationary-p (test-ps-open--drag 12 12)))
-  (should-not (ps/open--event-stationary-p (test-ps-open--drag 12 40))))
+(ert-deftest ps/open--clickable-event-p-reads-the-window-that-was-clicked ()
+  "Not the current buffer: by the time the release arrives, following the link
+has usually selected a different one, and the release must still recognise
+that its own press landed on a link."
+  (test-ps-open--with-clicked-buffer
+    (insert "plain ")
+    (let ((link (point)))
+      (insert (propertize "link" 'mouse-face 'highlight))
+      (setq-local ps/open-follow-function #'ignore)
+      (should (ps/open--clickable-event-p (test-ps-open--press link)))
+      (should-not (ps/open--clickable-event-p (test-ps-open--press (point-min))))
+      ;; The answer must not change when some other buffer is current.
+      (with-temp-buffer
+        (should (ps/open--clickable-event-p (test-ps-open--press link)))))))
 
-(ert-deftest ps/open-click-follows-only-what-it-landed-on ()
-  "Clicking a link follows it; clicking beside one moves point and stops
-there, which is what keeps a click on a heading or a size column harmless."
-  (with-temp-buffer
+(ert-deftest ps/open--clickable-event-p-needs-a-buffer-that-follows-anything ()
+  "`mouse-face' alone is not enough — a buffer with no follow function has
+nothing a click could do, so the press must fall through to a normal drag."
+  (test-ps-open--with-clicked-buffer
+    (insert (propertize "link" 'mouse-face 'highlight))
+    (should-not (ps/open--clickable-event-p (test-ps-open--press (point-min))))))
+
+(ert-deftest ps/open-down-click-follows-on-the-press-without-moving-point ()
+  "Point staying put is the mechanism, not a detail: moving it into the link is
+what makes org-appear reveal the raw syntax and slide the rest of the line out
+from under the pointer."
+  (test-ps-open--with-clicked-buffer
     (insert "plain ")
     (let ((link (point))
-          (followed 0))
+          (followed 0)
+          (dragged 0))
       (insert (propertize "link" 'mouse-face 'highlight))
+      (goto-char (point-min))
       (setq-local ps/open-follow-function
                   (lambda () (interactive) (setq followed (1+ followed))))
-      (cl-letf (((symbol-function 'mouse-set-point)
-                 (lambda (event) (goto-char (posn-point (event-end event))))))
-        (ps/open-click (test-ps-open--click (point-min)))
-        (should (= followed 0))
+      (cl-letf (((symbol-function 'mouse-drag-region)
+                 (lambda (_event) (setq dragged (1+ dragged)))))
+        (ps/open-down-click (test-ps-open--press link))
+        (should (= followed 1))
+        (should (= dragged 0))
         (should (= (point) (point-min)))
-        (ps/open-click (test-ps-open--click link))
-        (should (= followed 1))))))
+        ;; Off a link the press is an ordinary one.
+        (ps/open-down-click (test-ps-open--press (point-min)))
+        (should (= followed 1))
+        (should (= dragged 1))))))
 
-(ert-deftest ps/open-drag-click-follows-a-wobble-and-selects-a-real-drag ()
-  (with-temp-buffer
-    (insert (propertize "link" 'mouse-face 'highlight))
-    (insert " and more text")
-    (let ((followed 0)
+(ert-deftest ps/open-releases-decline-what-the-press-already-did ()
+  "The press opens; a release that also set point or a region would undo the
+point-never-moves guarantee, or select the link it just followed."
+  (test-ps-open--with-clicked-buffer
+    (insert "plain ")
+    (let ((link (point))
+          (pointed 0)
           (selected 0))
-      (setq-local ps/open-follow-function
-                  (lambda () (interactive) (setq followed (1+ followed))))
+      (insert (propertize "link" 'mouse-face 'highlight))
+      (setq-local ps/open-follow-function #'ignore)
       (cl-letf (((symbol-function 'mouse-set-point)
-                 (lambda (event) (goto-char (posn-point (event-end event)))))
+                 (lambda (_event) (setq pointed (1+ pointed))))
                 ((symbol-function 'mouse-set-region)
                  (lambda (_event) (setq selected (1+ selected)))))
-        (ps/open-drag-click (test-ps-open--drag 2 2))
-        (should (= followed 1))
+        (ps/open-click (test-ps-open--click link))
+        (ps/open-drag-click (test-ps-open--drag link link))
+        (should (= pointed 0))
         (should (= selected 0))
-        (ps/open-drag-click (test-ps-open--drag 2 10))
-        (should (= followed 1))
+        ;; Off a link both releases do their ordinary work.
+        (ps/open-click (test-ps-open--click (point-min)))
+        (ps/open-drag-click (test-ps-open--drag (point-min) 3))
+        (should (= pointed 1))
         (should (= selected 1))))))
 
-(ert-deftest ps/open-bind-click-binds-both-halves-of-a-click ()
-  "A drag binding without a click binding, or the other way round, is the bug
-this whole pair exists to fix."
+(ert-deftest ps/open-bind-click-binds-the-press-and-both-releases ()
+  "Binding the press without the releases leaves Emacs setting point after the
+link has already opened; binding a release without the press is the two-click
+bug this whole section exists to fix."
   (let ((map (make-sparse-keymap)))
     (ps/open-bind-click map)
+    (should (eq (lookup-key map [down-mouse-1]) #'ps/open-down-click))
     (should (eq (lookup-key map [mouse-1]) #'ps/open-click))
     (should (eq (lookup-key map [drag-mouse-1]) #'ps/open-drag-click))))
+
+(ert-deftest ps/open-setup-click-turns-off-the-rewrite-it-would-duplicate ()
+  "Left on, `mouse-1-click-follows-link' rewrites the release into a mouse-2 —
+a second, independent way to open what the press has already opened."
+  (with-temp-buffer
+    (ps/open-setup-click #'ignore)
+    (should (eq ps/open-follow-function #'ignore))
+    (should (local-variable-p 'mouse-1-click-follows-link))
+    (should-not mouse-1-click-follows-link)))
 
 ;;; test-ps-open.el ends here
