@@ -49,6 +49,15 @@ setup or borrow pieces for your own.
   DONE tasks, live-preview markup that hides `*`/`/`/`[[]]` until you edit it,
   a centred reading-width column for your plan files on wide windows, and
   automatic background Git sync of your Org files.
+- **Back and forward** — every window keeps its own trail, with `‹ ›` on the
+  mode line. Files open the way each kind deserves: Markdown and HTML render
+  inside Emacs, PDFs and video go to the system, and nothing is ever opened as
+  raw bytes.
+- **An optional capture inbox** — review the articles, papers and clips you
+  forwarded yourself during the day as one list, look inside any of them without
+  leaving Emacs, throw away what is not worth keeping, and hand the rest to the
+  AI assistant to file into your plans. Needs the separate `info-triage`
+  project; invisible without it.
 - **An optional AI assistant** — a side-window helper (on your Claude
   subscription) that reads and edits your notes, aware of what you have selected,
   with its changes shown as diffs. Guide it with an `AGENTS.md` in your Org

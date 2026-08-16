@@ -47,6 +47,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
   which settings belong to a vault and which are the same everywhere.
 - [[file:Files-and-navigation.org][Files & navigation]] — the file tree, named file sets, scoping the agenda,
   window management, and jumping around.
+- [[file:Info-triage.org][Info triage]] — the optional capture queue: review what you forwarded yourself
+  during the day, look inside it, and hand it to Claude Code to file.
 
 * AI Assistant
 - [[file:AI-integration.org][AI integration (Claude Code)]] — an optional assistant that reads and edits your

@@ -125,6 +125,35 @@ up stacked the wrong way round. It only ever toggles your two regular windows;
 the file tree and the [[file:AI-integration.org][Claude Code]] side panel, if
 open, are left exactly where they are.
 
+* Going back
+Every ordinary window keeps its own trail of where it has been, shown as =‹ ›=
+at the left of its mode line. Click =‹= to return to what you were looking at
+before, =›= to go forward again — the way a browser works. =C-c <left>= and
+=C-c <right>= do the same from the keyboard.
+
+An arrow is dimmed when there is nothing that way, and hovering over a live one
+names where it would take you. Each window has its own trail, so going back in
+one does not disturb the other, and the file tree and the Claude Code panel have
+none — a panel's buffer is the point of it.
+
+* Opening a file that is not a plan
+Emacs is used here for planning, so this configuration does not pretend to be
+the right place to open anything: a PDF goes to macOS Preview, a video to the
+system player, an HTML file renders as a *page* rather than as source, and
+Markdown opens with a reading view like the one these documentation pages use.
+Audio is declined outright, and anything else that is not text asks before it
+opens — nothing is ever loaded as raw bytes.
+
+The whole policy is one editable list, =ps/open-handlers=. See [[file:Info-triage.org][Info triage]] for
+the table and for where to change it.
+
+* Browsing a folder
+Opening a folder (Productivity → Capture & Notes → Open Notes Folder, or any
+folder link) shows it as a list of names — no permissions, owner or size
+columns, and no =.DS_Store=. Clicking a file opens it by the rules above;
+clicking a folder goes into it, reusing the same window rather than opening a
+new one each time; =‹= comes back out.
+
 * What the window title says
 The window title and the mode line name the file you are editing without its
 =.org= extension, so =Work.org= simply reads /Work/.
@@ -169,6 +198,12 @@ shown.
   =config.org= → /=treemacs= file tree/ alongside =treemacs-width=, which sets
   the width the tree first opens at.
 - The split-toggle command is defined in =config.org= → /Keybindings & Menu/.
+- Back and forward are =lisp/ps-nav.el= (=ps/nav-history-limit= and the two
+  glyphs in =config.org= → /Settings/ → /Navigation history/). What opening a
+  file of a given kind does is =lisp/ps-open.el=, driven entirely by
+  =ps/open-handlers= in =config.org= → /Settings/ → /Opening files/. Folder
+  browsing and the Markdown reading view are =config.org= → /Browsing a folder/
+  and /Reading Markdown/.
 - The window title and mode line are =lisp/ps-mode-line.el=; the name itself is
   built by =ps/mode-line--display-name=, and =ps/mode-line-separator= sets the
   separator. How same-named files are told apart is Emacs's

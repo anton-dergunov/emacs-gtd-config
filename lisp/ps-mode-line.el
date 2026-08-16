@@ -411,7 +411,10 @@ Agenda.  Robust regardless of how the build was triggered \(wrapper, dispatcher,
       (display-line-numbers-mode (if tasks 1 0))
       ;; Agenda buffers are regenerated — never accumulate undo data.
       (setq buffer-undo-list t)
-      (setq-local mode-line-format '((:eval (ps/mode-line--agenda-render))))
+      ;; The nav buttons go in as their own element rather than inside the
+      ;; render, so they are never cached (see `ps/nav-mode-line-add').
+      (setq-local mode-line-format
+                  (ps/mode-line--with-nav '((:eval (ps/mode-line--agenda-render)))))
       ;; Refresh on navigation so the Tasks percentage tracks point (see
       ;; `ps/mode-line--org-setup' for why a full redraw must be forced).
       (add-hook 'post-command-hook #'force-mode-line-update nil t))))
@@ -438,6 +441,12 @@ click (select window) and drag-to-resize are left untouched."
   (define-key global-map [mode-line mouse-3] #'ignore))
 
 ;;; Setup
+
+(defun ps/mode-line--with-nav (format)
+  "Return mode-line FORMAT with the back/forward buttons, when ps-nav is loaded.
+This config has two mode lines -- the stock one and the planning one installed
+below -- and buttons in only one of them work in only half the frame."
+  (if (fboundp 'ps/nav-mode-line-add) (ps/nav-mode-line-add format) format))
 
 (defun ps/mode-line--cache-valid-p ()
   "Non-nil when this window's cached mode-line string is still current.
@@ -482,7 +491,11 @@ window-parameter cache set by `ps/mode-line--render-window-cached'."
   (set-window-parameter nil 'ps-ml-name (buffer-name))
   (set-window-parameter nil 'ps-ml-task-gen ps/mode-line--task-count-gen)
   (set-window-parameter nil 'ps-ml-str (ps/mode-line--render))
-  (setq-local mode-line-format '((:eval (ps/mode-line--render-window-cached))))
+  ;; Outside the cached renderer, deliberately: it caches per window on a key
+  ;; (line, buffer name, task-count generation) that navigation does not touch,
+  ;; so a cached arrow would keep pointing at the buffer you already left.
+  (setq-local mode-line-format
+              (ps/mode-line--with-nav '((:eval (ps/mode-line--render-window-cached)))))
   (add-hook 'post-command-hook #'ps/mode-line--maybe-refresh nil t))
 
 ;;;###autoload

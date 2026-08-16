@@ -66,6 +66,19 @@ mouse. See [[file:Vaults.org][Vaults]].
 | =C-c p U=             | =ps/font-cycle-ui=                 | next file tree font           |
 | =C-c p h=             | =ps/help-open-doc=                 | open this documentation       |
 
+* Info triage
+Only useful with the optional capture inbox — see [[file:Info-triage.org][Info triage]].
+
+| Key             | Command                  | Action                      |
+|-----------------+--------------------------+-----------------------------|
+| =C-c p I=       | =ps/info-triage-open=    | open the capture queue      |
+| =C-c <left>=    | =ps/nav-back=            | back to the previous place  |
+| =C-c <right>=   | =ps/nav-forward=         | forward again               |
+
+Inside the queue itself, single keys: =RET= follow, =n= / =p= next / previous
+item, =d= drop the item at point, =s= sync, =g= renumber, =e= open the folder
+outside Emacs, =b= / =f= back / forward, =q= put it away.
+
 * Org task editing (in an Org file)
 | Key             | Action                                    |
 |-----------------+-------------------------------------------|

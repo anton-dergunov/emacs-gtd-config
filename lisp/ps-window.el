@@ -93,6 +93,38 @@ single-window case."
   (ps/window--split-if-alone)
   (switch-to-buffer (get-buffer buffer-or-name)))
 
+(declare-function ps/nav-note-departure "ps-nav")
+
+(defun ps/window--note-departure ()
+  "Tell `ps-nav' we are leaving, if it is loaded.
+A soft dependency in this direction, so `ps-window' stays the leaf it is: the
+history is a convenience layered on top of these helpers, never a requirement
+for them."
+  (when (fboundp 'ps/nav-note-departure)
+    (ps/nav-note-departure)))
+
+;;;###autoload
+(defun ps/window-replace-here (buffer-or-name)
+  "Display BUFFER-OR-NAME in the selected window, never splitting.
+Like `ps/window-show-here' but without the split-when-alone convenience,
+which is right for opening a view alongside what you were reading and wrong
+for stepping *through* something: the Info Triage queue, an item's index, its
+directory, a file inside it are one trail, and a trail that adds a window at
+every step is not one.  A side window is still never taken over -- see
+`ps/window--select-main'."
+  (ps/window--select-main)
+  (ps/window--note-departure)
+  (switch-to-buffer (get-buffer buffer-or-name)))
+
+;;;###autoload
+(defun ps/window-visit-here (file)
+  "Visit FILE in the selected window, never splitting.
+The file-visiting counterpart of `ps/window-replace-here', for callers that
+have a path rather than a live buffer."
+  (ps/window--select-main)
+  (ps/window--note-departure)
+  (find-file file))
+
 ;;;###autoload
 (defun ps/window--split-if-alone-advice (orig-fn &rest args)
   "Around-advice for `org-agenda'/`org-todo-list': split first when alone,

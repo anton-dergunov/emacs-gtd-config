@@ -124,6 +124,9 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-appear)
   (require 'ps-tags)
   (require 'ps-file-notify)
+  (require 'ps-open)
+  (require 'ps-nav)
+  (require 'ps-info-triage)
 
   ;; Two open files with the same name are told apart by their folder, and the
   ;; mode line / frame title reformat that into "Personal/Inbox".  Pinned rather
@@ -146,6 +149,15 @@ All self-contained logic lives in =lisp/ps-*.el=.
 
   ;; Keep reading-width margins off for the duration of any Ediff session.
   (ps/prose-width-setup)
+
+  ;; Record where each window has been, and put the back/forward pair on the
+  ;; stock mode line.  The planning mode line picks the same segment up from
+  ;; `ps/mode-line--with-nav' when a buffer gets it, so both carry the buttons.
+  (ps/nav-setup)
+
+  ;; Recognise the info-triage capture queue when it is opened.  Harmless on a
+  ;; machine that has no inbox: nothing here fires until that file is visited.
+  (ps/info-triage-setup)
 
   ;; Write the vault's own state file on exit, not only when switching away.
   (ps/vault-state-setup)
@@ -356,6 +368,48 @@ journal, archives, and the two config files that live in the Org base directory.
 #+begin_src emacs-lisp
   (setq ps/conflicts-gap-minutes    15
         ps/conflicts-include-past   nil)
+#+end_src
+
+** Opening files (ps-open.el)
+Emacs is used here for planning, not for editing every kind of file that
+happens to sit beside a plan — so "open this" is not one operation. This list
+is that policy, in order, first match wins. =emacs= visits the file here,
+=browser= renders a page rather than its source, =external= hands it to macOS,
+and =refuse= declines and says why. Anything not listed is decided by looking
+at the file: text opens, non-text asks first.
+#+begin_src emacs-lisp
+  (setq ps/open-handlers
+        '(("\\.\\(?:md\\|markdown\\|mdown\\)\\'"                       . emacs)
+          ("\\.\\(?:org\\|txt\\|text\\|json\\|ya?ml\\|csv\\|tsv\\|log\\|el\\)\\'" . emacs)
+          ("\\.\\(?:html?\\|xhtml\\)\\'"                               . browser)
+          ("\\.\\(?:jpe?g\\|png\\|gif\\|webp\\|bmp\\|svg\\)\\'"        . emacs)
+          ("\\.\\(?:pdf\\|epub\\)\\'"                                  . external)
+          ("\\.\\(?:mp4\\|mov\\|m4v\\|webm\\|mkv\\|avi\\)\\'"          . external)
+          ("\\.\\(?:ogg\\|opus\\|mp3\\|m4a\\|wav\\|aac\\|flac\\)\\'"   . refuse)
+          ("\\.\\(?:zip\\|gz\\|tgz\\|bz2\\|xz\\|dmg\\|pkg\\)\\'"       . refuse)))
+  (setq ps/open-external-command "open")
+#+end_src
+
+** Navigation history (ps-nav.el)
+Back and forward, per window, shown as =‹ ›= at the left of the mode line.
+#+begin_src emacs-lisp
+  (setq ps/nav-history-limit 30
+        ps/nav-back-glyph    "‹"
+        ps/nav-forward-glyph "›")
+#+end_src
+
+** Info triage (ps-info-triage.el)
+The capture inbox produced by the separate =info-triage= project. The Triage
+menu and everything under it appear only when this directory exists, so a
+machine without that project never sees them.
+
+=ps/info-triage-directory= must name the same folder the sync script pulls
+into — the script decides that for itself, so pointing this elsewhere would
+show one folder and rebuild another.
+#+begin_src emacs-lisp
+  (setq ps/info-triage-directory        (expand-file-name "~/info-triage-inbox/")
+        ps/info-triage-sync-script      (expand-file-name "~/projects/tools/info-triage/sync.sh")
+        ps/info-triage-external-command "code")
 #+end_src
 
 ** Blank line recovery (ps-blank-lines.el)
@@ -1973,6 +2027,71 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
     (setq dired-use-ls-dired nil))
 #+end_src
 
+** Browsing a folder
+Dired out of the box is a listing, not a browser: a click opens the file in
+*another* window, so walking one folder ends up ping-ponging between two
+windows and eventually replaces whatever you were reading. It also shows the
+=ls -l= columns, which say nothing about a plan.
+
+Three changes make it behave like the rest of this config: one window, one
+buffer, names only — and files open through =ps/open-file=, so a PDF goes to
+Preview and a video to the system player instead of filling a buffer with
+bytes.
+#+begin_src emacs-lisp
+  (use-package dired
+    :ensure nil
+    :defer t
+    :custom
+    ;; One buffer, not one per folder descended.  Safe because the navigation
+    ;; history records a *path*, so back still works after a buffer is killed.
+    (dired-kill-when-opening-new-dired-buffer t)
+    :config
+    ;; Names only.  The `ls -l' columns say nothing about captured material.
+    (add-hook 'dired-mode-hook #'dired-hide-details-mode)
+    ;; Hide the junk macOS leaves in every synced folder.
+    (require 'dired-x)
+    (setq dired-omit-files (concat dired-omit-files "\\|\\`\\.DS_Store\\'"))
+    (add-hook 'dired-mode-hook #'dired-omit-mode)
+    ;; mouse-2 is the binding click-follows-link actually reaches, so the
+    ;; open-in-another-window default has to go from there, not only from RET.
+    (define-key dired-mode-map (kbd "RET") #'ps/open-dired-thing)
+    (define-key dired-mode-map [mouse-2]   #'ps/open-dired-thing-at-mouse))
+#+end_src
+
+** Reading Markdown
+Captured material arrives as Markdown, and Emacs has no idea what to do with
+it out of the box. =markdown-mode= plus the same reading view the docs use
+(markup hidden, tables aligned, reading-width margins) makes an =index.md=
+read the way an Org file does. Links follow through =ps/open-file=, so they
+navigate in place like Org links.
+#+begin_src emacs-lisp
+  (use-package markdown-mode
+    :ensure t
+    :mode ("\\.md\\'" "\\.markdown\\'")
+    :custom
+    (markdown-hide-markup t)
+    (markdown-fontify-code-blocks-natively t)
+    (markdown-enable-math nil)
+    :config
+    ;; Heading faces inherit from `outline-*', so they follow the theme with no
+    ;; colour list of our own — see the configuration-style note in CLAUDE.md.
+    (defun ps/markdown-setup ()
+      "Give a Markdown buffer the same reading view the documentation gets."
+      (when (require 'valign nil t) (valign-mode 1))
+      (visual-line-mode 1)
+      (ps/prose-width-enable)
+      ;; Captured material is generated: editing it is always a mistake, and
+      ;; read-only is also what makes RET safe to use for following links.
+      (when (and buffer-file-name
+                 (string-prefix-p (expand-file-name ps/info-triage-directory)
+                                  (expand-file-name buffer-file-name)))
+        (read-only-mode 1)))
+    (add-hook 'markdown-mode-hook #'ps/markdown-setup)
+    (define-key markdown-mode-map [remap markdown-follow-thing-at-point]
+                #'ps/open-markdown-thing)
+    (define-key markdown-mode-map (kbd "RET") #'ps/open-markdown-thing))
+#+end_src
+
 ** =treemacs= file tree
 A tree-style sidebar for browsing the Org GTD tree.
 The ignore list and category icons live in =lisp/ps-file-tree.el= and
@@ -2567,7 +2686,14 @@ calendar boundary containing the start day (e.g. the whole current week)."
     (define-key m (kbd "M") #'ps/font-cycle-mono)           ; M → next Mono font
     (define-key m (kbd "U") #'ps/font-cycle-ui)             ; U → next UI font
     ;; Help
+    (define-key m (kbd "I") #'ps/info-triage-open)          ; I → Info triage queue
+    ;; Help
     (define-key m (kbd "h") #'ps/help-open-doc))            ; h → Help / docs index
+
+  ;; Back and forward, for the keyboard.  The mode-line buttons are the usual
+  ;; way in (lisp/ps-nav.el); these are the same two commands.
+  (global-set-key (kbd "C-c <left>")  #'ps/nav-back)
+  (global-set-key (kbd "C-c <right>") #'ps/nav-forward)
 
   ;; The Plan & Review submenu is `ps/mode-line-view-menu-items' (lisp/ps-mode-line.el)
   ;; plus this menu's own "Full Agenda…" entry at the end. That list is the single
@@ -2660,6 +2786,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
        ["The Agenda"            (ps/help-open-doc "Agenda.org") t]
        ["Situations"            (ps/help-open-doc "Situations.org") t]
        ["Planning Setup"        (ps/help-open-doc "Planning-setup.org") t]
+       ["Info Triage"           (ps/help-open-doc "Info-triage.org")
+        :visible (ps/info-triage-available-p)]
        "---"
        ["About this configuration" (ps/help-open-doc "About.org") t])))
 
@@ -2667,6 +2795,38 @@ calendar boundary containing the start day (e.g. the whole current week)."
   ;; prepending puts us to the left of help-menu (which stays last).
   (setq menu-bar-final-items
         (cons 'productivity (delq 'productivity menu-bar-final-items)))
+#+end_src
+
+** Triage menu
+The capture inbox from the separate =info-triage= project gets a menu of its
+own rather than a corner of Productivity: it is a workflow, not a tool, and
+it runs top to bottom every day.
+
+=:visible= is what keeps this configuration shareable. The whole menu
+disappears on a machine that has no =~/info-triage-inbox=, so nobody is
+offered a workflow for a project they do not have.
+#+begin_src emacs-lisp
+  (easy-menu-define ps/info-triage-menu global-map
+    "Working the info-triage capture inbox."
+    '("Triage"
+      :visible (ps/info-triage-available-p)
+      ["Sync Now"          ps/info-triage-sync t]
+      ["Open Inbox"        ps/info-triage-open :keys "C-c p I"]
+      "---"
+      ["Drop Item at Point"    ps/info-triage-drop
+       :active (ps/info-triage-queue-buffer-p) :keys "d"]
+      ["Open Item Externally"  ps/info-triage-open-externally
+       :active (ps/info-triage-queue-buffer-p) :keys "e"]
+      ["Renumber Both Views"   ps/info-triage-regenerate :keys "g"]
+      "---"
+      ["Back"    ps/nav-back    :keys "C-c <left>"]
+      ["Forward" ps/nav-forward :keys "C-c <right>"]
+      "---"
+      ["Documentation" (ps/help-open-doc "Info-triage.org") t]))
+
+  ;; Left of Productivity, which stays left of Help.
+  (setq menu-bar-final-items
+        (cons 'triage (delq 'triage menu-bar-final-items)))
 #+end_src
 
 * Session & Backups

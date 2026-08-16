@@ -1,0 +1,130 @@
+#+TITLE: Info triage
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+A capture queue for things you forward to yourself during the day — articles,
+papers, Instagram reels, YouTube shorts — reviewed here and filed into your
+plans by Claude Code.
+
+The capturing half is a separate project, =info-triage=: you forward a message
+to a Telegram bot, a server fetches whatever the message links to, and a sync
+script
+pulls the result onto this machine as one folder per item. This page covers the
+Emacs half — reading the queue, looking at what an item actually contains, and
+throwing away what is not worth keeping.
+
+*This whole feature is optional.* If the inbox folder does not exist on your
+machine, the Triage menu is not shown at all and nothing here applies.
+
+* The daily loop
+
+1. *Triage → Sync Now.* Fetches whatever arrived since last time, and tells the
+   server about anything you dropped here.
+2. *Triage → Open Inbox* (=C-c p I=). The queue opens in the current window: one
+   line per item, oldest first.
+3. Read down the list. Click an item's =index= to see what was captured, or its
+   =directory= to look through the files themselves.
+4. Press =d= on anything not worth keeping. It goes to the Trash, and the list
+   renumbers.
+5. Switch to Claude Code and type =/route triage=. It reads the *other* generated
+   file — a fuller Markdown version of the same list, in the same order with the
+   same numbers — proposes where each item belongs, and waits for you to approve.
+   Naming particular items works too: "route items 3, 5 and 10".
+6. Approving it files those items and deletes their folders, which the next sync
+   propagates back to the server.
+
+* The queue
+
+Each item is one heading and one line of links:
+
+: * 21 · 2026-08-16 · post · Ever noticed the coloured tags on the ancient trees…
+:   index · directory · source
+
+The number is what you quote to =/route=. It is positional and is renumbered
+every time the list is rebuilt, so it always matches what Claude Code reads.
+
+After the number come the capture date, the kind of thing it is, and a one-line
+label. Most captured items have no title of their own — an Instagram post has
+nothing worth calling one — so the label is derived from the item's own caption,
+on-screen text or transcript.
+
+Two things appear only when there is something to say. An item you added a note
+to when forwarding it shows that note in italics on its own line. An item whose
+extraction fell short is tagged =:partial:= or =:none:= at the right-hand edge; a
+clean item is not tagged at all.
+
+** Keys in the queue
+
+The queue is read-only — it is regenerated from scratch on every sync, so
+anything typed into it would be lost — which leaves single keys free:
+
+| Key         | Does                                                     |
+|-------------+----------------------------------------------------------|
+| =RET=, click  | follow the link at point                                 |
+| =n= / =p=       | next / previous item                                     |
+| =d=           | drop the item at point (asks first; goes to the Trash)    |
+| =s=           | sync                                                     |
+| =g=           | renumber both lists without syncing                      |
+| =e=           | open the item's folder outside Emacs                     |
+| =b= / =f=       | back / forward                                           |
+| =q=           | put the queue away                                       |
+
+* Looking inside an item
+
+Everything opens *in the window you are already in* — following a link never
+splits the frame or takes over another window. The =‹ ›= buttons at the left of
+the mode line walk back and forward along the trail, and so do =C-c <left>= and
+=C-c <right>=.
+
+What a click does depends on the kind of file, because Emacs is the right place
+for some of them and the wrong place for others:
+
+| Kind                       | Opens                                            |
+|----------------------------+--------------------------------------------------|
+| Markdown, text, JSON       | in Emacs, rendered — headings and emphasis, not markup |
+| HTML                       | in Emacs as a *page*, not as source code         |
+| Images                     | in Emacs                                         |
+| PDF                        | in macOS Preview                                 |
+| Video                      | in the system player                             |
+| Audio                      | refused — the transcript beside it is the readable copy |
+| Anything else non-text     | asks before opening                              |
+
+Nothing is opened as raw bytes. A file Emacs cannot show usefully says so
+instead of filling a buffer with a video.
+
+An item whose payload is twenty photos is one a file browser handles better:
+=e= (Triage → Open Item Externally) hands the folder to VS Code.
+
+* Browsing the folder
+
+Clicking =directory= opens the item's folder. It behaves like a browser rather
+than like stock Dired: one window, one buffer, names only — no permissions,
+owner or size columns — and =.DS_Store= hidden. Clicking a file opens it by the
+table above; clicking a folder goes into it; =‹= comes back out.
+
+* Under the hood / Customize
+
+- The queue, the sync commands and the drop are =lisp/ps-info-triage.el=.
+  Settings — where the inbox is, where the sync script is, which program =e=
+  hands a folder to — are in =config.org= → /Settings/ → /Info triage/
+  (=ps/info-triage-directory=, =ps/info-triage-sync-script=,
+  =ps/info-triage-external-command=).
+- What opening a file of a given kind does is =lisp/ps-open.el=, and the whole
+  policy is the one list =ps/open-handlers= in =config.org= → /Settings/ →
+  /Opening files/. Each entry is a file-name pattern and one of =emacs=,
+  =browser=, =external= or =refuse=; the first match wins, and anything not
+  listed is decided by looking at the file. =ps/open-external-command= is the
+  program =external= uses.
+- Back and forward are =lisp/ps-nav.el=; =ps/nav-history-limit= and the two
+  glyphs are in =config.org= → /Settings/ → /Navigation history/. The history
+  is per window, so two windows keep separate trails.
+- The Markdown reading view and the folder-browsing behaviour are =config.org= →
+  /Reading Markdown/ and /Browsing a folder/. Both apply everywhere, not only
+  inside the inbox.
+- The Triage menu is =config.org= → /Triage menu/. It is hidden entirely when
+  =ps/info-triage-directory= does not exist.
+- The two generated lists, and the sync script itself, belong to the
+  =info-triage= project — see its =docs/EMACS.md=. Nothing in this
+  configuration writes to them.
