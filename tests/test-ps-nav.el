@@ -236,6 +236,27 @@ two windows and no way to undo it."
             (should (get-text-property i 'local-map button)))))
     (set-window-parameter (selected-window) 'ps/nav-back nil)))
 
+(ert-deftest ps/nav--segment-keeps-the-two-buttons-apart ()
+  "Emacs highlights the whole run whose `mouse-face' is `eq', so two adjacent
+buttons sharing one face highlighted together -- one box around the pair,
+reading as a single wide button that does two different things.  There has to
+be at least one character between them carrying neither property."
+  (unwind-protect
+      (progn
+        (set-window-parameter (selected-window) 'ps/nav-back
+                              (list (cons temporary-file-directory 1)))
+        (set-window-parameter (selected-window) 'ps/nav-forward
+                              (list (cons temporary-file-directory 1)))
+        (let* ((segment (ps/nav--segment))
+               (gaps 0))
+          (dotimes (i (length segment))
+            (unless (or (get-text-property i 'mouse-face segment)
+                        (get-text-property i 'local-map segment))
+              (setq gaps (1+ gaps))))
+          (should (> gaps 0))))
+    (set-window-parameter (selected-window) 'ps/nav-back nil)
+    (set-window-parameter (selected-window) 'ps/nav-forward nil)))
+
 (ert-deftest ps/nav-back-says-so-when-there-is-nowhere-to-go ()
   (set-window-parameter (selected-window) 'ps/nav-back nil)
   (should-error (ps/nav-back) :type 'user-error))

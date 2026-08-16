@@ -89,6 +89,19 @@ clicked rather than merely what can be seen."
   :type 'integer
   :group 'ps/nav)
 
+(defface ps/nav-button-hover
+  '((t :box (:line-width (1 . -1) :style nil)))
+  "How a mode-line navigation button looks under the mouse.
+
+Not `mode-line-highlight', which is a two-pixel `released-button' box: the
+mode line already carries a box and an overline of its own, so there is no
+room above the text for that box's top edge and it comes out clipped.  The
+`(WIDTH . HEIGHT)' form with a negative height draws the box *inside* the
+line instead, where it can neither be cut off nor make the mode line taller,
+and leaving `:color' out takes the mode line's own foreground rather than
+naming a grey that no theme asked for."
+  :group 'ps/nav)
+
 ;;; Places
 
 (defun ps/nav--trackable-buffer-p (buffer)
@@ -289,7 +302,7 @@ between a button that looks bigger and one that is."
     (if (null place)
         (propertize label 'face 'shadow)
       (propertize label
-                  'mouse-face 'mode-line-highlight
+                  'mouse-face 'ps/nav-button-hover
                   'help-echo (format "mouse-1: %s to %s"
                                      (if (eq direction 'back) "back" "forward")
                                      (ps/nav--place-name place))
@@ -297,11 +310,21 @@ between a button that looks bigger and one that is."
                                  ps/nav--back-map
                                ps/nav--forward-map)))))
 
+(defconst ps/nav--button-separator " "
+  "What goes between the two buttons, carrying none of their properties.
+
+Load-bearing rather than decorative.  Emacs highlights the whole run whose
+`mouse-face' property is `eq', so two adjacent buttons sharing one face are a
+single run: hovering either drew one box around the pair, which reads as one
+wide button that does two different things.  A plain space breaks the run.")
+
 (defun ps/nav--segment ()
   "Return the back/forward pair for the mode line, or \"\" where it makes no sense."
   (if (not (ps/nav--trackable-window-p (selected-window)))
       ""
-    (concat (ps/nav--button 'back) (ps/nav--button 'forward))))
+    (concat (ps/nav--button 'back)
+            ps/nav--button-separator
+            (ps/nav--button 'forward))))
 
 (defconst ps/nav-mode-line-element '(:eval (ps/nav--segment))
   "The mode-line element that draws the back/forward pair.

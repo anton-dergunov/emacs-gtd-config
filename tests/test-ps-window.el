@@ -313,5 +313,101 @@ not each split off another window."
           (should (= (length (ps/window--content-windows)) 1)))
       (kill-buffer buf-a))))
 
+;;; -------------------------------------------------------
+;;; Opening beside a buffer that keeps its window
+;;; -------------------------------------------------------
+
+(ert-deftest ps/window--other-content-window-skips-side-windows ()
+  "A side window is a dock -- the file tree, the Claude Code panel.  Opening an
+item into one would replace the dock with the item, which is not a pane
+becoming free."
+  (let ((buf-a (generate-new-buffer "a"))
+        (buf-side (generate-new-buffer "side")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) buf-a)
+          (let ((side (split-window)))
+            (set-window-buffer side buf-side)
+            (set-window-parameter side 'window-side 'right)
+            (should-not (ps/window--other-content-window))))
+      (mapc #'kill-buffer (list buf-a buf-side)))))
+
+(ert-deftest ps/window--other-content-window-finds-the-other-pane ()
+  (let ((buf-a (generate-new-buffer "a"))
+        (buf-b (generate-new-buffer "b")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) buf-a)
+          (let ((win-a (selected-window))
+                (win-b (split-window)))
+            (set-window-buffer win-b buf-b)
+            (select-window win-a)
+            (should (eq (ps/window--other-content-window) win-b))))
+      (mapc #'kill-buffer (list buf-a buf-b)))))
+
+(ert-deftest ps/window-visit-beside-reuses-a-pane-rather-than-splitting-again ()
+  "The rule that makes the queue predictable: the first item splits, and every
+item after that lands in the pane the first one opened."
+  (let ((buf-queue (generate-new-buffer "queue"))
+        (buf-item (generate-new-buffer "item"))
+        (target (expand-file-name "lisp/ps-window.el"))
+        (splits 0))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) buf-queue)
+          (let ((win-queue (selected-window))
+                (win-item (split-window)))
+            (set-window-buffer win-item buf-item)
+            (select-window win-queue)
+            (cl-letf (((symbol-function 'split-window-sensibly)
+                       (lambda (&rest _) (setq splits (1+ splits)) nil)))
+              (ps/window-visit-beside target))
+            (should (= splits 0))
+            (should (eq (window-buffer win-queue) buf-queue))
+            (should (equal (buffer-file-name (window-buffer win-item)) target))))
+      (when-let* ((visiting (find-buffer-visiting target)))
+        (kill-buffer visiting))
+      (mapc #'kill-buffer (list buf-queue buf-item)))))
+
+(ert-deftest ps/window-visit-beside-splits-when-there-is-no-other-pane ()
+  "Asserted through the call rather than the layout: `split-window-sensibly'
+refuses a frame as small as a batch one, so counting windows afterwards would
+test the frame size instead of this function."
+  (let ((buf-queue (generate-new-buffer "queue"))
+        (target (expand-file-name "lisp/ps-window.el"))
+        (order nil))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (set-window-buffer (selected-window) buf-queue)
+          (cl-letf (((symbol-function 'split-window-sensibly)
+                     (lambda (&rest _) (push 'split order) nil))
+                    ((symbol-function 'ps/nav-note-departure)
+                     (lambda (&optional _) (push 'noted order))))
+            (ps/window-visit-beside target))
+          ;; And in that order: splitting selects a new window still showing
+          ;; the old buffer, so noting first records the step in the window
+          ;; that stayed put.
+          (should (equal (nreverse order) '(split noted))))
+      (when-let* ((visiting (find-buffer-visiting target)))
+        (kill-buffer visiting))
+      (kill-buffer buf-queue))))
+
+(ert-deftest ps/window-visit-only-here-records-the-step ()
+  "Navigating in place is still navigating: without this, the trail only
+learned about a move at the next redisplay."
+  (let ((target (expand-file-name "lisp/ps-window.el"))
+        (noted nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'ps/nav-note-departure)
+                   (lambda (&optional _) (setq noted t))))
+          (ps/window-visit-only-here target)
+          (should noted))
+      (when-let* ((visiting (find-buffer-visiting target)))
+        (kill-buffer visiting)))))
+
 (provide 'test-ps-window)
 ;;; test-ps-window.el ends here

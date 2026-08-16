@@ -156,6 +156,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-file-notify)
   (require 'ps-open)
   (require 'ps-nav)
+  (require 'ps-dired)
   (require 'ps-info-triage)
 
   ;; Two open files with the same name are told apart by their folder, and the
@@ -420,6 +421,16 @@ at the file: text opens, non-text asks first.
   (setq ps/open-external-command "open")
 #+end_src
 
+** Folder listing (ps-dired.el)
+A folder is listed as a type icon, a size for files, and the name — the =ls -l=
+columns in front of that answer a question from 1971, and the one thing they
+did carry usefully, file or folder, is put back as an icon rather than left to
+the colour of the name. =(= shows the full =ls= listing whenever it is wanted.
+#+begin_src emacs-lisp
+  (setq ps/dired-decorate-listing t
+        ps/dired-size-width       7)
+#+end_src
+
 ** Navigation history (ps-nav.el)
 Back and forward, per window, shown as =‹ ›= at the left of the mode line.
 #+begin_src emacs-lisp
@@ -436,10 +447,14 @@ machine without that project never sees them.
 =ps/info-triage-directory= must name the same folder the sync script pulls
 into — the script decides that for itself, so pointing this elsewhere would
 show one folder and rebuild another.
+=ps/info-triage-open-beside= is the window rule: with it on, the queue keeps
+its window for good and items open in the pane beside it. Turn it off to work
+one window at a time, with =‹= to get back to the list.
 #+begin_src emacs-lisp
   (setq ps/info-triage-directory        (expand-file-name "~/info-triage-inbox/")
         ps/info-triage-sync-script      (expand-file-name "~/projects/tools/info-triage/sync.sh")
-        ps/info-triage-external-command "code")
+        ps/info-triage-external-command "code"
+        ps/info-triage-open-beside      t)
 #+end_src
 
 ** Blank line recovery (ps-blank-lines.el)
@@ -2063,13 +2078,15 @@ Logic lives in =lisp/ps-links.el= (uses the string helpers in =ps-utils=).
 ** Browsing a folder
 Dired out of the box is a listing, not a browser: a click opens the file in
 *another* window, so walking one folder ends up ping-ponging between two
-windows and eventually replaces whatever you were reading. It also shows the
-=ls -l= columns, which say nothing about a plan.
+windows and eventually replaces whatever you were reading. It also leads with
+six =ls -l= columns — permissions, link count, owner, group — that say nothing
+about anything, and hides the one distinction that matters, file or folder, in
+the colour of the name.
 
-Three changes make it behave like the rest of this config: one window, one
-buffer, names only — and files open through =ps/open-file=, so a PDF goes to
-Preview and a video to the system player instead of filling a buffer with
-bytes.
+So: one window, one buffer, and a listing of a type icon, a size and a name.
+Files open through =ps/open-file=, so a PDF goes to Preview and a video to the
+system player instead of filling a buffer with bytes. =(= brings the full =ls=
+listing back at any time.
 #+begin_src emacs-lisp
   (use-package dired
     :ensure nil
@@ -2082,11 +2099,13 @@ bytes.
     ;; question nobody browsing captured material is asking, and its number
     ;; does not agree with the Finder's anyway.
     (dired-free-space nil)
+    ;; Hide the `ls -l' columns, but NOT the line naming the folder: that is
+    ;; the only place the path appears, and it is worth its line.
+    (dired-hide-details-hide-information-lines nil)
     :config
     ;; Directories first, then files, then by name — the order the Finder uses.
     ;; BSD `ls' cannot do it, so prefer GNU coreutils when it is installed and
-    ;; fall back to Emacs's own listing when it is not; either way the sizes and
-    ;; dates stay, which is why `dired-hide-details-mode' is NOT enabled here.
+    ;; fall back to Emacs's own listing when it is not.
     (if-let* ((gnu-ls (executable-find "gls")))
         (setq insert-directory-program gnu-ls
               dired-use-ls-dired t
@@ -2095,18 +2114,27 @@ bytes.
       (setq ls-lisp-use-insert-directory-program nil
             ls-lisp-dirs-first t
             dired-listing-switches "-alh"))
-    ;; Hide the junk macOS leaves in every synced folder.
+    ;; Lock files, auto-saves, `.', and the junk macOS leaves in every synced
+    ;; folder.  `..' deliberately stays — see `ps/dired-omit-files'.
     (require 'dired-x)
-    (setq dired-omit-files (concat dired-omit-files "\\|\\`\\.DS_Store\\'"))
+    (setq dired-omit-files ps/dired-omit-files
+          dired-omit-verbose nil)
     (add-hook 'dired-mode-hook #'dired-omit-mode)
-    ;; mouse-2 is the binding click-follows-link actually reaches, so the
-    ;; open-in-another-window default has to go from there, not only from RET.
+    (add-hook 'dired-mode-hook #'dired-hide-details-mode)
+    (add-hook 'dired-mode-hook #'ps/open-dired-setup-click)
+    (ps/dired-setup)
+    ;; A click opens what it landed on, in this window.  mouse-2 is what
+    ;; `mouse-1-click-follows-link' rewrites a click into; mouse-1 is bound
+    ;; directly as well, because that rewrite gives up on a click that drifted
+    ;; a few pixels — see `ps/open-click'.
     (define-key dired-mode-map (kbd "RET") #'ps/open-dired-thing)
     (define-key dired-mode-map [mouse-2]   #'ps/open-dired-thing-at-mouse)
-    ;; Up is not Back: `^' goes to the parent folder, the mode line's `‹'
-    ;; retraces where you have actually been.  Both are wanted, and only one of
-    ;; them was discoverable, so the parent gets a header-line button too.
-    (add-hook 'dired-mode-hook #'ps/open-dired-header-line))
+    (ps/open-bind-click dired-mode-map)
+    ;; Up is not Back: `^' goes to the parent folder (so does clicking `..'),
+    ;; the mode line's `‹' retraces where you have actually been.  Ours rather
+    ;; than Dired's own, so that going up follows the same window rule as every
+    ;; other step and is recorded in the trail.
+    (define-key dired-mode-map (kbd "^") #'ps/open-dired-up))
 #+end_src
 
 ** Reading HTML pages
@@ -2167,9 +2195,13 @@ navigate in place like Org links.
                                   (expand-file-name buffer-file-name)))
         (read-only-mode 1)))
     (add-hook 'markdown-mode-hook #'ps/markdown-setup)
+    (add-hook 'markdown-mode-hook #'ps/open-markdown-setup-click)
     (define-key markdown-mode-map [remap markdown-follow-thing-at-point]
                 #'ps/open-markdown-thing)
     (define-key markdown-mode-map (kbd "RET") #'ps/open-markdown-thing)
+    ;; And a plain click, which `mouse-1-click-follows-link' alone does not
+    ;; reliably deliver — see `ps/open-click'.
+    (ps/open-bind-click markdown-mode-map)
     ;; A wide table cannot be made to fit a narrow window: wrapping destroys its
     ;; columns and there is nothing to align once a row spans two screen lines.
     ;; `C-c |' stops wrapping so the table stays whole and scrolls sideways
@@ -2459,8 +2491,16 @@ a link only if the button was held for *less than 450 milliseconds*, and a
 longer press just moves the cursor. Aiming at a small link takes longer than
 that, so links appeared to need two clicks — sometimes. Follow on any click
 instead. Dragging still selects text; Emacs never follows a link on a drag.
+That alone still left links needing two clicks, for a second reason: the
+rewrite only fires when the button release arrives as a /click/, and Emacs
+calls it a /drag/ as soon as the pointer moved more than =double-click-fuzz=
+*pixels* between press and release. Three pixels is tighter than a hand on a
+trackpad, so an aimed click became a drag that selected nothing — while a
+quick double tap, which barely moves, worked. Eight pixels is still well
+inside a deliberate drag.
 #+begin_src emacs-lisp
-  (setq mouse-1-click-follows-link t)
+  (setq mouse-1-click-follows-link t
+        double-click-fuzz 8)
 #+end_src
 
 ** macOS: keyboard layout

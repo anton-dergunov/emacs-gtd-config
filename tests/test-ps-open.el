@@ -1,6 +1,7 @@
 ;;; test-ps-open.el --- ERT tests for ps-open -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-open)
 
@@ -115,5 +116,107 @@ through to `markdown-enter-key' there greeted anyone who missed a link with
     (goto-char (point-min))
     (setq buffer-read-only t)
     (should-not (ps/open-markdown-thing))))
+
+;;; -------------------------------------------------------
+;;; ps/open-file -- a directory is not sniffed
+;;; -------------------------------------------------------
+
+(ert-deftest ps/open-file-opens-a-directory-without-reading-it ()
+  "Resolving the handler first sent a directory to `ps/open--binary-file-p',
+which reads a file's opening bytes -- and reading a directory signals \"Read
+error: Is a directory\".  That is what clicking an item's `directory' link
+did."
+  (let ((directory (make-temp-file "ps-open-test-dir-" :directory))
+        (visited nil)
+        (sniffed nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'ps/window-visit-only-here)
+                   (lambda (file) (setq visited file)))
+                  ((symbol-function 'ps/open--binary-file-p)
+                   (lambda (_file) (setq sniffed t) nil)))
+          (ps/open-file directory)
+          (should (equal visited (expand-file-name directory)))
+          (should-not sniffed))
+      (delete-directory directory))))
+
+;;; -------------------------------------------------------
+;;; Following on a plain click
+;;; -------------------------------------------------------
+
+(defun test-ps-open--posn (position)
+  "Return a position list naming POSITION in the current buffer's window."
+  (list (selected-window) position '(0 . 0) 0))
+
+(defun test-ps-open--click (position)
+  "Return a `mouse-1' event at POSITION."
+  (list 'mouse-1 (test-ps-open--posn position)))
+
+(defun test-ps-open--drag (from to)
+  "Return a `drag-mouse-1' event from FROM to TO."
+  (list 'drag-mouse-1 (test-ps-open--posn from) (test-ps-open--posn to)))
+
+(ert-deftest ps/open--clickable-at-p-answers-for-a-mouse-face ()
+  "The one marker Org, Markdown and Dired all put on the text a click is aimed
+at -- and only on that text, so the padding around it stays inert."
+  (with-temp-buffer
+    (insert "before ")
+    (let ((start (point)))
+      (insert (propertize "link" 'mouse-face 'highlight))
+      (insert " after")
+      (should (ps/open--clickable-at-p start))
+      (should-not (ps/open--clickable-at-p (point-min)))
+      (should-not (ps/open--clickable-at-p (1- (point-max)))))))
+
+(ert-deftest ps/open--event-stationary-p-tells-a-wobble-from-a-selection ()
+  "A drag that never left the position it started at is a click the hand moved
+during, and Emacs reports one of those whenever the pointer drifts more than
+`double-click-fuzz' pixels."
+  (should (ps/open--event-stationary-p (test-ps-open--drag 12 12)))
+  (should-not (ps/open--event-stationary-p (test-ps-open--drag 12 40))))
+
+(ert-deftest ps/open-click-follows-only-what-it-landed-on ()
+  "Clicking a link follows it; clicking beside one moves point and stops
+there, which is what keeps a click on a heading or a size column harmless."
+  (with-temp-buffer
+    (insert "plain ")
+    (let ((link (point))
+          (followed 0))
+      (insert (propertize "link" 'mouse-face 'highlight))
+      (setq-local ps/open-follow-function
+                  (lambda () (interactive) (setq followed (1+ followed))))
+      (cl-letf (((symbol-function 'mouse-set-point)
+                 (lambda (event) (goto-char (posn-point (event-end event))))))
+        (ps/open-click (test-ps-open--click (point-min)))
+        (should (= followed 0))
+        (should (= (point) (point-min)))
+        (ps/open-click (test-ps-open--click link))
+        (should (= followed 1))))))
+
+(ert-deftest ps/open-drag-click-follows-a-wobble-and-selects-a-real-drag ()
+  (with-temp-buffer
+    (insert (propertize "link" 'mouse-face 'highlight))
+    (insert " and more text")
+    (let ((followed 0)
+          (selected 0))
+      (setq-local ps/open-follow-function
+                  (lambda () (interactive) (setq followed (1+ followed))))
+      (cl-letf (((symbol-function 'mouse-set-point)
+                 (lambda (event) (goto-char (posn-point (event-end event)))))
+                ((symbol-function 'mouse-set-region)
+                 (lambda (_event) (setq selected (1+ selected)))))
+        (ps/open-drag-click (test-ps-open--drag 2 2))
+        (should (= followed 1))
+        (should (= selected 0))
+        (ps/open-drag-click (test-ps-open--drag 2 10))
+        (should (= followed 1))
+        (should (= selected 1))))))
+
+(ert-deftest ps/open-bind-click-binds-both-halves-of-a-click ()
+  "A drag binding without a click binding, or the other way round, is the bug
+this whole pair exists to fix."
+  (let ((map (make-sparse-keymap)))
+    (ps/open-bind-click map)
+    (should (eq (lookup-key map [mouse-1]) #'ps/open-click))
+    (should (eq (lookup-key map [drag-mouse-1]) #'ps/open-drag-click))))
 
 ;;; test-ps-open.el ends here

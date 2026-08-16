@@ -148,9 +148,10 @@ Markdown opens with a reading view like the one these documentation pages use.
 Audio is declined outright, and anything else that is not text asks before it
 opens — nothing is ever loaded as raw bytes.
 
-Opening a file from a list puts it beside what you were reading when that was
-the only thing on screen, and in its place when it was not — so a second window
-appears when there is room for it and never when there is not.
+Opening a file replaces what is in the window you opened it from, so walking
+from a folder into a file and on into another one stays in one place. The
+exception is a list you keep coming back to — the [[file:Info-triage.org][capture queue]] is the one — which
+keeps its own window and opens what it lists in the pane beside it.
 
 Inside a rendered page, =R= reduces it to just the article and =&= hands it to
 your real browser. In a Markdown file with a table too wide for the window,
@@ -161,13 +162,21 @@ the table and for where to change it.
 
 * Browsing a folder
 Opening a folder (Productivity → Capture & Notes → Open Notes Folder, or any
-folder link) lists it the way the Finder does: folders first, then files, with
-sizes and dates, and no =.DS_Store=. Clicking a file opens it by the rules
-above; clicking a folder goes into it, reusing the same window rather than
-opening a new one each time.
+folder link) lists it as an icon, a size and a name — folders first, then
+files, and no =.DS_Store=. The =ls -l= columns are left out: permissions, link
+count, owner and group answer a question from 1971, and the one thing they did
+say usefully, file or folder, is now an icon rather than the colour of the
+name. Sizes are shown for files only, since a folder's own size says nothing
+about what is inside it.
 
-The =↑= button at the top of the listing goes to the parent folder, and so does
-=^=. That is a different move from =‹=, which retraces where you have been.
+Press =(= for the full =ls= listing whenever you do want it, and again to go
+back.
+
+Clicking a file opens it by the rules above; clicking a folder goes into it,
+reusing the same window rather than opening a new one each time.
+
+=..= at the top of the listing goes to the parent folder, and so does =^=. That
+is a different move from =‹=, which retraces where you have been.
 
 * What the window title says
 The window title and the mode line name the file you are editing without its
@@ -214,11 +223,17 @@ shown.
   the width the tree first opens at.
 - The split-toggle command is defined in =config.org= → /Keybindings & Menu/.
 - Back and forward are =lisp/ps-nav.el= (=ps/nav-history-limit= and the two
-  glyphs in =config.org= → /Settings/ → /Navigation history/). What opening a
-  file of a given kind does is =lisp/ps-open.el=, driven entirely by
-  =ps/open-handlers= in =config.org= → /Settings/ → /Opening files/. Folder
-  browsing and the Markdown reading view are =config.org= → /Browsing a folder/
-  and /Reading Markdown/.
+  glyphs in =config.org= → /Settings/ → /Navigation history/); the face a
+  button takes under the mouse is =ps/nav-button-hover=. What opening a file of
+  a given kind does is =lisp/ps-open.el=, driven entirely by =ps/open-handlers=
+  in =config.org= → /Settings/ → /Opening files/. Folder browsing and the
+  Markdown reading view are =config.org= → /Browsing a folder/ and /Reading
+  Markdown/, with the listing's icons and sizes in =lisp/ps-dired.el=
+  (=ps/dired-decorate-listing=, =ps/dired-size-width=).
+- That one click follows a link — rather than two — is =config.org= → /One
+  click follows a link/: =mouse-1-click-follows-link= says a click follows at
+  all, and =double-click-fuzz= says how far the pointer may drift during one
+  before Emacs decides it was a drag.
 - The window title and mode line are =lisp/ps-mode-line.el=; the name itself is
   built by =ps/mode-line--display-name=, and =ps/mode-line-separator= sets the
   separator. How same-named files are told apart is Emacs's

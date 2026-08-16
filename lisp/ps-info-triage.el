@@ -32,8 +32,10 @@
 ;;; Code:
 
 (require 'seq)
+;; A real require, not a declaration: the keymap below is built at load time
+;; and `ps/open-bind-click' has to exist by then.
+(require 'ps-open)
 
-(declare-function ps/open-file "ps-open")
 (declare-function ps/window-replace-here "ps-window")
 (declare-function ps/window-visit-here "ps-window")
 (declare-function ps/window--select-main "ps-window")
@@ -62,6 +64,19 @@ without the info-triage project never sees a menu for it."
   (expand-file-name "~/projects/tools/info-triage/sync.sh")
   "The info-triage synchronization script."
   :type 'file
+  :group 'ps/info-triage)
+
+(defcustom ps/info-triage-open-beside t
+  "Whether an item opens beside the queue rather than in its window.
+
+With this on -- the default -- the queue keeps its window for good: the first
+item you open splits and takes the other pane, and every item after that lands
+in that same pane.  The list is read down over and over, so an item opening
+into it would take the list away every time.
+
+Turn it off for one window at a time: the item replaces the queue and `‹'
+brings it back."
+  :type 'boolean
   :group 'ps/info-triage)
 
 (defcustom ps/info-triage-external-command "code"
@@ -307,6 +322,11 @@ replaces, `org-open-at-mouse', sets point itself."
     ;; handling and opened the item in another window.
     (define-key map [remap org-open-at-point] #'ps/info-triage-follow)
     (define-key map [remap org-open-at-mouse] #'ps/info-triage-follow-at-mouse)
+    ;; And mouse-1 directly, because even that pair is not enough: the rewrite
+    ;; that turns a click into a mouse-2 only fires for a release event of type
+    ;; `mouse-1', and a click that drifts more than `double-click-fuzz' pixels
+    ;; arrives as a drag instead.  See `ps/open-click'.
+    (ps/open-bind-click map)
     (define-key map (kbd "RET") #'ps/info-triage-follow)
     (define-key map (kbd "n")   #'org-next-visible-heading)
     (define-key map (kbd "p")   #'org-previous-visible-heading)
@@ -330,6 +350,15 @@ bindings."
   :lighter " Triage"
   :keymap ps/info-triage-mode-map
   (setq buffer-read-only (and ps/info-triage-mode t))
+  ;; A click here follows a link and nothing else -- the RET behaviour of
+  ;; opening the item at point when there is no link would mean clicking
+  ;; anywhere at all opened something.
+  (setq-local ps/open-follow-function
+              (and ps/info-triage-mode #'ps/info-triage-follow))
+  ;; The queue stays where it is and items open beside it; see
+  ;; `ps/info-triage-open-beside'.
+  (setq-local ps/open-keep-window
+              (and ps/info-triage-mode ps/info-triage-open-beside))
   ;; Org buffers get a line-number gutter here because plan files are worth
   ;; citing by line.  A generated queue is not: its items are addressed by the
   ;; number printed in each heading, and a second, different set of numbers

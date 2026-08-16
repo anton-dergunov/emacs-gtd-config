@@ -72,17 +72,18 @@ anything typed into it would be lost — which leaves single keys free:
 
 * Looking inside an item
 
-Where an item opens depends on what else is on screen, which is the difference
-between reviewing alone and reviewing next to Claude Code:
+*The queue keeps its window.* The first item you open splits the frame and
+takes the pane beside it; every item after that lands in that same pane, so the
+list stays where it is and stays in view. Following a link *inside* an item —
+=content.md=, a folder, a page — replaces what is in that pane rather than
+adding another one, so the frame never grows past two.
 
-- If the queue is *the only thing open*, the item appears beside it, so you can
-  read one and keep the other in view.
-- If anything else is already open — a Claude Code session, another plan file —
-  the item takes over the queue's own window rather than squeezing in a third.
+The =‹ ›= buttons at the left of the mode line walk back and forward along the
+trail you took, and so do =C-c <left>= and =C-c <right>=. Going back never adds
+a window.
 
-Either way the =‹ ›= buttons at the left of the mode line walk back and forward
-along the trail you took, and so do =C-c <left>= and =C-c <right>=. Going back
-never adds a window.
+To work one window at a time instead, with =‹= to get back to the list, turn
+=ps/info-triage-open-beside= off.
 
 What a click does depends on the kind of file, because Emacs is the right place
 for some of them and the wrong place for others:
@@ -108,15 +109,18 @@ An item whose payload is twenty photos is one a file browser handles better:
 
 * Browsing the folder
 
-Clicking =directory= opens the item's folder, listed the way the Finder lists
-one: folders first, then files, with sizes and dates, and =.DS_Store= hidden.
-Clicking a file opens it by the table above; clicking a folder goes into it,
-reusing the same window rather than opening a new one each time.
+Clicking =directory= opens the item's folder as an icon, a size and a name —
+folders first, then files, =.DS_Store= hidden, and the =ls -l= columns left
+out. Clicking a file opens it by the table above; clicking a folder goes into
+it, reusing the same window rather than opening a new one each time.
 
-*Up is not Back.* The =↑= button at the top of the listing goes to the parent
-folder (=^= does the same); =‹= on the mode line retraces the folders you
-actually opened, which after a few steps is somewhere else entirely. Both are
-useful, which is why they are separate.
+Press =(= for the full =ls= listing — permissions, owner, dates — and again to
+go back.
+
+*Up is not Back.* =..= at the top of the listing goes to the parent folder, and
+so does =^=; =‹= on the mode line retraces the folders you actually opened,
+which after a few steps is somewhere else entirely. Both are useful, which is
+why they are separate.
 
 * Under the hood / Customize
 
@@ -125,9 +129,10 @@ useful, which is why they are separate.
   does not exist.
 - The queue, the sync commands and the drop are =lisp/ps-info-triage.el=.
   Settings — where the inbox is, where the sync script is, which program =e=
-  hands a folder to — are in =config.org= → /Settings/ → /Info triage/
-  (=ps/info-triage-directory=, =ps/info-triage-sync-script=,
-  =ps/info-triage-external-command=).
+  hands a folder to, whether items open beside the queue — are in =config.org=
+  → /Settings/ → /Info triage/ (=ps/info-triage-directory=,
+  =ps/info-triage-sync-script=, =ps/info-triage-external-command=,
+  =ps/info-triage-open-beside=).
 - What opening a file of a given kind does is =lisp/ps-open.el=, and the whole
   policy is the one list =ps/open-handlers= in =config.org= → /Settings/ →
   /Opening files/. Each entry is a file-name pattern and one of =emacs=,
@@ -142,6 +147,14 @@ useful, which is why they are separate.
   pages/. All three apply everywhere, not only inside the inbox. In a Markdown
   file that still contains a wide table, =C-c |= stops lines wrapping so the
   table stays whole and scrolls sideways instead.
+- The listing's icons and sizes are =lisp/ps-dired.el=, with
+  =ps/dired-decorate-listing= and =ps/dired-size-width= in =config.org= →
+  /Settings/ → /Folder listing/. The icons are the file tree's own, so a folder
+  looks the same in both.
+- A single click follows a link because of two settings in =config.org= →
+  /One click follows a link/: =mouse-1-click-follows-link= and
+  =double-click-fuzz=, which is how far the pointer may drift during a click
+  before Emacs calls it a drag.
 - The two generated lists, and the sync script itself, belong to the
   =info-triage= project — see its =docs/EMACS.md=. Nothing in this
   configuration writes to them.

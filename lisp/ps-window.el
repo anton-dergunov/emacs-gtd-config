@@ -14,6 +14,8 @@
 
 ;;; Code:
 
+(require 'seq)
+
 (defvar org-agenda-multi)
 
 (defvar ps/window-inhibit-split nil
@@ -44,6 +46,13 @@ content window to move to."
     (when-let ((main (car (ps/window--content-windows))))
       (select-window main)))
   (selected-window))
+
+(defun ps/window--other-content-window ()
+  "Return a content window that is not the selected one, or nil for none.
+The most recently used one, so that following several links in a row keeps
+landing in the same pane rather than wandering around the frame."
+  (car (seq-sort (lambda (a b) (> (window-use-time a) (window-use-time b)))
+                 (delq (selected-window) (ps/window--content-windows)))))
 
 (defun ps/window--alone-p ()
   "Non-nil when the selected window is the only content window in the frame."
@@ -142,10 +151,42 @@ layout -- retracing a trail, for one."
 ;;;###autoload
 (defun ps/window-visit-only-here (file)
   "Visit FILE in the selected window, never splitting.
-For callers that must not change the window layout at all: `ps-nav' going back
-along a trail is one, since a step backwards that adds a window is not a step
-backwards."
+The ordinary way to step *through* something -- an item's index, its folder, a
+file inside it are one trail, and a trail that adds a window at every step is
+not one.  `ps-nav' retracing that trail uses this too, since a step backwards
+that adds a window is not a step backwards; the departure it notes here is
+suppressed while it is in transit."
   (ps/window--select-main)
+  (ps/window--note-departure)
+  (find-file file))
+
+;;;###autoload
+(defun ps/window--select-other-content-window ()
+  "Select a content window that is not the selected one, making one if need be.
+Returns the window now selected -- which is the one asked for unless the frame
+refused to split, in which case it is the one we started in and the caller
+degrades to visiting in place rather than failing."
+  (ps/window--select-main)
+  (if-let ((other (ps/window--other-content-window)))
+      (select-window other)
+    (when-let ((new (split-window-sensibly)))
+      (select-window new)))
+  (selected-window))
+
+;;;###autoload
+(defun ps/window-visit-beside (file)
+  "Visit FILE in a window other than this one, splitting to make one if need be.
+
+For a buffer that should stay on screen while you look at what it lists: the
+Info Triage queue is read down over and over, and an item opening *into* it
+would take the list away every time.  One rule, one outcome -- the first item
+splits, every later one lands in that same pane, and the list never moves.
+
+The departure is noted after the split, not before: splitting selects a new
+window that is still showing the old buffer, so noting first would record the
+step in the window that never went anywhere."
+  (ps/window--select-other-content-window)
+  (ps/window--note-departure)
   (find-file file))
 
 ;;;###autoload
