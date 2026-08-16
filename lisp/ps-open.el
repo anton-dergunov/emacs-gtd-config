@@ -207,6 +207,38 @@ turns walking one folder into a ping-pong between two of them."
   (mouse-set-point event)
   (ps/open-dired-thing))
 
+;;;###autoload
+(defun ps/open-dired-up ()
+  "Go to the parent folder, in this window.
+
+Deliberately separate from going *back*: back retraces the folders you opened,
+which after a few steps is not where you came from at all.  `dired-up-directory'
+already does this on `^'; this exists so there is something to click."
+  (interactive)
+  (let ((here (expand-file-name default-directory)))
+    (ps/window-visit-here (file-name-directory (directory-file-name here)))))
+
+(defvar ps/open--dired-up-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'ps/open-dired-up)
+    map)
+  "Keymap on the Dired header line's parent-folder button.")
+
+;;;###autoload
+(defun ps/open-dired-header-line ()
+  "Show the folder being browsed, with a button up to its parent."
+  (setq-local
+   header-line-format
+   '((:eval
+      (let ((here (directory-file-name (expand-file-name default-directory))))
+        (concat
+         (propertize "  ↑  "
+                     'face 'mode-line-emphasis
+                     'mouse-face 'mode-line-highlight
+                     'help-echo "mouse-1: up to the parent folder"
+                     'local-map ps/open--dired-up-map)
+         (propertize (abbreviate-file-name here) 'face 'shadow)))))))
+
 (defun ps/open--url-p (target)
   "Non-nil when TARGET is an absolute URL rather than a path."
   (string-match-p "\\`[a-zA-Z][a-zA-Z0-9+.-]*:" target))
@@ -214,11 +246,16 @@ turns walking one folder into a ping-pong between two of them."
 ;;;###autoload
 (defun ps/open-markdown-thing ()
   "Follow the Markdown link at point through `ps/open-file'.
-With no link at point, does what RET does in Markdown normally -- binding
-this to RET must not stop a Markdown buffer being typed in."
+
+With no link at point this must do whatever RET does normally, since it is
+bound to RET and a writable Markdown buffer still has to be typeable.  In a
+read-only one -- every captured file is -- that same fallback signalled
+\"Buffer is read-only\" at anyone who pressed RET off a link, so there it
+does nothing instead."
   (interactive)
   (let ((target (and (fboundp 'markdown-link-url) (markdown-link-url))))
     (cond
+     ((and (null target) buffer-read-only) nil)
      ((null target) (call-interactively #'markdown-enter-key))
      ((ps/open--url-p target) (browse-url target))
      (t (ps/open-file (expand-file-name target default-directory))))))

@@ -102,4 +102,18 @@ path.  A named handler answers for a path that does not even exist."
 (ert-deftest ps/open-file-refuses-a-file-that-is-not-there ()
   (should-error (ps/open-file "/nowhere/at/all/index.md") :type 'user-error))
 
+;;; -------------------------------------------------------
+;;; ps/open-markdown-thing -- RET off a link
+;;; -------------------------------------------------------
+
+(ert-deftest ps/open-markdown-thing-is-quiet-off-a-link-in-a-read-only-buffer ()
+  "It is bound to RET, and every captured file is read-only -- so falling
+through to `markdown-enter-key' there greeted anyone who missed a link with
+\"Buffer is read-only\"."
+  (with-temp-buffer
+    (insert "just prose, no link here\n")
+    (goto-char (point-min))
+    (setq buffer-read-only t)
+    (should-not (ps/open-markdown-thing))))
+
 ;;; test-ps-open.el ends here

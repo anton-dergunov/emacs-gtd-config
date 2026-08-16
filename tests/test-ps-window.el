@@ -1,6 +1,7 @@
 ;;; test-ps-window.el --- ERT tests for ps-window -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
 (add-to-list 'load-path "lisp")
 (require 'ps-window)
 
@@ -104,6 +105,43 @@ the exact signature of a background `org-agenda-redo' on a closed Agenda."
             (should (eq (window-buffer win-a) buf-new))
             (should (eq (window-buffer win-b) buf-b))))
       (mapc #'kill-buffer (list buf-a buf-b buf-new)))))
+
+(ert-deftest ps/window-visit-here-notes-the-departure-after-splitting ()
+  "Order matters: the split selects a NEW window still showing the old buffer,
+so the departure belongs to that window -- back then returns the item's window
+to what it replaced.  Noting first recorded a step in the window that stayed
+put, leaving the queue's own history claiming it had gone somewhere."
+  (let ((order nil)
+        (origin (current-buffer))
+        (target (expand-file-name "lisp/ps-window.el")))
+    ;; The order is asserted directly rather than through window identity:
+    ;; `split-window-sensibly' refuses a frame as small as a batch one, so a
+    ;; test that waited to see two windows would pass or fail on the frame size
+    ;; rather than on this function.
+    (cl-letf (((symbol-function 'ps/window--split-if-alone)
+               (lambda () (push 'split order)))
+              ((symbol-function 'ps/nav-note-departure)
+               (lambda (&optional _) (push 'noted order))))
+      (unwind-protect
+          (progn
+            (ps/window-visit-here target)
+            (should (equal (nreverse order) '(split noted))))
+        (when-let* ((visiting (find-buffer-visiting target)))
+          (kill-buffer visiting))
+        (switch-to-buffer origin)))))
+
+(ert-deftest ps/window-visit-only-here-never-splits ()
+  "Retracing a trail must not change the layout, whatever it is."
+  (let ((origin (current-buffer))
+        (target (expand-file-name "lisp/ps-window.el")))
+    (unwind-protect
+        (progn
+          (delete-other-windows)
+          (ps/window-visit-only-here target)
+          (should (= (length (ps/window--content-windows)) 1)))
+      (when-let* ((visiting (find-buffer-visiting target)))
+        (kill-buffer visiting))
+      (switch-to-buffer origin))))
 
 (ert-deftest ps/window-show-here-splits-when-alone ()
   "With exactly one content window, it splits first so the original buffer

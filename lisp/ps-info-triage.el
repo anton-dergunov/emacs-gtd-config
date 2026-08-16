@@ -282,6 +282,15 @@ Preview and a `.mp4' link goes to the system player -- which is
          ((member type '("http" "https")) (browse-url (format "%s:%s" type path)))
          (t (org-open-at-point)))))))
 
+(defun ps/info-triage-follow-at-mouse (event)
+  "Follow whatever EVENT clicked on.
+Point is normally already at the click by the time a mouse-2 binding runs, but
+a middle click arrives with no preceding drag -- which is why the command this
+replaces, `org-open-at-mouse', sets point itself."
+  (interactive "e")
+  (mouse-set-point event)
+  (ps/info-triage-follow))
+
 ;;; The queue buffer
 
 (defvar ps/info-triage-mode-map
@@ -289,7 +298,15 @@ Preview and a `.mp4' link goes to the system player -- which is
     ;; A remap rather than a key: Org puts its own keymap on a link as a text
     ;; property, which outranks a minor-mode map, so binding RET and mouse-1
     ;; alone would leave clicking a link going somewhere else entirely.
+    ;;
+    ;; BOTH remaps are needed, and the second is the one that was missing.
+    ;; `org-mouse-map' binds mouse-2 to `org-open-at-mouse', a *separate*
+    ;; command that ends in a plain `(org-open-at-point)' function call --
+    ;; and remapping rewrites command dispatch, never a funcall.  So with only
+    ;; the first line here, every mouse click went through stock Org file
+    ;; handling and opened the item in another window.
     (define-key map [remap org-open-at-point] #'ps/info-triage-follow)
+    (define-key map [remap org-open-at-mouse] #'ps/info-triage-follow-at-mouse)
     (define-key map (kbd "RET") #'ps/info-triage-follow)
     (define-key map (kbd "n")   #'org-next-visible-heading)
     (define-key map (kbd "p")   #'org-previous-visible-heading)
@@ -312,7 +329,12 @@ typed here is lost, and saying so up front is also what frees the single-key
 bindings."
   :lighter " Triage"
   :keymap ps/info-triage-mode-map
-  (setq buffer-read-only (and ps/info-triage-mode t)))
+  (setq buffer-read-only (and ps/info-triage-mode t))
+  ;; Org buffers get a line-number gutter here because plan files are worth
+  ;; citing by line.  A generated queue is not: its items are addressed by the
+  ;; number printed in each heading, and a second, different set of numbers
+  ;; running down the left margin is the one thing guaranteed to be misread.
+  (display-line-numbers-mode (if ps/info-triage-mode 0 1)))
 
 (defun ps/info-triage--maybe-enable ()
   "Turn on `ps/info-triage-mode' when this buffer is the queue."

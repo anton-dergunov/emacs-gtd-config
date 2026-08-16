@@ -118,11 +118,34 @@ every step is not one.  A side window is still never taken over -- see
 
 ;;;###autoload
 (defun ps/window-visit-here (file)
-  "Visit FILE in the selected window, never splitting.
-The file-visiting counterpart of `ps/window-replace-here', for callers that
-have a path rather than a live buffer."
+  "Visit FILE in the selected window, splitting only when it is the only one.
+
+The file-visiting counterpart of `ps/window-show-here', and it follows the same
+rule for the same reason.  Reviewing the Info Triage queue alone, the item
+should appear *beside* the queue rather than replace it; with Claude Code
+already in the other window there is no room for a third, and the item should
+take over the window it was launched from.  \"Split when alone\" is exactly that
+distinction, and it needs no setting to express it.
+
+Use `ps/window-visit-only-here' where a split would be wrong whatever the
+layout -- retracing a trail, for one."
   (ps/window--select-main)
+  ;; Split BEFORE noting the departure, not after.  The split selects a new
+  ;; window still showing the old buffer, so noting afterwards records the
+  ;; departure in the window that is about to leave it -- back then returns the
+  ;; item window to the queue, and the queue's own window is left alone.  Noting
+  ;; first put a step into the history of a window that never went anywhere.
+  (ps/window--split-if-alone)
   (ps/window--note-departure)
+  (find-file file))
+
+;;;###autoload
+(defun ps/window-visit-only-here (file)
+  "Visit FILE in the selected window, never splitting.
+For callers that must not change the window layout at all: `ps-nav' going back
+along a trail is one, since a step backwards that adds a window is not a step
+backwards."
+  (ps/window--select-main)
   (find-file file))
 
 ;;;###autoload

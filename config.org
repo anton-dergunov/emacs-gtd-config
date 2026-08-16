@@ -1174,7 +1174,10 @@ underneath to act on.
   ;; set switches). Instead, refuse to turn numbers on for these modes at the
   ;; source, so the decision holds every time the global mode evaluates a buffer.
   (defvar ps/display-line-numbers-exempt-modes
-    '(treemacs-mode term-mode shell-mode eshell-mode org-agenda-mode eat-mode)
+    '(treemacs-mode term-mode shell-mode eshell-mode org-agenda-mode eat-mode
+      ;; Listings and rendered documents, not source: a line number beside a
+      ;; file name or a captured article numbers nothing you would ever cite.
+      dired-mode markdown-mode help-mode Info-mode special-mode)
     "Major modes for which global line numbers must never be enabled.")
 
   (advice-add 'display-line-numbers--turn-on :before-while
@@ -2075,9 +2078,23 @@ bytes.
     ;; One buffer, not one per folder descended.  Safe because the navigation
     ;; history records a *path*, so back still works after a buffer is killed.
     (dired-kill-when-opening-new-dired-buffer t)
+    ;; Drop the "(66 GiB available)" suffix on the first line: it answers a
+    ;; question nobody browsing captured material is asking, and its number
+    ;; does not agree with the Finder's anyway.
+    (dired-free-space nil)
     :config
-    ;; Names only.  The `ls -l' columns say nothing about captured material.
-    (add-hook 'dired-mode-hook #'dired-hide-details-mode)
+    ;; Directories first, then files, then by name — the order the Finder uses.
+    ;; BSD `ls' cannot do it, so prefer GNU coreutils when it is installed and
+    ;; fall back to Emacs's own listing when it is not; either way the sizes and
+    ;; dates stay, which is why `dired-hide-details-mode' is NOT enabled here.
+    (if-let* ((gnu-ls (executable-find "gls")))
+        (setq insert-directory-program gnu-ls
+              dired-use-ls-dired t
+              dired-listing-switches "-alh --group-directories-first")
+      (require 'ls-lisp)
+      (setq ls-lisp-use-insert-directory-program nil
+            ls-lisp-dirs-first t
+            dired-listing-switches "-alh"))
     ;; Hide the junk macOS leaves in every synced folder.
     (require 'dired-x)
     (setq dired-omit-files (concat dired-omit-files "\\|\\`\\.DS_Store\\'"))
@@ -2085,7 +2102,23 @@ bytes.
     ;; mouse-2 is the binding click-follows-link actually reaches, so the
     ;; open-in-another-window default has to go from there, not only from RET.
     (define-key dired-mode-map (kbd "RET") #'ps/open-dired-thing)
-    (define-key dired-mode-map [mouse-2]   #'ps/open-dired-thing-at-mouse))
+    (define-key dired-mode-map [mouse-2]   #'ps/open-dired-thing-at-mouse)
+    ;; Up is not Back: `^' goes to the parent folder, the mode line's `‹'
+    ;; retraces where you have actually been.  Both are wanted, and only one of
+    ;; them was discoverable, so the parent gets a header-line button too.
+    (add-hook 'dired-mode-hook #'ps/open-dired-header-line))
+#+end_src
+
+** Reading HTML pages
+Captured pages open in Emacs's own renderer. Two settings do most of the work:
+a page's hardcoded colours fight the theme and are better dropped, and a saved
+page must not phone home for cookies while fetching its images. Inside a page,
+=R= strips it down to just the article and =&= reopens it in the real browser.
+#+begin_src emacs-lisp
+  (with-eval-after-load 'shr
+    (setq shr-use-colors nil
+          shr-max-width 100
+          shr-cookie-policy nil))
 #+end_src
 
 ** Reading Markdown
@@ -2105,11 +2138,28 @@ navigate in place like Org links.
     :config
     ;; Heading faces inherit from `outline-*', so they follow the theme with no
     ;; colour list of our own — see the configuration-style note in CLAUDE.md.
+    ;;
+    ;; Links are the exception, and not by choice: markdown-mode defines
+    ;; `markdown-link-face' as `:inherit link', which every theme underlines —
+    ;; but solarized *replaces* the face with `:inherit default' plus a colour,
+    ;; so links lost their underline and stopped looking like links at all.
+    ;; Putting the inheritance back takes whatever the theme says a link is,
+    ;; rather than picking an underline colour here.
+    (defun ps/markdown-apply-link-face ()
+      "Make Markdown links look like links again, whatever the theme says one is."
+      (set-face-attribute 'markdown-link-face nil :inherit 'link :underline t))
+    (add-hook 'markdown-mode-hook #'ps/markdown-apply-link-face)
+
     (defun ps/markdown-setup ()
-      "Give a Markdown buffer the same reading view the documentation gets."
-      (when (require 'valign nil t) (valign-mode 1))
+      "Give a Markdown buffer the same reading view the documentation gets.
+
+  No `valign' here, deliberately.  With `markdown-hide-markup' on,
+  markdown-mode pins every table separator to its *raw source* column, which is
+  far to the right of the visible text once the link markup is hidden; valign
+  measures pixel widths after clearing only the display properties it set
+  itself, so it reads those stretched positions as real and cannot correct
+  them.  It costs a jit-lock pass per redisplay to make nothing better."
       (visual-line-mode 1)
-      (ps/prose-width-enable)
       ;; Captured material is generated: editing it is always a mistake, and
       ;; read-only is also what makes RET safe to use for following links.
       (when (and buffer-file-name
@@ -2119,7 +2169,14 @@ navigate in place like Org links.
     (add-hook 'markdown-mode-hook #'ps/markdown-setup)
     (define-key markdown-mode-map [remap markdown-follow-thing-at-point]
                 #'ps/open-markdown-thing)
-    (define-key markdown-mode-map (kbd "RET") #'ps/open-markdown-thing))
+    (define-key markdown-mode-map (kbd "RET") #'ps/open-markdown-thing)
+    ;; A wide table cannot be made to fit a narrow window: wrapping destroys its
+    ;; columns and there is nothing to align once a row spans two screen lines.
+    ;; `C-c |' stops wrapping so the table stays whole and scrolls sideways
+    ;; instead.  Captured material generated from today on has no tables at all,
+    ;; but items captured earlier keep theirs, and other people's Markdown will
+    ;; always have some.
+    (define-key markdown-mode-map (kbd "C-c |") #'toggle-truncate-lines))
 #+end_src
 
 ** =treemacs= file tree
@@ -2396,6 +2453,16 @@ natively — no API key or token handling needed.
 #+end_src
 
 * Keybindings & Menu
+** One click follows a link
+Out of the box, =mouse-1-click-follows-link= is the number 450: a click follows
+a link only if the button was held for *less than 450 milliseconds*, and a
+longer press just moves the cursor. Aiming at a small link takes longer than
+that, so links appeared to need two clicks — sometimes. Follow on any click
+instead. Dragging still selects text; Emacs never follows a link on a drag.
+#+begin_src emacs-lisp
+  (setq mouse-1-click-follows-link t)
+#+end_src
+
 ** macOS: keyboard layout
 On a UK Mac keyboard, Option-3 should type =#= but Emacs intercepts it as
 =M-3= (digit-argument). Translate =M-3= → =#= at the input level so org-mode's
@@ -2788,6 +2855,8 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :style toggle
         :selected ps/file-tree-set-applies-to-agenda
         :keys "C-c p g"]
+       ["Back"                      ps/nav-back              :keys "C-c <left>"]
+       ["Forward"                   ps/nav-forward           :keys "C-c <right>"]
        ["Recent Files…"             recentf-open-files       :keys "C-c p f"]
        ["Imenu (jump to heading)"   imenu                    :keys "C-c p i"])
       ("AI Assistant"
@@ -2809,6 +2878,23 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :style toggle :selected ps/font-prose-in-org]
        ["Customize ps/* Settings"
         (lambda () (interactive) (customize-apropos "^ps/")) t])
+      ;; The capture inbox from the separate =info-triage= project.  `:visible'
+      ;; on a nested submenu is folded into its `menu-item' and re-evaluated
+      ;; every time the menu opens, so the whole thing is simply absent on a
+      ;; machine that has no ~/info-triage-inbox -- this configuration is
+      ;; shared, and it must not offer a workflow for a project you do not have.
+      ("Triage"
+       :visible (ps/info-triage-available-p)
+       ["Sync Now"              ps/info-triage-sync t]
+       ["Open Inbox"            ps/info-triage-open :keys "C-c p I"]
+       "---"
+       ["Drop Item at Point"    ps/info-triage-drop
+        :active (ps/info-triage-queue-buffer-p) :keys "d"]
+       ["Open Item Externally"  ps/info-triage-open-externally
+        :active (ps/info-triage-queue-buffer-p) :keys "e"]
+       ["Renumber Both Views"   ps/info-triage-regenerate :keys "g"]
+       "---"
+       ["Documentation"         (ps/help-open-doc "Info-triage.org") t])
       ("Help"
        ["Documentation (Index)" (ps/help-open-doc "Index.org") :keys "C-c p h"]
        "---"
@@ -2827,37 +2913,6 @@ calendar boundary containing the start day (e.g. the whole current week)."
         (cons 'productivity (delq 'productivity menu-bar-final-items)))
 #+end_src
 
-** Triage menu
-The capture inbox from the separate =info-triage= project gets a menu of its
-own rather than a corner of Productivity: it is a workflow, not a tool, and
-it runs top to bottom every day.
-
-=:visible= is what keeps this configuration shareable. The whole menu
-disappears on a machine that has no =~/info-triage-inbox=, so nobody is
-offered a workflow for a project they do not have.
-#+begin_src emacs-lisp
-  (easy-menu-define ps/info-triage-menu global-map
-    "Working the info-triage capture inbox."
-    '("Triage"
-      :visible (ps/info-triage-available-p)
-      ["Sync Now"          ps/info-triage-sync t]
-      ["Open Inbox"        ps/info-triage-open :keys "C-c p I"]
-      "---"
-      ["Drop Item at Point"    ps/info-triage-drop
-       :active (ps/info-triage-queue-buffer-p) :keys "d"]
-      ["Open Item Externally"  ps/info-triage-open-externally
-       :active (ps/info-triage-queue-buffer-p) :keys "e"]
-      ["Renumber Both Views"   ps/info-triage-regenerate :keys "g"]
-      "---"
-      ["Back"    ps/nav-back    :keys "C-c <left>"]
-      ["Forward" ps/nav-forward :keys "C-c <right>"]
-      "---"
-      ["Documentation" (ps/help-open-doc "Info-triage.org") t]))
-
-  ;; Left of Productivity, which stays left of Help.
-  (setq menu-bar-final-items
-        (cons 'triage (delq 'triage menu-bar-final-items)))
-#+end_src
 
 * Session & Backups
 ** Enable Magit for version control

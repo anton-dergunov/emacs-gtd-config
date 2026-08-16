@@ -206,6 +206,36 @@ this the step it just popped would be pushed straight back on."
           (should-not (ps/nav--stack window 'back)))
       (set-window-parameter window 'ps/nav-back nil))))
 
+(ert-deftest ps/nav--restore-never-splits ()
+  "The forward helpers split when the window is alone, which is right for
+following a link and wrong for retracing one: pressing back twice would leave
+two windows and no way to undo it."
+  (let* ((window (selected-window))
+         (origin (current-buffer))
+         (target (expand-file-name "lisp/ps-nav.el"))
+         (before (length (ps/window--content-windows))))
+    (unwind-protect
+        (progn
+          (ps/nav--restore (cons target 1))
+          (should (= (length (ps/window--content-windows)) before))
+          (should (equal (buffer-file-name (window-buffer window)) target)))
+      (when-let* ((visiting (find-buffer-visiting target)))
+        (kill-buffer visiting))
+      (set-window-buffer window origin))))
+
+(ert-deftest ps/nav--button-padding-is-clickable-not-decorative ()
+  "Padding outside the propertized run would widen the gap and not the target."
+  (unwind-protect
+      (let ((ps/nav-button-padding 2))
+        (set-window-parameter (selected-window) 'ps/nav-back
+                              (list (cons temporary-file-directory 1)))
+        (let ((button (ps/nav--button 'back)))
+          (should (> (length button) 4))
+          ;; Every character, padding included, carries the keymap.
+          (dotimes (i (length button))
+            (should (get-text-property i 'local-map button)))))
+    (set-window-parameter (selected-window) 'ps/nav-back nil)))
+
 (ert-deftest ps/nav-back-says-so-when-there-is-nowhere-to-go ()
   (set-window-parameter (selected-window) 'ps/nav-back nil)
   (should-error (ps/nav-back) :type 'user-error))

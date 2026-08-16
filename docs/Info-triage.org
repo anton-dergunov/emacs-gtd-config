@@ -10,9 +10,8 @@ plans by Claude Code.
 
 The capturing half is a separate project, =info-triage=: you forward a message
 to a Telegram bot, a server fetches whatever the message links to, and a sync
-script
-pulls the result onto this machine as one folder per item. This page covers the
-Emacs half — reading the queue, looking at what an item actually contains, and
+script pulls the result onto this machine as one folder per item. This page
+covers the Emacs half — reading the queue, looking at what an item actually contains, and
 throwing away what is not worth keeping.
 
 *This whole feature is optional.* If the inbox folder does not exist on your
@@ -20,9 +19,9 @@ machine, the Triage menu is not shown at all and nothing here applies.
 
 * The daily loop
 
-1. *Triage → Sync Now.* Fetches whatever arrived since last time, and tells the
-   server about anything you dropped here.
-2. *Triage → Open Inbox* (=C-c p I=). The queue opens in the current window: one
+1. *Productivity → Triage → Sync Now.* Fetches whatever arrived since last
+   time, and tells the server about anything you dropped here.
+2. *Productivity → Triage → Open Inbox* (=C-c p I=). The queue opens as one
    line per item, oldest first.
 3. Read down the list. Click an item's =index= to see what was captured, or its
    =directory= to look through the files themselves.
@@ -73,10 +72,17 @@ anything typed into it would be lost — which leaves single keys free:
 
 * Looking inside an item
 
-Everything opens *in the window you are already in* — following a link never
-splits the frame or takes over another window. The =‹ ›= buttons at the left of
-the mode line walk back and forward along the trail, and so do =C-c <left>= and
-=C-c <right>=.
+Where an item opens depends on what else is on screen, which is the difference
+between reviewing alone and reviewing next to Claude Code:
+
+- If the queue is *the only thing open*, the item appears beside it, so you can
+  read one and keep the other in view.
+- If anything else is already open — a Claude Code session, another plan file —
+  the item takes over the queue's own window rather than squeezing in a third.
+
+Either way the =‹ ›= buttons at the left of the mode line walk back and forward
+along the trail you took, and so do =C-c <left>= and =C-c <right>=. Going back
+never adds a window.
 
 What a click does depends on the kind of file, because Emacs is the right place
 for some of them and the wrong place for others:
@@ -94,18 +100,29 @@ for some of them and the wrong place for others:
 Nothing is opened as raw bytes. A file Emacs cannot show usefully says so
 instead of filling a buffer with a video.
 
+Inside a captured web page, =R= strips it down to just the article and =&=
+reopens it in your real browser — Emacs renders a page, it does not run one.
+
 An item whose payload is twenty photos is one a file browser handles better:
-=e= (Triage → Open Item Externally) hands the folder to VS Code.
+=e= (Productivity → Triage → Open Item Externally) hands the folder to VS Code.
 
 * Browsing the folder
 
-Clicking =directory= opens the item's folder. It behaves like a browser rather
-than like stock Dired: one window, one buffer, names only — no permissions,
-owner or size columns — and =.DS_Store= hidden. Clicking a file opens it by the
-table above; clicking a folder goes into it; =‹= comes back out.
+Clicking =directory= opens the item's folder, listed the way the Finder lists
+one: folders first, then files, with sizes and dates, and =.DS_Store= hidden.
+Clicking a file opens it by the table above; clicking a folder goes into it,
+reusing the same window rather than opening a new one each time.
+
+*Up is not Back.* The =↑= button at the top of the listing goes to the parent
+folder (=^= does the same); =‹= on the mode line retraces the folders you
+actually opened, which after a few steps is somewhere else entirely. Both are
+useful, which is why they are separate.
 
 * Under the hood / Customize
 
+- The Triage menu lives under Productivity and is =config.org= → /Productivity
+  menu + prefix keys/. It is hidden entirely when =ps/info-triage-directory=
+  does not exist.
 - The queue, the sync commands and the drop are =lisp/ps-info-triage.el=.
   Settings — where the inbox is, where the sync script is, which program =e=
   hands a folder to — are in =config.org= → /Settings/ → /Info triage/
@@ -120,11 +137,11 @@ table above; clicking a folder goes into it; =‹= comes back out.
 - Back and forward are =lisp/ps-nav.el=; =ps/nav-history-limit= and the two
   glyphs are in =config.org= → /Settings/ → /Navigation history/. The history
   is per window, so two windows keep separate trails.
-- The Markdown reading view and the folder-browsing behaviour are =config.org= →
-  /Reading Markdown/ and /Browsing a folder/. Both apply everywhere, not only
-  inside the inbox.
-- The Triage menu is =config.org= → /Triage menu/. It is hidden entirely when
-  =ps/info-triage-directory= does not exist.
+- The Markdown reading view, the folder-browsing behaviour and the page renderer
+  are =config.org= → /Reading Markdown/, /Browsing a folder/ and /Reading HTML
+  pages/. All three apply everywhere, not only inside the inbox. In a Markdown
+  file that still contains a wide table, =C-c |= stops lines wrapping so the
+  table stays whole and scrolls sideways instead.
 - The two generated lists, and the sync script itself, belong to the
   =info-triage= project — see its =docs/EMACS.md=. Nothing in this
   configuration writes to them.

@@ -36,7 +36,8 @@
 (require 'seq)
 
 (declare-function ps/window--side-window-p "ps-window")
-(declare-function ps/window-visit-here "ps-window")
+(declare-function ps/window-visit-only-here "ps-window")
+(declare-function ps/material-icons-image "ps-material-icons")
 
 (defgroup ps/nav nil
   "Back and forward navigation across windows."
@@ -58,13 +59,34 @@ deliberately absent -- going back out of them is exactly the point."
   :group 'ps/nav)
 
 (defcustom ps/nav-back-glyph "‹"
-  "Glyph for the mode line's back button."
+  "Text for the mode line's back button when no icon font is available."
   :type 'string
   :group 'ps/nav)
 
 (defcustom ps/nav-forward-glyph "›"
-  "Glyph for the mode line's forward button."
+  "Text for the mode line's forward button when no icon font is available."
   :type 'string
+  :group 'ps/nav)
+
+(defcustom ps/nav-icon-height 18
+  "Height in pixels of the mode-line back/forward icons.
+A bare `‹' is a couple of pixels of ink and a miserable mouse target; this is
+the size lever.  Raising it much past the mode line's text height makes the
+mode line itself taller, since its height is the tallest thing in it."
+  :type 'integer
+  :group 'ps/nav)
+
+(defcustom ps/nav-icon-ascent 80
+  "Vertical alignment of the mode-line icons, as a percentage above the baseline.
+Mirrors `ps/file-tree-icon-ascent', which does the same job for the file tree."
+  :type 'integer
+  :group 'ps/nav)
+
+(defcustom ps/nav-button-padding 1
+  "Spaces placed either side of each mode-line button.
+The padding carries the button's own keymap, so it enlarges what can be
+clicked rather than merely what can be seen."
+  :type 'integer
   :group 'ps/nav)
 
 ;;; Places
@@ -111,11 +133,15 @@ Dired buffers in particular are killed as you descend out of them."
     (if (bufferp target) (buffer-live-p target) (file-exists-p target))))
 
 (defun ps/nav--restore (place)
-  "Show PLACE in the selected window and move point into it."
+  "Show PLACE in the selected window and move point into it.
+Deliberately `ps/window-visit-only-here': the forward helpers split when the
+window is alone, and a step backwards that adds a window is not a step
+backwards -- pressing back twice would end up with two windows and no way to
+undo it."
   (let ((target (car place)))
     (if (bufferp target)
         (switch-to-buffer target)
-      (ps/window-visit-here target)))
+      (ps/window-visit-only-here target)))
   (when (<= (cdr place) (point-max))
     (goto-char (cdr place))))
 
@@ -233,16 +259,36 @@ assumed."
     map)
   "Keymap on the mode line's forward button.")
 
+(defun ps/nav--glyph (direction)
+  "Return the display string for DIRECTION's button.
+A Material Symbols chevron where the font is there to draw one, and the plain
+`‹'/`›' text otherwise -- the same two names and the same fallbacks the agenda
+header already uses for its date arrows.  An unknown icon name resolves to nil
+rather than signalling, so the text path stays live."
+  (let ((fallback (if (eq direction 'back) ps/nav-back-glyph ps/nav-forward-glyph)))
+    (or (and (display-graphic-p)
+             (fboundp 'ps/material-icons-image)
+             (when-let* ((image (ps/material-icons-image
+                                 (if (eq direction 'back) "chevron_left" "chevron_right")
+                                 ps/nav-icon-ascent ps/nav-icon-height)))
+               (propertize " " 'display image)))
+        fallback)))
+
 (defun ps/nav--button (direction)
   "Return the propertized mode-line button for DIRECTION.
 Dimmed and inert when that direction is empty, so the pair reads as a state
-rather than as two buttons that sometimes do nothing."
-  (let ((glyph (if (eq direction 'back) ps/nav-back-glyph ps/nav-forward-glyph))
-        (place (car (seq-drop-while (lambda (p) (not (ps/nav--reachable-p p)))
-                                    (ps/nav--stack (selected-window) direction)))))
+rather than as two buttons that sometimes do nothing.
+
+The padding is inside the propertized run on purpose: spaces added outside it
+would widen the gap without widening the target, which is the difference
+between a button that looks bigger and one that is."
+  (let* ((pad (make-string (max 0 ps/nav-button-padding) ?\s))
+         (label (concat pad (ps/nav--glyph direction) pad))
+         (place (car (seq-drop-while (lambda (p) (not (ps/nav--reachable-p p)))
+                                     (ps/nav--stack (selected-window) direction)))))
     (if (null place)
-        (propertize glyph 'face 'shadow)
-      (propertize glyph
+        (propertize label 'face 'shadow)
+      (propertize label
                   'mouse-face 'mode-line-highlight
                   'help-echo (format "mouse-1: %s to %s"
                                      (if (eq direction 'back) "back" "forward")
@@ -255,7 +301,7 @@ rather than as two buttons that sometimes do nothing."
   "Return the back/forward pair for the mode line, or \"\" where it makes no sense."
   (if (not (ps/nav--trackable-window-p (selected-window)))
       ""
-    (concat " " (ps/nav--button 'back) (ps/nav--button 'forward))))
+    (concat (ps/nav--button 'back) (ps/nav--button 'forward))))
 
 (defconst ps/nav-mode-line-element '(:eval (ps/nav--segment))
   "The mode-line element that draws the back/forward pair.

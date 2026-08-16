@@ -79,6 +79,11 @@ Inside the queue itself, single keys: =RET= follow, =n= / =p= next / previous
 item, =d= drop the item at point, =s= sync, =g= renumber, =e= open the folder
 outside Emacs, =b= / =f= back / forward, =q= put it away.
 
+In a folder listing, =^= goes up to the parent (so does the =↑= button at the
+top). In a Markdown file, =C-c |= stops lines wrapping, for a table too wide to
+fit. In a rendered web page, =R= shows just the article and =&= reopens it in
+your real browser.
+
 * Org task editing (in an Org file)
 | Key             | Action                                    |
 |-----------------+-------------------------------------------|

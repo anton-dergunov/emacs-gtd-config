@@ -154,9 +154,17 @@ is shared, and a menu for a tool you do not have is noise."
 
 (ert-deftest ps/info-triage-mode-remaps-org-link-following ()
   "Org puts its own keymap on a link as a text property, which outranks a
-minor-mode map -- so only a remap reaches a click on a link."
+minor-mode map -- so only a remap reaches a click on a link.
+
+Both commands must be remapped.  `org-mouse-map' binds mouse-2 to
+`org-open-at-mouse', a separate command ending in a plain
+`(org-open-at-point)' funcall -- and remapping rewrites dispatch, never a
+funcall, so remapping only the second leaves every mouse click going through
+stock Org handling and opening the item in another window."
   (ps/info-triage-test--in-queue
     (ps/info-triage-mode 1)
-    (should (eq (command-remapping #'org-open-at-point) #'ps/info-triage-follow))))
+    (should (eq (command-remapping #'org-open-at-point) #'ps/info-triage-follow))
+    (should (eq (command-remapping #'org-open-at-mouse)
+                #'ps/info-triage-follow-at-mouse))))
 
 ;;; test-ps-info-triage.el ends here

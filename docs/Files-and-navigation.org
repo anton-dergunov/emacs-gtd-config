@@ -131,6 +131,10 @@ at the left of its mode line. Click =‹= to return to what you were looking at
 before, =›= to go forward again — the way a browser works. =C-c <left>= and
 =C-c <right>= do the same from the keyboard.
 
+Back is not the same as /up/: it retraces the places you actually opened, which
+after a few steps is not the folder above you. Going back never adds a window,
+however the one you are in was opened.
+
 An arrow is dimmed when there is nothing that way, and hovering over a live one
 names where it would take you. Each window has its own trail, so going back in
 one does not disturb the other, and the file tree and the Claude Code panel have
@@ -144,15 +148,26 @@ Markdown opens with a reading view like the one these documentation pages use.
 Audio is declined outright, and anything else that is not text asks before it
 opens — nothing is ever loaded as raw bytes.
 
+Opening a file from a list puts it beside what you were reading when that was
+the only thing on screen, and in its place when it was not — so a second window
+appears when there is room for it and never when there is not.
+
+Inside a rendered page, =R= reduces it to just the article and =&= hands it to
+your real browser. In a Markdown file with a table too wide for the window,
+=C-c |= stops lines wrapping so the table stays whole and scrolls sideways.
+
 The whole policy is one editable list, =ps/open-handlers=. See [[file:Info-triage.org][Info triage]] for
 the table and for where to change it.
 
 * Browsing a folder
 Opening a folder (Productivity → Capture & Notes → Open Notes Folder, or any
-folder link) shows it as a list of names — no permissions, owner or size
-columns, and no =.DS_Store=. Clicking a file opens it by the rules above;
-clicking a folder goes into it, reusing the same window rather than opening a
-new one each time; =‹= comes back out.
+folder link) lists it the way the Finder does: folders first, then files, with
+sizes and dates, and no =.DS_Store=. Clicking a file opens it by the rules
+above; clicking a folder goes into it, reusing the same window rather than
+opening a new one each time.
+
+The =↑= button at the top of the listing goes to the parent folder, and so does
+=^=. That is a different move from =‹=, which retraces where you have been.
 
 * What the window title says
 The window title and the mode line name the file you are editing without its
