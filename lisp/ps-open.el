@@ -410,30 +410,73 @@ one click enough."
     (mouse-drag-region event)))
 
 ;;;###autoload
-(defun ps/open-click (event)
+(defun ps/open-click (event &optional promote-to-region)
   "Set point from EVENT, unless the press it ends already followed a link.
-Bound to `mouse-1'; the work is done by `ps/open-down-click'."
-  (interactive "e")
+Bound to `mouse-1'; the work is done by `ps/open-down-click'.
+
+PROMOTE-TO-REGION is passed straight through to `mouse-set-point', which is
+what makes a double click select the word under it.  Dropping it would be a
+quiet loss everywhere this is bound -- and it is bound globally."
+  (interactive "e\np")
   (unless (ps/open--take-press-followed)
-    (mouse-set-point event)))
+    (mouse-set-point event promote-to-region)))
+
+(defun ps/open--event-stationary-p (event)
+  "Non-nil when EVENT is a drag that never left the position it started at.
+That is a click the pointer wobbled during, not a selection: the buffer
+position is the same at both ends, so there is nothing to select."
+  (let ((start (event-start event))
+        (end (event-end event)))
+    (and (eq (posn-window start) (posn-window end))
+         (equal (posn-point start) (posn-point end)))))
 
 ;;;###autoload
 (defun ps/open-drag-click (event)
-  "Select the region EVENT covers, unless its press already followed a link.
-Bound to `drag-mouse-1'; a hand that wobbled over a link has already opened
-it, so there is nothing left to select."
+  "Select the region EVENT covers, unless there is nothing to select.
+
+Bound to `drag-mouse-1'.  Two ways there is nothing: its press already
+followed a link and opened something, or it never actually moved.
+
+The second is not a nicety.  Emacs calls a release a drag as soon as the
+pointer travelled more than `double-click-fuzz' pixels, which a hand on a
+trackpad does without meaning to, and `mouse-set-region' on a drag of zero
+length leaves an *active* but empty region.  Nothing shows until the buffer
+scrolls; then point is carried away from the anchor and the region opens up
+behind it, which is a whole folder listing highlighted after what felt like a
+plain click."
   (interactive "e")
   (unless (ps/open--take-press-followed)
-    (mouse-set-region event)))
+    (if (ps/open--event-stationary-p event)
+        (mouse-set-point event)
+      (mouse-set-region event))))
 
 (defun ps/open-bind-click (map)
   "Bind a plain click in MAP to follow whatever it landed on.
-All three mouse events are bound together: the press does the work, and the
-two releases have to decline it.  The buffer says what a click follows,
-through `ps/open-follow-function'."
+The press does the work; the releases are handled globally by
+`ps/open-click-setup', and are bound here too so that a map which is set up on
+its own is complete.  The buffer says what a click follows, through
+`ps/open-follow-function'."
   (define-key map [down-mouse-1] #'ps/open-down-click)
   (define-key map [mouse-1]      #'ps/open-click)
   (define-key map [drag-mouse-1] #'ps/open-drag-click))
+
+;;;###autoload
+(defun ps/open-click-setup ()
+  "Teach the release of a click that already opened something to stand down.
+
+Global, and it has to be.  The press is bound per buffer, but a release is
+delivered to whatever buffer is current by *then* -- and following a link has
+usually replaced it.  Clicking a `.json' file in the folder listing delivered
+its release into the JSON buffer, which binds no mouse of ours, so Emacs's own
+`mouse-set-region' ran there and set an active mark at wherever the press had
+landed; scrolling then dragged point away from it and the region grew down the
+file.  Markdown and Dired looked fine only because they carry the bindings
+below, and would have shown it too.
+
+Nothing changes where no link was followed: both commands then do exactly what
+the global map already did, `mouse-set-point' and `mouse-set-region'."
+  (global-set-key [mouse-1]      #'ps/open-click)
+  (global-set-key [drag-mouse-1] #'ps/open-drag-click))
 
 ;;;###autoload
 (defun ps/open-setup-click (follow-function)

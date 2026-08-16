@@ -239,7 +239,7 @@ point-never-moves guarantee, or select the link it just followed."
       (setq-local ps/open-follow-function #'ignore)
       (cl-letf (((symbol-function 'mouse-drag-region) #'ignore)
                 ((symbol-function 'mouse-set-point)
-                 (lambda (_event) (setq pointed (1+ pointed))))
+                 (lambda (_event &optional _promote) (setq pointed (1+ pointed))))
                 ((symbol-function 'mouse-set-region)
                  (lambda (_event) (setq selected (1+ selected)))))
         (ps/open-down-click (test-ps-open--press link))
@@ -255,6 +255,25 @@ point-never-moves guarantee, or select the link it just followed."
         (ps/open-drag-click (test-ps-open--drag (point-min) 3))
         (should (= pointed 1))
         (should (= selected 1))))))
+
+(ert-deftest ps/open-drag-click-treats-a-wobble-as-a-click ()
+  "Emacs calls a release a drag as soon as the pointer moved more than
+`double-click-fuzz' pixels, which a hand on a trackpad does without meaning
+to.  `mouse-set-region' on a drag of zero length leaves an *active* empty
+region; nothing shows until the buffer scrolls, and then the region opens up
+behind point and highlights the whole listing."
+  (let ((pointed 0)
+        (selected 0))
+    (cl-letf (((symbol-function 'mouse-set-point)
+               (lambda (_event &optional _promote) (setq pointed (1+ pointed))))
+              ((symbol-function 'mouse-set-region)
+               (lambda (_event) (setq selected (1+ selected)))))
+      (ps/open-drag-click (test-ps-open--drag 12 12))
+      (should (= pointed 1))
+      (should (= selected 0))
+      (ps/open-drag-click (test-ps-open--drag 12 40))
+      (should (= pointed 1))
+      (should (= selected 1)))))
 
 (ert-deftest ps/open-release-remembers-the-press-across-a-buffer-change ()
   "Following a link routinely replaces the buffer in the very window that was
@@ -286,6 +305,46 @@ selection across whatever had just opened.  Dired's `..' showed it every time."
   (let ((ps/open--press-followed t))
     (should (ps/open--take-press-followed))
     (should-not (ps/open--take-press-followed))))
+
+(ert-deftest ps/open-release-stands-down-in-a-buffer-that-binds-nothing ()
+  "The release is delivered to whatever buffer the click *opened*, not to the
+one it was aimed at.  A JSON buffer binds no mouse of its own, so the release
+reached Emacs's `mouse-set-region', which set an active mark wherever the
+press had landed and let scrolling grow a region down the file.  Hence the
+global bindings: the release has to stand down wherever it arrives."
+  (let ((selected 0))
+    (cl-letf (((symbol-function 'mouse-set-region)
+               (lambda (_event) (setq selected (1+ selected)))))
+      (let ((ps/open--press-followed t))
+        ;; A buffer with no `ps/open-follow-function' at all -- the release
+        ;; still has to know the press already did the work.
+        (with-temp-buffer
+          (ps/open-drag-click (test-ps-open--drag 1 1))))
+      (should (= selected 0)))))
+
+(ert-deftest ps/open-click-setup-keeps-what-the-global-map-already-did ()
+  "These go in the global map, so anything they drop is dropped everywhere.
+`mouse-set-point's second argument is what makes a double click select a word."
+  (should (equal (cadr (interactive-form #'ps/open-click))
+                 (cadr (interactive-form #'mouse-set-point))))
+  (let ((previous (current-global-map)))
+    (unwind-protect
+        (progn
+          (use-global-map (make-sparse-keymap))
+          (ps/open-click-setup)
+          (should (eq (lookup-key (current-global-map) [mouse-1]) #'ps/open-click))
+          (should (eq (lookup-key (current-global-map) [drag-mouse-1])
+                      #'ps/open-drag-click)))
+      (use-global-map previous))))
+
+(ert-deftest ps/open-click-promotes-a-double-click-to-a-word ()
+  "Off a link this must behave exactly as the global binding it replaces."
+  (let ((promoted nil))
+    (cl-letf (((symbol-function 'mouse-set-point)
+               (lambda (_event &optional promote) (setq promoted promote))))
+      (let ((ps/open--press-followed nil))
+        (ps/open-click (test-ps-open--click 1) 2))
+      (should (equal promoted 2)))))
 
 (ert-deftest ps/open--dired-header-directory-reads-the-component-at-point ()
   "Dired's header spells the folder out one clickable component at a time.

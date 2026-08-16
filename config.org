@@ -190,6 +190,11 @@ All self-contained logic lives in =lisp/ps-*.el=.
   ;; `ps/mode-line--with-nav' when a buffer gets it, so both carry the buttons.
   (ps/nav-setup)
 
+  ;; A click that opened something must not also leave a selection behind.  The
+  ;; release lands in whichever buffer the click opened, so this one is global
+  ;; rather than per mode; off a link it does what Emacs already did.
+  (ps/open-click-setup)
+
   ;; Recognise the info-triage capture queue when it is opened.  Harmless on a
   ;; machine that has no inbox: nothing here fires until that file is visited.
   (ps/info-triage-setup)
