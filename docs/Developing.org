@@ -81,6 +81,9 @@ Passing the test suite is necessary but not sufficient — the real check is tha
 #+end_quote
 
 * How the config is organized
+- =early-init.el= runs before the first frame is created. Only settings that
+  have to beat frame creation belong there (currently: switching off the tool
+  bar, which is drawn over the frame if it is turned off later).
 - =init.el= loads =config.org= (tangling and executing its elisp blocks in
   order).
 - =config.org= is the main configuration, in literate Org form. Its /Settings/

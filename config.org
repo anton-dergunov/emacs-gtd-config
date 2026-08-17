@@ -1036,7 +1036,10 @@ nil leaves the colours alone.
   ;; Disable tooltips
   (tooltip-mode -1)
 
-  ;; Disable the toolbar
+  ;; Disable the toolbar.  This is only a late fallback, for a session that
+  ;; loaded this file with a toolbar already on screen; early-init.el is what
+  ;; actually keeps it away, by turning it off before the first frame exists.
+  ;; Turning it off from here alone is not enough -- see early-init.el.
   (tool-bar-mode -1)
 
   ;; Custom fringe scrollbars (ps-scrollbar.el).

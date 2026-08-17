@@ -1,5 +1,6 @@
 *
 !README.md
+!early-init.el
 !init.el
 !config.org
 !local.el.template
