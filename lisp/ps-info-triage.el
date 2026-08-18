@@ -54,8 +54,17 @@
   "Review the info-triage capture inbox."
   :group 'ps)
 
-(defcustom ps/info-triage-directory (expand-file-name "~/info-triage-inbox/")
-  "Directory the info-triage sync script pulls captured items into.
+(defcustom ps/info-triage-directory (expand-file-name "~/info-triage-inbox/info/")
+  "Directory holding the capture queue this feature works.
+
+The sync script pulls each of its routes into its own subdirectory of
+~/info-triage-inbox/, and each is a self-contained queue: its own items, its
+own `triage.org' beside them, its own numbering from 1.  This points at the
+default route, which is the only one triaged by hand -- job, clip and lang are
+consumed by scripts.  Point it at another route's directory to work that one
+instead; nothing else here needs to change, because an item's `directory' link
+is relative to the queue that lists it.
+
 Everything in this feature is hidden when it does not exist, so a machine
 without the info-triage project never sees a menu for it."
   :type 'directory
