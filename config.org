@@ -458,14 +458,14 @@ The capture inbox produced by the separate =info-triage= project. The Triage
 menu and everything under it appear only when this directory exists, so a
 machine without that project never sees them.
 
-=ps/info-triage-directory= must name the same folder the sync script pulls
-into — the script decides that for itself, so pointing this elsewhere would
-show one folder and rebuild another.
+=ps/info-triage-directory= must name the route's own subdirectory of
+=~/info-triage-inbox/= that the sync script pulls into — =info/= is the
+default route, the only one triaged by hand.
 =ps/info-triage-open-beside= is the window rule: with it on, the queue keeps
 its window for good and items open in the pane beside it. Turn it off to work
 one window at a time, with =‹= to get back to the list.
 #+begin_src emacs-lisp
-  (setq ps/info-triage-directory        (expand-file-name "~/info-triage-inbox/")
+  (setq ps/info-triage-directory        (expand-file-name "~/info-triage-inbox/info/")
         ps/info-triage-sync-script      (expand-file-name "~/projects/tools/info-triage/sync.sh")
         ps/info-triage-external-command "code"
         ps/info-triage-open-beside      t)
