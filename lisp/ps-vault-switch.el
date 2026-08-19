@@ -56,6 +56,7 @@
 (declare-function ps/file-tree-set-projects "ps-file-tree")
 (declare-function ps/file-tree--ensure-valid-set "ps-file-tree")
 (declare-function ps/file-tree-window-exists-p "ps-file-tree")
+(declare-function ps/nav-forget-all "ps-nav" ())
 (declare-function ps/git-sync-stop "ps-git-sync")
 (declare-function ps/git-sync-maybe-start "ps-git-sync")
 (declare-function ps/situations-apply "ps-situations")
@@ -257,6 +258,12 @@ its buffers, timers and sync, reset the vault-scoped globals, move
     (ps/vault--step "views" (ps/vault--kill-generated-buffers))
     (when previous
       (ps/vault--step "buffers" (ps/vault--kill-vault-buffers previous)))
+    ;; After the buffers, for the same reason they are killed: a trail records
+    ;; *paths*, and the outgoing vault's files are all still on disk, so every
+    ;; step in it stays "reachable" and back would walk out of the vault that
+    ;; was just opened and into the one just left.
+    (ps/vault--step "navigation trail"
+      (when (fboundp 'ps/nav-forget-all) (ps/nav-forget-all)))
     (ps/vault--step "settings reset" (ps/vault-restore-defaults))
 
     ;; Entering the new vault.  These three mirror the config.org blocks that

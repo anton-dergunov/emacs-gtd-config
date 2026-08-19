@@ -131,14 +131,25 @@ at the left of its mode line. Click =‹= to return to what you were looking at
 before, =›= to go forward again — the way a browser works. =C-c <left>= and
 =C-c <right>= do the same from the keyboard.
 
+The trail covers every way a file reaches a window — clicked in the file tree,
+opened from the agenda, followed from a link, typed with =C-x C-f= — so back
+always returns to whatever you were reading last, whichever of those brought
+you there. Opening something new drops the forward trail, again as a browser
+does.
+
 Back is not the same as /up/: it retraces the places you actually opened, which
 after a few steps is not the folder above you. Going back never adds a window,
 however the one you are in was opened.
 
-An arrow is dimmed when there is nothing that way, and hovering over a live one
-names where it would take you. Each window has its own trail, so going back in
-one does not disturb the other, and the file tree and the Claude Code panel have
-none — a panel's buffer is the point of it.
+An arrow is dimmed when there is nothing that way; hovering names where a live
+one would take you, and says so when a dim one would take you nowhere. Each
+window has its own trail, so going back in one does not disturb the other, and
+the file tree and the Claude Code panel have none — a panel's buffer is the
+point of it.
+
+A trail is forgotten when the places in it stop meaning anything: switching
+vaults, or clearing the session with =M-x desktop-clear=. Both arrows go dim,
+rather than offering to jump into the folder you have just left.
 
 * Opening a file that is not a plan
 Emacs is used here for planning, so this configuration does not pretend to be

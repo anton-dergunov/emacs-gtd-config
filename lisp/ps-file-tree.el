@@ -37,6 +37,7 @@
 ;; Optional: git-sync status is appended to the file-tree mode line when the
 ;; module is loaded.  Guarded with `fboundp', so this file stays standalone.
 (declare-function ps/git-sync--modeline "ps-git-sync" ())
+(declare-function ps/nav-note-departure "ps-nav" (&optional window))
 (require 'subr-x)
 
 ;;; Customization
@@ -1138,6 +1139,13 @@ would make Emacs split a new window to escape the dedicated side window."
          (win (or (and buf (get-buffer-window buf))
                   (ps/file-tree--target-window))))
     (when (window-live-p win) (select-window win))
+    ;; After the window is selected and before the file replaces its buffer:
+    ;; the step belongs to the window being navigated, and there is nothing to
+    ;; record once it has moved.  A soft dependency, exactly as
+    ;; `ps/window--note-departure' takes it -- and this tree opens files
+    ;; directly rather than through the `ps-window' helpers, so without it the
+    ;; trail depends entirely on the redisplay-time recorder.
+    (when (fboundp 'ps/nav-note-departure) (ps/nav-note-departure))
     (find-file file)
     (when pos
       (goto-char pos)

@@ -10,6 +10,10 @@
 (require 'ert)
 (add-to-list 'load-path "lisp")
 (require 'ps-window)
+;; Required rather than left to load order: `ps/nav--place-name' takes the
+;; file tree's display-name transformer when it is there, and a test of that
+;; must not depend on some other test file having pulled it in first.
+(require 'ps-file-tree)
 (require 'ps-nav)
 
 ;;; -------------------------------------------------------
@@ -69,6 +73,14 @@ would be unreachable by the time back is pressed."
     (rename-buffer " *hidden work*" t)
     (should-not (ps/nav--place (current-buffer)))))
 
+(ert-deftest ps/nav--place-name-names-a-file-the-way-everything-else-does ()
+  "The tooltip must not be the one place a file is called \"photo.org\" while
+the file tree, the mode line and the frame title all call it \"Photo\"."
+  (should (equal (ps/nav--place-name '("/plans/photo.org" . 1)) "photo"))
+  (should (equal (ps/nav--place-name '("/plans/Deep_Work.org" . 1)) "Deep Work"))
+  ;; A name nobody transforms is left exactly as it is.
+  (should (equal (ps/nav--place-name '("/plans/index.md" . 1)) "index.md")))
+
 (ert-deftest ps/nav--reachable-p-drops-a-place-whose-file-is-gone ()
   "Dropping an item deletes its directory, and its place must not strand back."
   (should-not (ps/nav--reachable-p '("/nowhere/at/all/index.md" . 1)))
@@ -101,6 +113,17 @@ pair that says which way you can actually go."
   (let ((glyph (ps/nav--button 'back)))
     (should (eq (get-text-property 0 'face glyph) 'shadow))
     (should-not (get-text-property 0 'local-map glyph))))
+
+(ert-deftest ps/nav--button-says-why-a-dead-direction-is-dead ()
+  "A tooltip is replaced when the pointer reaches text carrying a `help-echo'
+and left showing otherwise, so a dimmed arrow with none of its own let the live
+arrow's tooltip stand over it.  It stays inert -- no map, no `mouse-face'."
+  (set-window-parameter (selected-window) 'ps/nav-forward nil)
+  (let ((glyph (ps/nav--button 'forward)))
+    (should (equal (get-text-property 0 'help-echo glyph)
+                   "Nothing to go forward to"))
+    (should-not (get-text-property 0 'local-map glyph))
+    (should-not (get-text-property 0 'mouse-face glyph))))
 
 (ert-deftest ps/nav--button-dims-the-glyph-itself-not-only-its-face ()
   "The `shadow' face above is the *text* fallback's dim.  When the glyph is an
@@ -183,7 +206,7 @@ of their own -- which is the bug above, not a detail of wiring."
 ;;; Recording and moving
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/nav--record-pushes-the-outgoing-buffer-and-clears-forward ()
+(ert-deftest ps/nav--record-window-pushes-the-outgoing-buffer-and-clears-forward ()
   "Going somewhere new abandons the forward trail, as in a browser."
   (let* ((window (selected-window))
          (first (find-file-noselect (expand-file-name "lisp/ps-nav.el")))
@@ -195,7 +218,7 @@ of their own -- which is the bug above, not a detail of wiring."
           (set-window-buffer window first)
           (set-window-parameter window 'ps/nav--current first)
           (set-window-buffer window second)
-          (ps/nav--record window)
+          (ps/nav--record-window window)
           (should (equal (car (car (ps/nav--stack window 'back)))
                          (buffer-file-name first)))
           (should-not (ps/nav--stack window 'forward)))
@@ -204,6 +227,86 @@ of their own -- which is the bug above, not a detail of wiring."
       (set-window-parameter window 'ps/nav--current nil)
       (kill-buffer first)
       (kill-buffer second))))
+
+(ert-deftest ps/nav--record-accepts-the-frame-the-hook-actually-passes ()
+  "The regression that made back and forward unpredictable for months.
+
+`window-buffer-change-functions' hands a *window* only to functions registered
+buffer-locally; its default value -- where `ps/nav-setup' registers this one --
+is called with the FRAME.  Recording only for a window argument therefore
+recorded nothing at all, and the trail was left standing on
+`ps/nav-note-departure', which the file tree and the agenda do not call."
+  (let* ((window (selected-window))
+         (origin (window-buffer window))
+         (first (find-file-noselect (expand-file-name "lisp/ps-nav.el")))
+         (second (find-file-noselect (expand-file-name "lisp/ps-open.el"))))
+    (unwind-protect
+        (progn
+          (set-window-parameter window 'ps/nav-back nil)
+          (set-window-parameter window 'ps/nav-forward (list '("/x.org" . 1)))
+          (set-window-buffer window first)
+          (set-window-parameter window 'ps/nav--current first)
+          (set-window-buffer window second)
+          (ps/nav--record (window-frame window))
+          (should (equal (car (car (ps/nav--stack window 'back)))
+                         (buffer-file-name first)))
+          (should-not (ps/nav--stack window 'forward)))
+      (set-window-parameter window 'ps/nav-back nil)
+      (set-window-parameter window 'ps/nav-forward nil)
+      (set-window-parameter window 'ps/nav--current nil)
+      (set-window-buffer window origin)
+      (kill-buffer first)
+      (kill-buffer second))))
+
+(ert-deftest ps/nav--record-keeps-each-window-of-a-frame-on-its-own-trail ()
+  "One call carries the whole frame, so the walk must not pool the windows'
+histories -- two windows keep independent trails, which is the point of holding
+them in window parameters at all."
+  (let* ((window (selected-window))
+         (origin (window-buffer window))
+         (first (find-file-noselect (expand-file-name "lisp/ps-nav.el")))
+         (second (find-file-noselect (expand-file-name "lisp/ps-open.el")))
+         (third (find-file-noselect (expand-file-name "lisp/ps-window.el")))
+         (other nil))
+    (unwind-protect
+        (progn
+          (delete-other-windows window)
+          (setq other (split-window window))
+          (dolist (w (list window other))
+            (set-window-parameter w 'ps/nav-back nil)
+            (set-window-parameter w 'ps/nav-forward nil))
+          (set-window-buffer window first)
+          (set-window-parameter window 'ps/nav--current first)
+          (set-window-buffer other second)
+          (set-window-parameter other 'ps/nav--current second)
+          ;; Both windows move on, and one call reports both.
+          (set-window-buffer window third)
+          (set-window-buffer other third)
+          (ps/nav--record (window-frame window))
+          (should (equal (car (car (ps/nav--stack window 'back)))
+                         (buffer-file-name first)))
+          (should (equal (car (car (ps/nav--stack other 'back)))
+                         (buffer-file-name second))))
+      (dolist (w (list window other))
+        (when (window-live-p w)
+          (set-window-parameter w 'ps/nav-back nil)
+          (set-window-parameter w 'ps/nav-forward nil)
+          (set-window-parameter w 'ps/nav--current nil)))
+      (when (window-live-p other) (delete-window other))
+      (set-window-buffer window origin)
+      (mapc #'kill-buffer (list first second third)))))
+
+(ert-deftest ps/nav-forget-all-clears-every-trail ()
+  "`desktop-clear' and a vault switch both leave places that still resolve --
+the files are on disk -- but no longer mean anything."
+  (let ((window (selected-window)))
+    (set-window-parameter window 'ps/nav-back (list '("/a.org" . 1)))
+    (set-window-parameter window 'ps/nav-forward (list '("/b.org" . 1)))
+    (set-window-parameter window 'ps/nav--current (current-buffer))
+    (ps/nav-forget-all)
+    (should-not (ps/nav--stack window 'back))
+    (should-not (ps/nav--stack window 'forward))
+    (should-not (window-parameter window 'ps/nav--current))))
 
 (ert-deftest ps/nav-back-returns-and-leaves-a-way-forward ()
   (let* ((window (selected-window))

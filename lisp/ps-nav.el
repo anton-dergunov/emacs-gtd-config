@@ -14,6 +14,15 @@
 ;; got round to drawing.  `ps/nav--push' collapses a repeat, so the overlap
 ;; costs nothing.
 ;;
+;; The second of those is registered on the hook's DEFAULT value, and the
+;; default value is called with a FRAME -- only a buffer-local registration is
+;; handed a window.  `ps/nav--record' checking for a window and returning
+;; otherwise therefore recorded nothing at all, for anything, and the trail was
+;; left standing on `ps/nav-note-departure' alone: the Info Triage queue and
+;; Org/Markdown/Dired links behaved, while a file opened from the file tree or
+;; a task opened from the agenda left no step behind and the arrows went on
+;; pointing wherever they had last been aimed.
+;;
 ;; The history lives in *window parameters*, so two windows keep independent
 ;; trails and closing a window forgets its own.  A place records where to reopen
 ;; something, not what was open: a file path, a directory, or -- for a generated
@@ -38,6 +47,7 @@
 (declare-function ps/window--side-window-p "ps-window")
 (declare-function ps/window-visit-only-here "ps-window")
 (declare-function ps/material-icons-image "ps-material-icons")
+(declare-function ps/file-tree--normalize-display-name "ps-file-tree" (name))
 
 (defgroup ps/nav nil
   "Back and forward navigation across windows."
@@ -142,13 +152,23 @@ Dired buffers in particular are killed as you descend out of them."
                   (t buffer))
             (point)))))
 
+(defun ps/nav--display-name (name)
+  "Return file NAME as this configuration shows a file name anywhere else.
+`.org' dropped and `_' read as a space, via the file tree's own transformer --
+the same soft dependency `ps/mode-line--strip-org' takes on it, and for the
+same reason: a file the tree calls \"Photo\" must not be called \"photo.org\"
+by the tooltip that offers to go back to it."
+  (if (fboundp 'ps/file-tree--normalize-display-name)
+      (ps/file-tree--normalize-display-name name)
+    name))
+
 (defun ps/nav--place-name (place)
   "Return a short human name for PLACE, for a tooltip."
   (let ((target (car place)))
     (cond ((bufferp target) (buffer-name target))
           ((directory-name-p target)
            (file-name-nondirectory (directory-file-name target)))
-          (t (file-name-nondirectory target)))))
+          (t (ps/nav--display-name (file-name-nondirectory target))))))
 
 (defun ps/nav--reachable-p (place)
   "Non-nil when PLACE can still be returned to."
@@ -211,22 +231,41 @@ harmlessly: `ps/nav--push' collapses a repeat of the same target."
         ;; Going somewhere new abandons the forward trail, as in a browser.
         (ps/nav--set-stack window 'forward nil)))))
 
-(defun ps/nav--record (window-or-frame)
-  "Note that a window's buffer changed, for `window-buffer-change-functions'.
-That hook passes a window when a window's buffer changed and a frame when
-windows were created or deleted, so the argument is checked rather than
-assumed."
-  (when (and (windowp window-or-frame)
-             (ps/nav--trackable-window-p window-or-frame))
-    (let ((previous (window-parameter window-or-frame 'ps/nav--current))
-          (current (window-buffer window-or-frame)))
+(defun ps/nav--record-window (window)
+  "Note that WINDOW's buffer changed, recording where it came from."
+  (when (ps/nav--trackable-window-p window)
+    (let ((previous (window-parameter window 'ps/nav--current))
+          (current (window-buffer window)))
       (unless (eq previous current)
         (when-let* ((place (and (buffer-live-p previous) (ps/nav--place previous))))
-          (ps/nav--set-stack window-or-frame 'back
-                             (ps/nav--push place (ps/nav--stack window-or-frame 'back)))
+          (ps/nav--set-stack window 'back
+                             (ps/nav--push place (ps/nav--stack window 'back)))
           ;; Going somewhere new abandons the forward trail, as in a browser.
-          (ps/nav--set-stack window-or-frame 'forward nil))
-        (set-window-parameter window-or-frame 'ps/nav--current current)))))
+          (ps/nav--set-stack window 'forward nil))
+        (set-window-parameter window 'ps/nav--current current)))))
+
+(defun ps/nav--record (window-or-frame)
+  "Record buffer changes for `window-buffer-change-functions'.
+
+The argument is a FRAME, not a window, and getting that wrong is why this
+recorded nothing at all for a while.  The hook hands a *window* only to
+functions registered buffer-locally; the default value -- which is where
+`ps/nav-setup' registers this, since a trail must be kept for every buffer and
+not for a chosen few -- is called once per frame, whenever any window on it
+was added, deleted, or given a different buffer.  So the frame is walked and
+each of its windows compared with what it last showed.
+
+Both shapes are accepted anyway: a window costs one line to handle, and it is
+the shape a buffer-local registration would arrive in.
+
+This is the general recorder, the one that catches every way a buffer can
+reach a window -- the file tree, the agenda jumping to a task, `C-x C-f'.
+`ps/nav-note-departure' is the synchronous half, for the paths that can afford
+not to wait for redisplay; `ps/nav--push' collapses the overlap between them."
+  (cond ((windowp window-or-frame) (ps/nav--record-window window-or-frame))
+        ((framep window-or-frame)
+         (dolist (window (window-list window-or-frame 'no-mini))
+           (ps/nav--record-window window)))))
 
 (defun ps/nav--go (direction)
   "Move DIRECTION (`back' or `forward') in the selected window's history."
@@ -253,6 +292,24 @@ assumed."
         ;; Claim the arrival ourselves, so the recorder -- which runs later, at
         ;; redisplay -- sees no change and does not push this step back on.
         (set-window-parameter window 'ps/nav--current (window-buffer window))))))
+
+;;;###autoload
+(defun ps/nav-forget-all ()
+  "Forget every window's trail, in every frame.
+
+For the moments when the places a trail names are still on disk but no longer
+mean anything: `desktop-clear' kills the buffers and leaves the window
+parameters, and a vault switch moves the whole directory out from under them.
+`ps/nav--reachable-p' cannot tell -- the files are all still there -- so an
+arrow that looks live would step into the session or the vault you just left."
+  (interactive)
+  (dolist (frame (frame-list))
+    (dolist (window (window-list frame 'no-mini))
+      (set-window-parameter window 'ps/nav-back nil)
+      (set-window-parameter window 'ps/nav-forward nil)
+      ;; The seed goes too, or the next redisplay records a step out of a
+      ;; buffer that no longer exists.
+      (set-window-parameter window 'ps/nav--current nil))))
 
 ;;;###autoload
 (defun ps/nav-back ()
@@ -345,7 +402,13 @@ rather than as two buttons that sometimes do nothing.
 
 The padding is inside the propertized run on purpose: spaces added outside it
 would widen the gap without widening the target, which is the difference
-between a button that looks bigger and one that is."
+between a button that looks bigger and one that is.
+
+The dead direction carries a `help-echo' of its own, and that is not merely
+informative.  A tooltip is replaced when the pointer reaches text with a
+`help-echo' and left alone otherwise, so a dimmed arrow with none of its own
+let the *live* arrow's tooltip stand -- \"forward to Live\" hanging over a
+button that goes nowhere.  It stays inert: no `mouse-face', no keymap."
   (let* ((pad (make-string (max 0 ps/nav-button-padding) ?\s))
          ;; Where we could go decides how the glyph is *drawn*, so it has to be
          ;; known before the glyph is asked for -- see `ps/nav--glyph'.
@@ -353,7 +416,10 @@ between a button that looks bigger and one that is."
                                      (ps/nav--stack (selected-window) direction))))
          (label (concat pad (ps/nav--glyph direction (null place)) pad)))
     (if (null place)
-        (propertize label 'face 'shadow)
+        (propertize label
+                    'face 'shadow
+                    'help-echo (format "Nothing to go %s to"
+                                       (if (eq direction 'back) "back" "forward")))
       (propertize label
                   'mouse-face 'ps/nav-button-hover
                   'help-echo (format "mouse-1: %s to %s"
@@ -391,11 +457,20 @@ Idempotent: reloading config.org must not stack a second pair of arrows."
       format
     (cons ps/nav-mode-line-element (if (listp format) format (list format)))))
 
+(defun ps/nav--forget-after-desktop-clear (&rest _)
+  "Forget every trail once `desktop-clear' has emptied the session."
+  (ps/nav-forget-all))
+
 ;;;###autoload
 (defun ps/nav-setup ()
   "Start recording navigation history and put the buttons on the mode line.
 Idempotent, so it survives a config reload."
   (add-hook 'window-buffer-change-functions #'ps/nav--record)
+  ;; `desktop-clear' kills every buffer and leaves the window parameters
+  ;; holding the trail, so the arrows go on offering the session that was just
+  ;; discarded.  Advice rather than a hook because `desktop-clear' has none,
+  ;; and `advice-add' is happy to name a command whose file has not loaded yet.
+  (advice-add 'desktop-clear :after #'ps/nav--forget-after-desktop-clear)
   (setq-default mode-line-format (ps/nav-mode-line-add (default-value 'mode-line-format))))
 
 (provide 'ps-nav)
