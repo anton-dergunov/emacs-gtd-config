@@ -52,14 +52,18 @@ This is *not* a merge conflict, and there is nothing to resolve in Magit. Fix
 it by deleting the copies and then removing the cause.
 
 * The fix
-Two ways, both fine. Option 1 is less to set up; option 2 also survives moving
-to a machine where your home folder has a different path.
+Two ways. Both need one setup step on *every* machine that has the vault —
+neither is something you do once and forget. What differs is what happens when
+you forget.
 
-Do this on *every* machine that has the vault, and quit Emacs on all of them
-first so nothing is syncing while you work.
+Quit Emacs on all your machines first, and make sure everything is committed
+and pushed (=C-x g=, or let the sync finish and check the indicator shows
+=✓ Sync=). Pick one option and use it everywhere: a machine using one and a
+machine using the other put different things at the same =.git= path, which is
+the very collision you are trying to stop.
 
 ** Option 1 — tell Dropbox to ignore =.git=
-Dropbox can be told to leave a file alone. On macOS:
+Dropbox can be told to leave a path alone. On macOS:
 
 #+begin_src bash
 xattr -w com.dropbox.ignored 1 "/path/to/your/vault/.git"
@@ -77,20 +81,20 @@ On Windows, in PowerShell:
 Set-Content -Path 'C:\path\to\vault\.git:com.dropbox.ignored' -Value 1
 #+end_src
 
-Each machine then keeps its own private repository, and the two exchange
+Each machine then keeps its own private repository, and the machines exchange
 history through your remote (GitHub) the way Git is meant to. Dropbox syncs
 only your notes.
 
-*One trap.* Ignoring a folder that Dropbox has already synced makes Dropbox
-delete it from the cloud — and therefore from your other machines. So:
+*This is a per-machine setting, not an account one.* It is an attribute on that
+machine's filesystem; nothing about it is stored in your Dropbox account or
+sent to your other computers.
 
-1. On every machine, make sure everything is committed and pushed (=C-x g=, or
-   just let the sync finish and check the indicator shows =✓ Sync=).
-2. On the *first* machine, run the command above. Wait for Dropbox to settle;
-   the folder gets a grey "minus" badge.
-3. On every *other* machine, =.git= will disappear. Do not wait for it to come
-   back — rebuild it from your remote, applying the ignore immediately so it is
-   never uploaded again:
+What /does/ reach your other machines is the consequence: ignoring a folder
+Dropbox has already synced makes Dropbox remove it from the server, so =.git=
+disappears on every other machine. That looks like the setting propagated. It
+did not — those machines simply lost the folder, and they have not learned to
+ignore anything. So on each of them, rebuild the repository from your remote
+and apply the ignore *before* Git puts anything there:
 
 #+begin_src bash
 cd /path/to/your/vault
@@ -104,23 +108,65 @@ git reset --mixed origin/main
 =git reset --mixed= keeps every file exactly as it is on disk; it only tells
 Git where you are in the history.
 
+*If you forget on a machine*, that machine goes on syncing its =.git= to
+Dropbox, and nothing says so. With only one machine still doing it there are no
+collisions — a conflicted copy needs two writers — so the damage is a large
+folder being uploaded pointlessly. But the protection is only as good as the
+machine you last remembered, and adding a third computer quietly puts you back
+where you started.
+
 ** Option 2 — keep the repository outside the cloud folder
-Move the repository itself somewhere Dropbox never looks, and leave a pointer
-behind. Git supports this natively: =.git= may be a *file* containing a path
-instead of a folder.
+Move the repository somewhere Dropbox never looks and leave a pointer behind.
+Git supports this natively: =.git= may be a *file* holding a path instead of a
+folder.
 
 #+begin_src bash
 cd /path/to/your/vault
+mkdir -p ~/.gitrepos
 mv .git ~/.gitrepos/notes-org
 echo "gitdir: $HOME/.gitrepos/notes-org" > .git
 git status                                # confirm it still works
 #+end_src
 
-Dropbox then syncs a one-line text file that is identical on every machine, so
-it can never conflict. Repeat the =mv= on each machine (or rebuild from your
-remote as above), and make sure the path in the =.git= file is one that exists
-on all of them — that is the only requirement, and the reason to prefer this
-option if a machine with a different home folder is in your future.
+Dropbox then syncs a one-line text file. Every machine reads the same line, so
+it can never conflict — and that is also the catch:
+
+*The path in that line must exist on every machine.* It is one shared string,
+so =/Users/you/.gitrepos/notes-org= is what a Linux box will look for too, and
+not find. Between machines that share a layout (same username, same OS)
+this is free; across different ones you need a path that is valid everywhere,
+or Option 1 instead. A relative pointer (=gitdir: ../../.gitrepos/notes-org=,
+resolved from the vault) helps only if the vault sits at the same depth on
+each machine, which Dropbox's own location often breaks —
+=~/Library/CloudStorage/Dropbox/= on macOS against =~/Dropbox/= elsewhere.
+
+On each further machine, either move its =.git= aside the same way, or rebuild
+it from your remote:
+
+#+begin_src bash
+mkdir -p ~/.gitrepos/notes-org
+cd ~/.gitrepos/notes-org
+git init --bare .                          # a plain `git init` works too
+cd /path/to/your/vault
+git fetch origin
+git reset --mixed origin/main
+#+end_src
+
+*If you forget on a machine*, it says so immediately and precisely. Git refuses
+to do anything, naming the path it wanted —
+=fatal: not a git repository: /Users/you/.gitrepos/notes-org= — and the sync
+indicator turns red with /the repository this vault points at is missing/.
+Syncing keeps retrying rather than pausing, so creating the missing repository
+is enough to clear it — there is nothing to re-enable afterwards.
+
+** Which one
+Option 2, unless your machines have layouts too different to share one path.
+
+Both cost the same to set up. The difference is that Option 1 fails *silently*
+— a machine you skipped looks exactly like a machine you did — while Option 2
+fails *loudly*, on that machine, naming what is missing. When the thing being
+protected is the repository holding all your history, a mistake you can see is
+worth more than one you cannot.
 
 * Cleaning up after a collision
 Delete the copies — they are copies, not your work:
@@ -136,7 +182,7 @@ Enabled*, and do the permanent fix above so it cannot recur.
 
 If =git fsck= reports missing objects rather than harmless "dangling" ones, the
 simplest cure is to rebuild the repository from your remote with the =git init=
-sequence from option 1 — your notes on disk are untouched by any of it.
+sequence from Option 1 — your notes on disk are untouched by any of it.
 
 * Conflicted copies of your notes
 Even with =.git= out of the way, two machines editing the same =.org= file at

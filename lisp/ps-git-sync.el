@@ -105,6 +105,7 @@ Left unfiltered these are ~50 of the ~60 lines of a failed push.")
 (defvar ps/git-sync--failure-patterns
   '((cloud-copy   . "conflicted copy\\|bad object refs/")
     (conflict     . "CONFLICT\\|Automatic merge failed")
+    (no-repo      . "not a git repository")
     (local        . "would be overwritten by\\|Please commit your changes or stash\
 \\|You have unmerged\\|needs merge")
     (auth         . "Authentication failed\\|could not read Username\
@@ -131,6 +132,7 @@ a merge that never happened.")
 (defvar ps/git-sync--class-phrases
   '((cloud-copy   . "conflicted copies inside the repository, sync paused")
     (conflict     . "merge conflict, sync paused")
+    (no-repo      . "the repository this vault points at is missing")
     (local        . "local changes block the pull")
     (auth         . "the remote refused the credentials")
     (rejected     . "push rejected, the remote has newer commits")
@@ -139,9 +141,20 @@ a merge that never happened.")
     (unknown      . "sync failed"))
   "How each failure class is described to the user.")
 
-(defvar ps/git-sync--attention-classes '(cloud-copy conflict local auth rejected)
+(defvar ps/git-sync--attention-classes
+  '(cloud-copy conflict no-repo local auth rejected)
   "Failure classes that will not clear on their own.
-Everything else is shown as `retrying': the next tick may well succeed.")
+Everything else is shown as `retrying': the next tick may well succeed.
+
+`no-repo' is here because of the `.git'-outside-the-cloud-folder layout (see
+`docs/Dropbox-and-git.org'): the vault's `.git' is a *file* pointing at a
+repository kept elsewhere, `ps/vault-git-repo-p' sees that file and starts
+syncing, and every git command then fails because the target does not exist
+on this machine.  That is a setup step nobody did, not a hiccup, and showing
+it as `retrying' -- \"out of your hands, it will try again shortly\" -- would
+wait forever for something that is never going to happen.  It does not
+*pause*, though: the answer may be a volume that is not mounted yet, and
+that does come back on its own.")
 
 (defvar ps/git-sync--pausing-classes '(conflict cloud-copy)
   "Failure classes that stop the sync until the user has acted.

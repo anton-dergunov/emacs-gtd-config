@@ -209,9 +209,21 @@ is a property of the classifier and not of the patterns."
   (dolist (class ps/git-sync--pausing-classes)
     (should (memq class ps/git-sync--attention-classes))))
 
+(ert-deftest ps/git-sync--classify-a-missing-repository ()
+  "A .git file pointing at a repository that is not on this machine.
+That is the layout `docs/Dropbox-and-git.org' recommends, and the failure a
+machine that never had its half of the setup done will show.  It must read
+as `needs you' rather than as something the next tick might fix."
+  (should (eq (ps/git-sync--classify
+               "fatal: not a git repository: /Users/you/.gitrepos/notes-org")
+              'no-repo))
+  (should (eq (ps/git-sync--class-severity 'no-repo) 'failed))
+  ;; But it does not pause: an unmounted volume comes back on its own.
+  (should-not (memq 'no-repo ps/git-sync--pausing-classes)))
+
 (ert-deftest ps/git-sync--class-severity-splits-attention-from-retry ()
   "Failures that need the user are `failed'; the self-healing ones `retrying'."
-  (dolist (class '(cloud-copy conflict local auth rejected))
+  (dolist (class '(cloud-copy conflict no-repo local auth rejected))
     (should (eq (ps/git-sync--class-severity class) 'failed)))
   (dolist (class '(remote-error offline unknown))
     (should (eq (ps/git-sync--class-severity class) 'retrying))))

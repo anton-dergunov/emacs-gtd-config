@@ -276,6 +276,9 @@ one changed, saving takes an explicit confirmation.
   Retrying/ or /Sync Failed/; =ps/git-sync-show-log= opens the log.
   =ps/git-sync-cloud-copy-regexp= (same settings block) is what a cloud
   syncer's leftovers look like; set it to =nil= to stop checking for them.
+  A vault whose =.git= points at a repository kept elsewhere (see
+  [[file:Dropbox-and-git.org][Dropbox & Git together]]) reports /the repository this vault points at is
+  missing/ on a machine where that repository was never created.
 - Saving Org buffers: =lisp/ps-org-save.el=; settings in =config.org= →
   /Settings → Org saving/ (=ps/org-save-on-focus-loss-idle-threshold=). A
   buffer whose file changed on disk under it is never saved over;
