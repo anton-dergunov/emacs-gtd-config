@@ -40,9 +40,14 @@ org-journal directory and archives."
   :group 'ps-org-files)
 
 (defcustom ps/org-files-exclude-files
-  '("\\`init\\.org\\'" "\\`workspace\\.org\\'")
+  '("\\`init\\.org\\'" "\\`workspace\\.org\\'" "conflicted copy")
   "Regexps matched against a file NAME; matching .org files are excluded.
-The defaults drop the two config files that live in the Org base directory."
+The defaults drop the two config files that live in the Org base directory,
+and the copies a cloud syncer (Dropbox) leaves behind when two machines write
+the same file.  That last one is deliberately an unanchored substring, since
+the account name and date around it vary; without it, `Plans (Your Name's
+conflicted copy 2026-08-19).org' is a second copy of every task it holds,
+shown in the agenda beside the original."
   :type '(repeat regexp)
   :group 'ps-org-files)
 

@@ -63,6 +63,8 @@ Emacs? Jump to [[file:Planning-setup.org][Planning your work]].
 * Syncing & Backups
 - [[file:Sync-and-backups.org][Sync & backups]] — automatic background Git sync, auto-save/auto-revert,
   session restore, and backups.
+- [[file:Dropbox-and-git.org][Dropbox & Git together]] — keeping your vault in a cloud folder /and/ in Git:
+  the one setup step that stops the two from corrupting each other.
 
 * Reference
 - [[file:Keybindings.org][Keybindings]] — a one-page cheat sheet.

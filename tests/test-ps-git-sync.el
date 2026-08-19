@@ -51,6 +51,8 @@ Skipped when git is unavailable. Cleans up the repo afterward."
          (ps/git-sync--failure-count 0)
          (ps/git-sync--failure-since nil)
          (ps/git-sync--log nil)
+         (ps/git-sync--paused-class nil)
+         (ps/git-sync--copies nil)
          (ps/git-sync-paused nil))
      ,@body))
 
@@ -79,6 +81,12 @@ To https://github.com/example/notes.git
  ! [remote rejected] main -> main (Internal Server Error)
 error: failed to push some refs to 'https://github.com/example/notes.git'"
   "The real output of the GitHub outage this reporting was built for.")
+
+(defconst ps/git-sync-test--dropbox-refs
+  "fatal: bad object refs/heads/main (Anton Dergunov's conflicted copy 2026-08-19)
+error: https://github.com/example/notes.git did not send all necessary objects"
+  "The real output of 2026-08-19: Dropbox syncing .git between two laptops
+left a conflicted copy in refs/heads, which git read as a branch name.")
 
 ;;; -------------------------------------------------------
 ;;; Icons / defaults
@@ -165,12 +173,112 @@ Ordering in `ps/git-sync--failure-patterns' is what guarantees this."
 fatal: unable to access remote")
               'conflict)))
 
+(ert-deftest ps/git-sync--classify-dropbox-conflicted-copy ()
+  "The 2026-08-19 failure is a cloud-syncer casualty, not a merge conflict.
+Dropbox replicated .git between two laptops and left a conflicted copy in
+refs/heads; git read it as a branch and every command died with `bad
+object'.  Nothing about it can be fixed in Magit."
+  (should (eq (ps/git-sync--classify ps/git-sync-test--dropbox-refs)
+              'cloud-copy)))
+
+(ert-deftest ps/git-sync--classify-is-case-sensitive ()
+  "Case folding is what made a \"conflicted copy\" look like a `CONFLICT'.
+`case-fold-search' defaults to t and `string-match-p' honours it, so this
+is a property of the classifier and not of the patterns."
+  (should (eq (ps/git-sync--classify "CONFLICT (content): Merge conflict in W.org")
+              'conflict))
+  (should-not (eq (ps/git-sync--classify
+                   "fatal: bad object refs/heads/main (conflicted copy)")
+                  'conflict))
+  ;; Nor the other way round: a real conflict is not a cloud copy.
+  (should-not (eq (ps/git-sync--classify
+                   "CONFLICT (content): Merge conflict in Work.org")
+                  'cloud-copy)))
+
+(ert-deftest ps/git-sync--classify-cloud-copy-outranks-the-push-error ()
+  "A damaged repository fails at the push, so it reports both."
+  (should (eq (ps/git-sync--classify
+               (concat ps/git-sync-test--dropbox-refs
+                       "\n ! [rejected]        main -> main (non-fast-forward)"))
+              'cloud-copy)))
+
+(ert-deftest ps/git-sync--pausing-classes-are-the-unrecoverable-ones ()
+  "Only failures the next tick cannot possibly clear stop the sync."
+  (should (equal (sort (copy-sequence ps/git-sync--pausing-classes) #'string<)
+                 '(cloud-copy conflict)))
+  (dolist (class ps/git-sync--pausing-classes)
+    (should (memq class ps/git-sync--attention-classes))))
+
 (ert-deftest ps/git-sync--class-severity-splits-attention-from-retry ()
   "Failures that need the user are `failed'; the self-healing ones `retrying'."
-  (dolist (class '(conflict local auth rejected))
+  (dolist (class '(cloud-copy conflict local auth rejected))
     (should (eq (ps/git-sync--class-severity class) 'failed)))
   (dolist (class '(remote-error offline unknown))
     (should (eq (ps/git-sync--class-severity class) 'retrying))))
+
+(ert-deftest ps/git-sync--cloud-copies-finds-them-in-the-tree ()
+  "A conflicted copy anywhere under the vault is found; ordinary files are not."
+  (ps/git-sync-test--with-non-repo
+    (make-directory (expand-file-name "Work" dir))
+    (dolist (name '("Inbox.org"
+                    "Inbox (Anton Dergunov's conflicted copy 2026-08-19).org"
+                    "Work/Plans.org"
+                    "Work/Plans (Anton's conflicted copy 2026-08-19).org"))
+      (write-region "" nil (expand-file-name name dir)))
+    (should (equal (ps/git-sync--cloud-copies dir)
+                   '("Inbox (Anton Dergunov's conflicted copy 2026-08-19).org"
+                     "Work/Plans (Anton's conflicted copy 2026-08-19).org")))))
+
+(ert-deftest ps/git-sync--cloud-copies-skips-dotted-directories ()
+  "The walk does not descend into .git — an object store is far too big to
+walk once a minute — but the three named directories inside it are checked,
+because a copy landing in refs/heads is what breaks git outright."
+  (ps/git-sync-test--with-non-repo
+    (make-directory (expand-file-name ".git/refs/heads" dir) t)
+    (make-directory (expand-file-name ".git/objects/ab" dir) t)
+    (write-region "" nil (expand-file-name
+                          ".git/refs/heads/main (conflicted copy 2026-08-19)" dir))
+    (write-region "" nil (expand-file-name
+                          ".git/objects/ab/cdef (conflicted copy 2026-08-19)" dir))
+    (should (equal (ps/git-sync--cloud-copies dir)
+                   '(".git/refs/heads/main (conflicted copy 2026-08-19)")))))
+
+(ert-deftest ps/git-sync--cloud-copies-can-be-turned-off ()
+  "A nil regexp stops the check, and a missing directory is not an error."
+  (ps/git-sync-test--with-non-repo
+    (write-region "" nil (expand-file-name "A (conflicted copy).org" dir))
+    (let ((ps/git-sync-cloud-copy-regexp nil))
+      (should-not (ps/git-sync--cloud-copies dir))))
+  (should-not (ps/git-sync--cloud-copies "/nonexistent/vault/"))
+  (should-not (ps/git-sync--cloud-copies nil)))
+
+(ert-deftest ps/git-sync--note-copies-overrides-a-healthy-sync ()
+  "The sync worked; the working tree still needs the user.  Announced once."
+  (ps/git-sync-test--with-non-repo
+    (ps/git-sync-test--with-clean-state
+      (ps/git-sync-test--capturing-messages msgs
+        (write-region "" nil (expand-file-name "A (conflicted copy).org" dir))
+        (ps/git-sync--note-success)
+        (should (eq ps/git-sync--state 'ok))
+        (ps/git-sync--note-copies)
+        (should (eq ps/git-sync--state 'copies))
+        (should (equal ps/git-sync--copies '("A (conflicted copy).org")))
+        (should (= (length msgs) 1))
+        ;; The same set on the next tick keeps the state but stays quiet.
+        (ps/git-sync--note-copies)
+        (should (eq ps/git-sync--state 'copies))
+        (should (= (length msgs) 1))))))
+
+(ert-deftest ps/git-sync--note-copies-is-silent-when-there-are-none ()
+  "A clean tree leaves the sync's own state alone."
+  (ps/git-sync-test--with-non-repo
+    (ps/git-sync-test--with-clean-state
+      (ps/git-sync-test--capturing-messages msgs
+        (ps/git-sync--note-success)
+        (ps/git-sync--note-copies)
+        (should (eq ps/git-sync--state 'ok))
+        (should-not ps/git-sync--copies)
+        (should-not msgs)))))
 
 ;;; -------------------------------------------------------
 ;;; Reason extraction / echo line
@@ -302,11 +410,29 @@ Automatic merge failed; fix conflicts and then commit the result.")
 
 (ert-deftest ps/git-sync--log-render-conflict-guidance ()
   "The conflict case leads with how to resolve and resume."
-  (let ((text (ps/git-sync--log-render nil t)))
+  (let ((text (ps/git-sync--log-render nil 'conflict)))
     (should (string-match-p "merge conflict" text))
     (should (string-match-p "Magit" text))
     (should (string-match-p "Git Sync Enabled" text)))
   (should-not (string-match-p "Magit" (ps/git-sync--log-render nil))))
+
+(ert-deftest ps/git-sync--log-render-cloud-copy-guidance ()
+  "A Dropbox-damaged repository gets its own remedy, not the merge one.
+Sending the user to Magit to resolve a merge that never happened is exactly
+what this whole class exists to stop."
+  (let ((text (ps/git-sync--log-render nil 'cloud-copy)))
+    (should (string-match-p "conflicted" text))
+    (should (string-match-p "Dropbox-and-git" text))
+    (should (string-match-p "Git Sync Enabled" text))
+    (should-not (string-match-p "Magit" text))))
+
+(ert-deftest ps/git-sync--log-render-lists-copies ()
+  "Conflicted copies found in the tree are named in the log, paused or not."
+  (let ((text (ps/git-sync--log-render
+               nil nil '("Inbox (conflicted copy 2026-08-19).org"))))
+    (should (string-match-p "Inbox (conflicted copy 2026-08-19).org" text)))
+  (should-not (string-match-p "conflicted copies in your vault"
+                              (ps/git-sync--log-render nil))))
 
 (ert-deftest ps/git-sync--show-log-is-interactive ()
   "The log is reachable by name and by the mode-line click."
@@ -441,16 +567,17 @@ Collapsing these two was the original reporting bug."
 ;;; conflict handling
 ;;; -------------------------------------------------------
 
-(ert-deftest ps/git-sync--handle-conflict-pauses-and-shows ()
-  "handle-conflict pauses sync, sets the failed state, and shows the log."
+(ert-deftest ps/git-sync--handle-pause-pauses-and-shows ()
+  "handle-pause pauses sync, sets the failed state, and shows the log."
   (ps/git-sync-test--with-clean-state
     (ps/git-sync-test--capturing-messages _msgs
       (unwind-protect
           (progn
             (ps/git-sync--note-failure
              "CONFLICT (content): Merge conflict in Work.org")
-            (ps/git-sync--handle-conflict)
+            (ps/git-sync--handle-pause 'conflict)
             (should ps/git-sync-paused)
+            (should (eq ps/git-sync--paused-class 'conflict))
             (should (eq ps/git-sync--state 'failed))
             (let ((buf (get-buffer "*Org Git Sync*")))
               (should buf)
@@ -599,6 +726,8 @@ without a matching reset would silently show the next vault as broken."
         (ps/git-sync--failure-count 7)
         (ps/git-sync--failure-since (current-time))
         (ps/git-sync--log '((nil auth "denied" "")))
+        (ps/git-sync--paused-class 'conflict)
+        (ps/git-sync--copies '("Inbox (conflicted copy).org"))
         (ps/git-sync--state 'error))
     (ps/git-sync-stop)
     (should-not ps/git-sync--timer)
@@ -613,6 +742,8 @@ without a matching reset would silently show the next vault as broken."
     (should (= ps/git-sync--failure-count 0))
     (should-not ps/git-sync--failure-since)
     (should-not ps/git-sync--log)
+    (should-not ps/git-sync--paused-class)
+    (should-not ps/git-sync--copies)
     (should (eq ps/git-sync--state 'off))))
 
 (ert-deftest ps/git-sync-maybe-start-syncs-a-repo ()

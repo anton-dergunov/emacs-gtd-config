@@ -21,6 +21,10 @@ git init
 git remote add origin git@github.com:you/your-notes.git
 #+end_src
 
+If that folder is also in Dropbox, iCloud Drive or another cloud folder, read
+[[file:Dropbox-and-git.org][Dropbox & Git together]] before you go any further — there is one setup step
+that stops the two syncs from corrupting the repository.
+
 A vault with no =.git= folder is simply left alone, and its indicator says so.
 Each vault decides independently, so you can sync work notes and keep a personal
 vault local. A vault kept /inside/ a larger repository does not sync either —
@@ -45,13 +49,14 @@ sleeps mid-pull), the indicator clears the stuck state and resumes by itself.
 ** When a sync fails
 The indicator distinguishes trouble that will pass from trouble that needs you:
 
-| Indicator         | Meaning                                           |
-|-------------------+---------------------------------------------------|
-| =✓ Sync=          | The last sync succeeded.                          |
-| =↻ Syncing=       | A sync is running right now.                      |
-| =⊘ Sync Off=      | This vault is not a repository, or you paused it. |
-| =⚠ Sync Retrying= | Out of your hands — it will try again shortly     |
-| =⚠ Sync Failed=   | Needs you before syncing can continue             |
+| Indicator             | Meaning                                           |
+|-----------------------+---------------------------------------------------|
+| =✓ Sync=              | The last sync succeeded.                          |
+| =↻ Syncing=           | A sync is running right now.                      |
+| =⊘ Sync Off=          | This vault is not a repository, or you paused it. |
+| =⚠ Conflicted Copies= | The sync worked; a cloud syncer left copies       |
+| =⚠ Sync Retrying=     | Out of your hands — it will try again shortly     |
+| =⚠ Sync Failed=       | Needs you before syncing can continue             |
 
 /Sync Retrying/ (orange) means the remote server returned an error or the
 network is unreachable. Your work is already committed locally and the next
@@ -61,6 +66,14 @@ attempt will push it, so there is nothing to do but wait.
 a push rejected because another device got there first. A merge conflict also
 pauses syncing and opens the sync log with instructions; resolve it (=C-x g=
 for Magit), then re-enable syncing.
+
+/Conflicted Copies/ (orange) is not a Git problem at all: the sync succeeded,
+but your vault contains files a cloud syncer left behind when two machines
+wrote the same file — =Plans (Your Name's conflicted copy 2026-08-19).org=.
+Click the indicator for the list. Such a file is never committed and never
+scanned by the agenda, so you can take your time over it; merge what you need
+and delete it. See [[file:Dropbox-and-git.org][Dropbox & Git together]], which also covers the one setup
+step that keeps a cloud folder away from the repository itself.
 
 Failures are reported *once*, as a single line at the bottom of the frame — a
 server outage lasting an hour interrupts you one time, not once a minute. The
@@ -80,6 +93,29 @@ You rarely need to press save:
   never edit a stale copy. This happens silently as long as you have no unsaved
   edits in that buffer. If you /do/ have unsaved edits, Emacs stops and asks
   before discarding them.
+
+** When both sides changed
+Sometimes a file changes on disk /while/ you have unsaved edits in it — you
+typed on this laptop, and an edit from your phone arrived at the same time.
+Neither version is safe to throw away, so the automatic save leaves that file
+alone rather than writing your older text over the newer one. Everything else
+is still saved as usual.
+
+You are told once, and the file is listed in *Show Files Out of Sync*
+(Productivity → Sync & Version Control). From there:
+
+| Key       | What it does                                       |
+|-----------+----------------------------------------------------|
+| =d=/=RET= | Compare your version with the file, side by side   |
+| =m=       | Keep mine — write your version over the file       |
+| =r=       | Take the disk version — discard your unsaved edits |
+| =g=       | Refresh the list                                   |
+
+Both destructive choices ask first. Clicking a file name compares it, the same
+as =d=.
+
+If it happens while you are quitting Emacs, the file is simply left unsaved and
+Emacs asks about it in the usual way.
 
 * Sessions
 Your set of open files and windows is saved when you quit and restored next
@@ -238,8 +274,17 @@ one changed, saving takes an explicit confirmation.
   =ps/git-sync-paused=. Failures are sorted into classes by
   =ps/git-sync--failure-patterns=, which decides whether one shows as /Sync
   Retrying/ or /Sync Failed/; =ps/git-sync-show-log= opens the log.
+  =ps/git-sync-cloud-copy-regexp= (same settings block) is what a cloud
+  syncer's leftovers look like; set it to =nil= to stop checking for them.
+- Saving Org buffers: =lisp/ps-org-save.el=; settings in =config.org= →
+  /Settings → Org saving/ (=ps/org-save-on-focus-loss-idle-threshold=). A
+  buffer whose file changed on disk under it is never saved over;
+  =ps/org-save-show-stale= opens the list.
 - Auto-save/revert, sessions, and backups: =config.org= → /Session & Backups/
   and /Org Mode → Behavior → Auto-save .../. Reverts are driven by filesystem
   notifications rather than polling; =lisp/ps-file-notify.el= keeps a
   notification that arrives as a file is replaced (a Dropbox sync) from
   reporting an error once the revert is already done. Nothing to configure.
+- Conflicted copies of your notes are kept out of the agenda by
+  =ps/org-files-exclude-files= (=config.org= → /Settings → Org files/) and out
+  of Git by your vault's own =.gitignore=. See [[file:Dropbox-and-git.org][Dropbox & Git together]].

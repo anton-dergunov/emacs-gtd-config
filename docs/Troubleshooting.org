@@ -72,6 +72,22 @@ This now clears itself: the pointer comes back as soon as you press a key or
 run any command. If you ever see it persist beyond that, restarting Emacs
 restores it.
 
+* "Conflicted copy" files keep appearing
+Your vault is in a cloud folder (Dropbox and the like) as well as in Git, and
+the two are both syncing the hidden =.git= folder. Sooner or later that breaks
+Git outright — =fatal: bad object= — and the sync indicator says
+=conflicted copies inside the repository=. It is *not* a merge conflict and
+there is nothing to resolve in Magit.
+
+[[file:Dropbox-and-git.org][Dropbox & Git together]] has the cleanup and the one-time fix that stops it
+recurring.
+
+* A file I edited on my phone lost its changes (or mine did)
+It should not: when a file changes on disk while you have unsaved edits in
+Emacs, neither version is written over the other. The file is listed in *Show
+Files Out of Sync* (Productivity → Sync & Version Control) so you can compare
+the two and choose — see [[file:Sync-and-backups.org][Sync & backups]].
+
 * Git sync did something unexpected
 - Open =C-x g= (Magit) to inspect the repository state and history.
 - Pause sync with =C-c p s= while you sort things out.

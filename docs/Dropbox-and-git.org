@@ -1,0 +1,174 @@
+#+TITLE: Dropbox & Git together
+#+OPTIONS: toc:t
+#+STARTUP: inlineimages
+
+[[file:Index.org][↑ Back to the documentation index]]
+
+Keeping your vault in a cloud folder (Dropbox, iCloud Drive, OneDrive, Google
+Drive) /and/ as a Git repository is a sensible combination: the cloud folder is
+what lets you edit a file on your phone, and Git is what gives you history and
+a backup you can go back through. This config's [[file:Sync-and-backups.org][automatic Git sync]] is happy
+to run inside a cloud folder.
+
+There is exactly one thing you must do first, and it is not obvious. Skip it
+and the two syncs will eventually corrupt each other's work — not your notes,
+but the repository itself.
+
+* The one rule
+*Only one of them may sync the =.git= folder.* Git owns Git; the cloud folder
+owns your notes.
+
+Your vault holds two very different kinds of thing. The =.org= files are
+documents: if two machines change the same one, the worst case is that you
+merge two versions by hand. The hidden =.git= folder is not a document — it is
+a database that Git assumes only Git is writing to, on this machine, right now.
+
+A cloud syncer does not know that. It replicates =.git= between your machines
+like any other folder, and when both machines have written to it (which they do
+constantly — every commit, every fetch), it does what it always does with a
+collision: it keeps both versions, naming one of them =conflicted copy=.
+
+Inside =.git= that is not a harmless extra file. Git treats every file under
+=.git/refs/heads/= as a branch, so a copy landing there becomes a branch
+literally named:
+
+#+begin_example
+main (Your Name's conflicted copy 2026-08-19)
+#+end_example
+
+and from that moment every Git command fails with =fatal: bad object=. Copies
+of the index, the reflog and the object store are quieter but worse — those can
+lose commits rather than announce themselves.
+
+* What it looks like when it happens
+- The sync indicator goes red and the sync log says
+  =conflicted copies inside the repository=. Sync pauses; it will not clear on
+  its own.
+- Git commands in that folder fail with =fatal: bad object= or
+  =did not send all necessary objects=.
+- Files matching =*conflicted copy*= appear inside =.git=.
+
+This is *not* a merge conflict, and there is nothing to resolve in Magit. Fix
+it by deleting the copies and then removing the cause.
+
+* The fix
+Two ways, both fine. Option 1 is less to set up; option 2 also survives moving
+to a machine where your home folder has a different path.
+
+Do this on *every* machine that has the vault, and quit Emacs on all of them
+first so nothing is syncing while you work.
+
+** Option 1 — tell Dropbox to ignore =.git=
+Dropbox can be told to leave a file alone. On macOS:
+
+#+begin_src bash
+xattr -w com.dropbox.ignored 1 "/path/to/your/vault/.git"
+#+end_src
+
+On Linux:
+
+#+begin_src bash
+attr -s com.dropbox.ignored -V 1 /path/to/your/vault/.git
+#+end_src
+
+On Windows, in PowerShell:
+
+#+begin_src powershell
+Set-Content -Path 'C:\path\to\vault\.git:com.dropbox.ignored' -Value 1
+#+end_src
+
+Each machine then keeps its own private repository, and the two exchange
+history through your remote (GitHub) the way Git is meant to. Dropbox syncs
+only your notes.
+
+*One trap.* Ignoring a folder that Dropbox has already synced makes Dropbox
+delete it from the cloud — and therefore from your other machines. So:
+
+1. On every machine, make sure everything is committed and pushed (=C-x g=, or
+   just let the sync finish and check the indicator shows =✓ Sync=).
+2. On the *first* machine, run the command above. Wait for Dropbox to settle;
+   the folder gets a grey "minus" badge.
+3. On every *other* machine, =.git= will disappear. Do not wait for it to come
+   back — rebuild it from your remote, applying the ignore immediately so it is
+   never uploaded again:
+
+#+begin_src bash
+cd /path/to/your/vault
+git init
+xattr -w com.dropbox.ignored 1 .git      # before anything else
+git remote add origin git@github.com:you/your-notes.git
+git fetch origin
+git reset --mixed origin/main
+#+end_src
+
+=git reset --mixed= keeps every file exactly as it is on disk; it only tells
+Git where you are in the history.
+
+** Option 2 — keep the repository outside the cloud folder
+Move the repository itself somewhere Dropbox never looks, and leave a pointer
+behind. Git supports this natively: =.git= may be a *file* containing a path
+instead of a folder.
+
+#+begin_src bash
+cd /path/to/your/vault
+mv .git ~/.gitrepos/notes-org
+echo "gitdir: $HOME/.gitrepos/notes-org" > .git
+git status                                # confirm it still works
+#+end_src
+
+Dropbox then syncs a one-line text file that is identical on every machine, so
+it can never conflict. Repeat the =mv= on each machine (or rebuild from your
+remote as above), and make sure the path in the =.git= file is one that exists
+on all of them — that is the only requirement, and the reason to prefer this
+option if a machine with a different home folder is in your future.
+
+* Cleaning up after a collision
+Delete the copies — they are copies, not your work:
+
+#+begin_src bash
+cd /path/to/your/vault
+find .git -name "*conflicted copy*" -print -delete
+git fsck                                  # confirm the repository is sound
+#+end_src
+
+Then re-enable syncing from *Productivity → Sync & Version Control → Git Sync
+Enabled*, and do the permanent fix above so it cannot recur.
+
+If =git fsck= reports missing objects rather than harmless "dangling" ones, the
+simplest cure is to rebuild the repository from your remote with the =git init=
+sequence from option 1 — your notes on disk are untouched by any of it.
+
+* Conflicted copies of your notes
+Even with =.git= out of the way, two machines editing the same =.org= file at
+the same time still produce a second file beside the original, named something
+like =Plans (Your Name's conflicted copy 2026-08-19).org=. That is a
+document-level collision, and it is the ordinary, recoverable kind.
+
+This config makes sure such a file can only ever be an inconvenience:
+
+- It is *not* committed — the vault's =.gitignore= excludes the
+  =*conflicted copy*= pattern, so it never enters your history.
+- It is *not* scanned — the agenda ignores it, so it cannot show you a second
+  copy of every task in it.
+- It *is* reported — after each sync the vault is checked, and the indicator
+  shows =⚠ Conflicted Copies= when any exist. Click it for the list.
+
+Merge whatever you need out of the copy and delete it. If you would rather not
+be told, set =ps/git-sync-cloud-copy-regexp= to =nil= (see
+[[file:Customization.org][Customization]]).
+
+* Avoiding them in the first place
+Nothing can prevent a collision between two machines that genuinely both wrote
+the same file — a cloud folder has no locking, and keeping both versions is the
+best it can do. What helps:
+
+- Let Emacs finish saving before you close the lid. Saves here are automatic
+  and near-instant, so this mostly takes care of itself.
+- Prefer one "writing" machine at a time. A machine that is only *reading* your
+  notes never causes a conflict, however long it stays open.
+- Watch the indicator after a machine wakes up. That is when a day's worth of
+  changes arrive at once.
+
+And note the case that /is/ handled for you: if a file changes on disk while
+you have unsaved edits in Emacs, your buffer is never written over it. See
+[[file:Sync-and-backups.org][Sync & backups]].

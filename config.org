@@ -127,6 +127,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-window)
   (require 'ps-links)
   (require 'ps-done)
+  (require 'ps-org-save)
   (require 'ps-git-sync)
   (require 'ps-agenda-emoji)
   (require 'ps-material-icons)
@@ -384,12 +385,18 @@ The two exclusion lists are regexps matched against a *name* (not a path):
 directories matching the first are not descended into at all, and =.org= files
 matching the second are dropped. The defaults skip dotted directories, the
 journal, archives, and the two config files that live in the Org base directory.
+
+The last file entry drops the copies a cloud syncer leaves behind — Dropbox
+writes =Plans (Your Name's conflicted copy 2026-08-19).org= when two machines
+save the same file — so a copy never shows up in the agenda as a duplicate of
+everything in it. It is an unanchored substring because the name and date
+around it vary. See [[file:docs/Dropbox-and-git.org][Dropbox & Git together]].
 #+begin_src emacs-lisp
   (setq ps/org-files-root nil)
   (setq ps/org-files-exclude-directories
         '("\\`\\." "\\`Journal\\'" "\\`Archive\\'"))
   (setq ps/org-files-exclude-files
-        '("\\`init\\.org\\'" "\\`workspace\\.org\\'"))
+        '("\\`init\\.org\\'" "\\`workspace\\.org\\'" "conflicted copy"))
 #+end_src
 
 ** Availability (ps-availability.el)
@@ -707,9 +714,26 @@ active theme's =shadow= face (the =auto= value handled in =ps-done.el=).
 #+end_src
 
 ** Git sync (ps-git-sync.el)
+=ps/git-sync-cloud-copy-regexp= is what a "conflicted copy" looks like: after
+each sync the vault is checked for files whose name matches, and the indicator
+says so when there are any. This matters when the vault is kept in a cloud
+folder *and* in Git — see [[file:docs/Dropbox-and-git.org][Dropbox & Git together]]. Set it to =nil= to stop looking.
 #+begin_src emacs-lisp
   (setq ps/git-sync-interval 60)
   (setq ps/git-sync-timeout 120)
+  (setq ps/git-sync-cloud-copy-regexp "conflicted copy")
+#+end_src
+
+** Org saving (ps-org-save.el)
+Org buffers are saved for you — shortly after you stop typing, when Emacs
+loses focus, and on exit. =ps/org-save-on-focus-loss-idle-threshold= is how
+long Emacs may have been sitting idle before a focus-loss save is skipped as
+not being a deliberate hand-off to another app.
+
+A buffer whose file *also* changed on disk is never saved over; it is listed in
+=Show Files Out of Sync= instead. See [[file:docs/Sync-and-backups.org][Sync & backups]].
+#+begin_src emacs-lisp
+  (setq ps/org-save-on-focus-loss-idle-threshold 300)
 #+end_src
 
 ** Schedule/deadline icons (ps-schedule-icons.el)
@@ -1819,71 +1843,17 @@ The DONE collapse/expand commands themselves live in =lisp/ps-done.el=.
 
 ** Behavior
 *** Auto-save org buffers + auto-revert on disk change
+Org buffers are written for you: shortly after you stop typing, the moment
+Emacs loses focus (which is also how Claude Code comes to see the latest text),
+and just before exit — so the mode line never needs a "modified" flag.
+
+A buffer that has unsaved edits *and* whose file changed on disk is the one
+exception: saving it would write your older text over the newer file that
+arrived from your phone or another machine. Those are skipped and listed in
+=Show Files Out of Sync= (Productivity → Sync & Version Control) instead, where
+you can compare the two and choose. Logic lives in =lisp/ps-org-save.el=.
 #+begin_src emacs-lisp
-  ;; Auto-save all Org buffers
-  ;; https://christiantietze.de/posts/2019/03/sync-emacs-org-files/
-  ;; Save quietly: `org-save-all-org-buffers' echoes "Saving all Org
-  ;; buffers... done" on every auto-save, which both flashes in the echo
-  ;; area and piles up in *Messages* when Emacs runs for days.  Binding
-  ;; `inhibit-message' suppresses the echo-area flash and `message-log-max'
-  ;; nil keeps it out of *Messages*; the save itself is unchanged.
-  (defun ps/org-save-all-org-buffers-quietly ()
-    "Save all Org buffers without echoing/logging the save message."
-    (let ((inhibit-message t) (message-log-max nil))
-      (org-save-all-org-buffers)))
-  (add-hook 'auto-save-hook #'ps/org-save-all-org-buffers-quietly)
-
-  ;; Obsidian-like persistence. The idle auto-save above keeps files current
-  ;; while editing; these two close the remaining gaps so the mode line never
-  ;; needs a "modified" indicator:
-  ;;   - save the moment Emacs loses focus (e.g. switching to another app,
-  ;;     which is also how Claude Code picks up the latest file content), and
-  ;;   - save just before exit, so quitting never prompts "Save buffer?".
-  (defcustom ps/org-save-on-focus-loss-idle-threshold 300
-    "Seconds since the last command above which a focus-loss save is skipped.
-The org files here live on a Dropbox-backed CloudStorage mount; a save
-triggered long after Emacs was last actually used (e.g. a focus event
-generated around system sleep/wake) is exactly when that mount is most
-likely to be slow to respond -- and is not a deliberate hand-off to another
-app, since nothing has happened in Emacs for a while anyway. Skipping it
-there avoids blocking all of Emacs on that write; the next real save (the
-periodic auto-save-hook one above, or a later focus-loss save) still covers
-it."
-    :type 'number)
-
-  (defvar ps/org-save--last-command-time (float-time)
-    "`float-time' of the most recent command Emacs processed.
-Compared against `ps/org-save-on-focus-loss-idle-threshold' by
-`ps/org-save-on-focus-loss' -- more direct than `current-idle-time', which
-is not reliably meaningful from inside a focus-change callback.")
-  (add-hook 'post-command-hook
-            (lambda () (setq ps/org-save--last-command-time (float-time))))
-
-  (defun ps/org-save--any-org-buffer-modified-p ()
-    "Non-nil if any live Org buffer has unsaved changes."
-    (seq-some (lambda (b)
-                (and (buffer-modified-p b)
-                     (with-current-buffer b (derived-mode-p 'org-mode))))
-              (buffer-list)))
-
-  (defun ps/org-save-on-focus-loss ()
-    "Save all Org buffers when Emacs loses focus.
-Skipped outright when nothing is modified, or when Emacs has been idle
-longer than `ps/org-save-on-focus-loss-idle-threshold' (see its docstring).
-The save itself is bounded by a timeout and never lets an error escape, so a
-slow or failing save cannot take the rest of `after-focus-change-function'
--- e.g. `ps/scrollbar--on-focus-change' -- down with it."
-    (unless (frame-focus-state)
-      (when (and (ps/org-save--any-org-buffer-modified-p)
-                 (< (- (float-time) ps/org-save--last-command-time)
-                    ps/org-save-on-focus-loss-idle-threshold))
-        (with-timeout (5 (message "ps/org-save-on-focus-loss: timed out, skipped"))
-          (condition-case err
-              (ps/org-save-all-org-buffers-quietly)
-            (error (message "ps/org-save-on-focus-loss: %S" err)))))))
-  (add-function :after after-focus-change-function #'ps/org-save-on-focus-loss)
-  (advice-add 'save-buffers-kill-emacs :before
-              (lambda (&rest _) (ps/org-save-all-org-buffers-quietly)))
+  (ps/org-save-setup)
 
   ;; Automatically revert buffers when files change on disk.
   ;; Rely on file-system notifications instead of the default ~5s polling
@@ -2921,6 +2891,11 @@ calendar boundary containing the start day (e.g. the whole current week)."
         :active (ps/vault-git-repo-p)
         :keys "C-c p s"]
        ["Show Sync Log"     ps/git-sync-show-log t]
+       ;; Enabled only when something has actually diverged: the report is
+       ;; about a situation, not a place you go to look around.
+       ["Show Files Out of Sync" ps/org-save-show-stale
+        :active (and (fboundp 'ps/org-save-stale-buffers)
+                     (ps/org-save-stale-buffers))]
        ["Magit Status"      magit-status       :keys "C-x g"])
       ("Layout & Navigation"
        ["Focus Current Buffer"      delete-other-windows     :keys "C-x 1"]

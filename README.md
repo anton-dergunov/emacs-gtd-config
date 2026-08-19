@@ -175,6 +175,9 @@ Jump straight to:
   and settings
 - [AI integration (Claude Code)](docs/AI-integration.org) — the optional
   assistant and how to guide it with `AGENTS.md`
+- [Dropbox & Git together](docs/Dropbox-and-git.org) — keeping your notes in a
+  cloud folder *and* in Git: the one setup step that stops the two from
+  corrupting each other
 
 ## Developing
 
