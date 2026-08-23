@@ -25,6 +25,26 @@ selected in your Org files — select a few lines and ask about "this", and it
 knows what you mean. It can also open files, show you diffs, and report Emacs
 diagnostics.
 
+The usual flow works as you would expect it to: select some lines, click into
+the assistant's window, and ask. What it receives is the file's name, the line
+numbers, and the selected lines themselves. Two details are worth knowing:
+
+- *It is sent once, not with every message.* Asking a follow-up without going
+  back to your file does not attach the same lines again — they are already
+  part of the conversation. Selecting something else and returning to the
+  assistant sends the new selection.
+- *Very large selections are not pasted in.* Past =ps/claude-selection-max-lines=
+  (500) or =ps/claude-selection-max-chars= (20000), only the file is reported
+  and the assistant reads it itself.
+
+With nothing selected, it is simply told which file you are in — including
+right after you start a session, so the first question can say "this file".
+
+If it ever answers that it cannot see your selection, set
+=ps/claude-debug-selection= to =t=, reproduce it once, and look at the log named
+by =ps/claude-debug-resize-file=: it records every selection sent and every one
+skipped, with the reason.
+
 * Reviewing proposed edits
 Changes the assistant wants to make are shown as an Emacs diff (Ediff) so you
 can step through them and accept or reject. Your mouse pointer is left where
@@ -122,7 +142,9 @@ Module: =lisp/ps-claude.el=. Settings block: =config.org= → /Package Managemen
 → Claude Code (ps-claude.el)/ — =ps/claude-window-width=,
 =ps/claude-resize-debounce-delay=, =ps/claude-reanchor-delay=,
 =ps/claude-resize-throttle-interval=, =ps/claude-no-exit-prompt=,
-=ps/claude-debug-resize=.
+=ps/claude-debug-resize=, =ps/claude-selection-max-lines=,
+=ps/claude-selection-max-chars=, =ps/claude-selection-connect-delay=,
+=ps/claude-debug-selection=.
 
 * Quitting Emacs with a session running
 Emacs normally asks to confirm before killing running processes, which a live

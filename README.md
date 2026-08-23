@@ -39,6 +39,9 @@ setup or borrow pieces for your own.
   live.
 - **Modern scrollbars** — an auto-hiding, theme-coloured scroll-position
   indicator, plus smooth pixel scrolling.
+- **Selection you can see** — selected text is tinted instead of repainted, so
+  headings and TODO pills keep their colours, and it stays visible in a paler
+  shade when you move to another window.
 - **Blank-line recovery** — mobile Org apps throw away the blank lines you put
   in your files. One command finds the last version that still had them, works
   out where they belong in the file as it is now, and shows you what it would

@@ -600,5 +600,220 @@ it -- this was the one process still blocking exit."
   (should (equal (ps/claude--eat-geometry-string '(80 24 nil nil 500 nil))
                  "eat=80x24 win=nilxnil pmax=500 db=nil")))
 
+;;; The editor selection Claude is told about
+
+(defun ps/claude-test--selection (payload key &rest path)
+  "Return PAYLOAD's KEY, descending through PATH inside the selection."
+  (let ((value (alist-get key payload)))
+    (dolist (step path value)
+      (setq value (alist-get step value)))))
+
+(ert-deftest ps/claude-test-position-is-zero-based ()
+  "Lines and characters are 0-based, as the protocol (VS Code's) expects."
+  (with-temp-buffer
+    (insert "first line\nsecond line\nthird line\n")
+    ;; Start of the buffer.
+    (should (equal (ps/claude--position (point-min)) '(0 . 0)))
+    ;; Third character of the second line.
+    (goto-char (point-min))
+    (forward-line 1)
+    (should (equal (ps/claude--position (+ (point) 2)) '(1 . 2)))))
+
+(ert-deftest ps/claude-test-selection-params-shape ()
+  "The payload matches the schema the CLI parses."
+  (let ((payload (ps/claude--selection-params "/tmp/a.org" '(3 . 0) '(5 . 7) "body")))
+    (should (equal (alist-get 'text payload) "body"))
+    (should (equal (alist-get 'filePath payload) "/tmp/a.org"))
+    (should (equal (ps/claude-test--selection payload 'selection 'start 'line) 3))
+    (should (equal (ps/claude-test--selection payload 'selection 'start 'character) 0))
+    (should (equal (ps/claude-test--selection payload 'selection 'end 'line) 5))
+    (should (equal (ps/claude-test--selection payload 'selection 'end 'character) 7))))
+
+(ert-deftest ps/claude-test-current-selection-reports-the-region ()
+  "An active region is reported with its text and 0-based bounds."
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\nfour\n")
+    (goto-char (point-min))
+    (forward-line 1)
+    (set-mark (point))
+    (forward-line 2)
+    (activate-mark)
+    (let* ((ps/claude--region-snapshot nil)
+           (payload (ps/claude--current-selection)))
+      (should (equal (alist-get 'text payload) "two\nthree\n"))
+      (should (equal (ps/claude-test--selection payload 'selection 'start 'line) 1))
+      ;; A whole-line selection ends at column 0 of the following line, which
+      ;; is what keeps the CLI's own line count right.
+      (should (equal (ps/claude-test--selection payload 'selection 'end 'line) 3))
+      (should (equal (ps/claude-test--selection payload 'selection 'end 'character) 0)))))
+
+(ert-deftest ps/claude-test-current-selection-without-a-region ()
+  "With no region the payload carries the cursor and no text."
+  (with-temp-buffer
+    (insert "one\ntwo\n")
+    (goto-char (point-min))
+    (forward-line 1)
+    (let* ((ps/claude--region-snapshot nil)
+           (payload (ps/claude--current-selection)))
+      (should (equal (alist-get 'text payload) ""))
+      (should (equal (ps/claude-test--selection payload 'selection 'start 'line) 1))
+      (should (equal (ps/claude-test--selection payload 'selection 'end 'line) 1)))))
+
+(ert-deftest ps/claude-test-current-selection-uses-the-snapshot ()
+  "A collapsed region still reports the last one seen in that buffer."
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\n")
+    (let* ((ps/claude--region-snapshot (cons 5 (point-max)))
+           (payload (ps/claude--current-selection)))
+      (should (equal (alist-get 'text payload) "two\nthree\n")))))
+
+(ert-deftest ps/claude-test-snapshot-bounds-are-validated ()
+  "A snapshot pointing outside the buffer is ignored rather than signalling."
+  (with-temp-buffer
+    (insert "short\n")
+    (let ((ps/claude--region-snapshot (cons 2 900)))
+      (should-not (ps/claude--snapshot-bounds)))
+    (let ((ps/claude--region-snapshot (cons 5 2)))
+      (should-not (ps/claude--snapshot-bounds)))
+    (let ((ps/claude--region-snapshot (cons 1 4)))
+      (should (equal (ps/claude--snapshot-bounds) (cons 1 4))))))
+
+(ert-deftest ps/claude-test-track-region-clears-the-snapshot ()
+  "Deselecting in the buffer drops the remembered region."
+  (with-temp-buffer
+    (insert "one\ntwo\n")
+    (let ((my-org-base-directory "/tmp/vault/")
+          (buffer-file-name "/tmp/vault/plan.org"))
+      (goto-char (point-min))
+      (set-mark (point))
+      (goto-char (point-max))
+      (activate-mark)
+      (ps/claude--track-region)
+      (should ps/claude--region-snapshot)
+      (deactivate-mark)
+      (ps/claude--track-region)
+      (should-not ps/claude--region-snapshot))))
+
+(ert-deftest ps/claude-test-track-region-ignores-other-buffers ()
+  "A buffer outside the Org base never becomes the resend target."
+  (with-temp-buffer
+    (let ((my-org-base-directory "/tmp/vault/")
+          (buffer-file-name "/tmp/elsewhere/notes.org")
+          (ps/claude--last-file-buffer 'unchanged))
+      (ps/claude--track-region)
+      (should (eq ps/claude--last-file-buffer 'unchanged)))))
+
+(ert-deftest ps/claude-test-oversized-selection-degrades-to-the-file ()
+  "Past the size cap the file is reported without pasting the region."
+  (with-temp-buffer
+    (dotimes (i 40) (insert (format "line %d\n" i)))
+    (let ((ps/claude-selection-max-lines 10)
+          (ps/claude-selection-max-chars 100000)
+          (ps/claude--region-snapshot (cons (point-min) (point-max))))
+      (should (equal (alist-get 'text (ps/claude--current-selection)) "")))
+    (let ((ps/claude-selection-max-lines 1000)
+          (ps/claude-selection-max-chars 10)
+          (ps/claude--region-snapshot (cons (point-min) (point-max))))
+      (should (equal (alist-get 'text (ps/claude--current-selection)) "")))
+    (let ((ps/claude-selection-max-lines 1000)
+          (ps/claude-selection-max-chars 100000)
+          (ps/claude--region-snapshot (cons (point-min) (point-max))))
+      (should-not (equal (alist-get 'text (ps/claude--current-selection)) "")))))
+
+(ert-deftest ps/claude-test-cli-reconstructs-the-real-line-range ()
+  "The range Claude ends up being told is the range that was selected.
+The CLI reads the payload as VS Code does -- it reports the start line as
+`start.line + 1' and the line count as `end.line - start.line + 1', minus
+one when the selection ends at column 0.  Running that arithmetic here is
+what pins the 0-based conversion: with the package's original 1-based
+payload every range came out one line too high."
+  (with-temp-buffer
+    (insert "one\ntwo\nthree\nfour\nfive\n")
+    ;; Select lines 2 to 4 inclusive, as a whole-line selection.
+    (goto-char (point-min))
+    (forward-line 1)
+    (set-mark (point))
+    (forward-line 3)
+    (activate-mark)
+    (let* ((payload (ps/claude--current-selection))
+           (selection (alist-get 'selection payload))
+           (start (alist-get 'start selection))
+           (end (alist-get 'end selection))
+           (line-start (1+ (alist-get 'line start)))
+           (count (- (alist-get 'line end) (alist-get 'line start)))
+           (count (if (zerop (alist-get 'character end)) count (1+ count)))
+           (line-end (+ line-start count -1)))
+      (should (equal line-start 2))
+      (should (equal line-end 4))
+      (should (equal (alist-get 'text payload) "two\nthree\nfour\n")))))
+
+(ert-deftest ps/claude-test-resend-needed-p ()
+  "An unchanged selection is resent only after a prompt was submitted."
+  (let ((ps/claude--last-sent '((text . "x")))
+        (ps/claude--panel-input-seen nil))
+    (should-not (ps/claude--resend-needed-p '((text . "x"))))
+    (should (ps/claude--resend-needed-p '((text . "y")))))
+  (let ((ps/claude--last-sent '((text . "x")))
+        (ps/claude--panel-input-seen t))
+    (should (ps/claude--resend-needed-p '((text . "x"))))))
+
+(ert-deftest ps/claude-test-note-sent-selection ()
+  "Recording a sent selection also clears the submitted-prompt flag."
+  (let ((ps/claude--last-sent nil)
+        (ps/claude--panel-input-seen t))
+    (ps/claude--note-sent-selection "selection_changed" '((text . "x")))
+    (should (equal ps/claude--last-sent '((text . "x"))))
+    (should-not ps/claude--panel-input-seen))
+  ;; Other notifications leave the state alone.
+  (let ((ps/claude--last-sent 'kept)
+        (ps/claude--panel-input-seen t))
+    (ps/claude--note-sent-selection "notifications/tools/list_changed" nil)
+    (should (eq ps/claude--last-sent 'kept))
+    (should ps/claude--panel-input-seen)))
+
+(ert-deftest ps/claude-test-note-panel-input ()
+  "Only RET counts as submitting a prompt."
+  (let ((ps/claude--panel-input-seen nil)
+        (last-command-event ?a))
+    (ps/claude--note-panel-input)
+    (should-not ps/claude--panel-input-seen)
+    (setq last-command-event ?\r)
+    (ps/claude--note-panel-input)
+    (should ps/claude--panel-input-seen)))
+
+(ert-deftest ps/claude-test-panel-selected-p ()
+  "Only the selected window showing a session buffer counts."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (progn
+          (should-not (ps/claude--panel-selected-p nil))
+          (should-not (ps/claude--panel-selected-p (selected-window)))
+          (set-window-buffer (selected-window) buf)
+          (should (ps/claude--panel-selected-p (selected-window))))
+      (set-window-buffer (selected-window) (get-buffer-create "*scratch*"))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-selected-window-accepts-a-frame ()
+  "The hook's default value is handed a frame, so a frame must resolve to
+its selected window -- a handler that only understood windows would never
+fire at all."
+  (should (eq (ps/claude--selected-window (selected-frame))
+              (frame-selected-window (selected-frame))))
+  (should (eq (ps/claude--selected-window (selected-window)) (selected-window)))
+  (should-not (ps/claude--selected-window nil)))
+
+(ert-deftest ps/claude-test-resend-target-requires-a-live-buffer ()
+  "A killed or unrelated buffer is never the resend target."
+  (let ((ps/claude--last-file-buffer nil))
+    (should-not (ps/claude--resend-target)))
+  (let ((buf (generate-new-buffer " *ps-claude-target*")))
+    (with-current-buffer buf
+      (setq buffer-file-name "/tmp/vault/plan.org"))
+    (let ((my-org-base-directory "/tmp/vault/")
+          (ps/claude--last-file-buffer buf))
+      (should (eq (ps/claude--resend-target) buf))
+      (kill-buffer buf)
+      (should-not (ps/claude--resend-target)))))
+
 (provide 'test-ps-claude)
 ;;; test-ps-claude.el ends here

@@ -43,7 +43,9 @@ just keep your hands on the home row.
   text goes to the "kill ring".
 - *Yank (paste):* =C-y= yanks the last kill; =M-y= cycles through earlier kills.
 - *Select a region:* set a mark with =C-SPC=, move the cursor, then act on the
-  highlighted region (=C-w= to cut, =M-w= to copy).
+  highlighted region (=C-w= to cut, =M-w= to copy). A selection stays put when
+  you move to another window, shown in a paler colour — see
+  [[file:Customization.org][Customization & appearance]].
 - The usual =Cmd/Ctrl-C= / =Cmd/Ctrl-V= often work too, depending on your build.
 
 * Files

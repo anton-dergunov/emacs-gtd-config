@@ -151,6 +151,7 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (require 'ps-task-count)
   (require 'ps-heading-stars)
   (require 'ps-scrollbar)
+  (require 'ps-selection)
   (require 'ps-emphasis)
   (require 'ps-appear)
   (require 'ps-tags)
@@ -507,6 +508,22 @@ number outright.
                                              (10 . 2) (20 . 3) (50 . 7) (100 . 14)
                                              (200 . 30) (500 . 90) (1000 . 365))
         ps/blank-lines-review-side-by-side  t)
+#+end_src
+
+** Selection (ps-selection.el)
+How selected text is drawn. =ps/selection-pale= is how far the theme's own
+selection colour is washed toward the page background (0.0 keeps the theme's
+colour, 1.0 makes it invisible); =ps/selection-inactive-pale= is the same for a
+selection whose window is no longer focused, which stays visible instead of
+vanishing -- set =ps/selection-show-inactive= to nil to leave those windows
+blank as stock Emacs does. =ps/selection-keep-foreground= restores the theme's
+habit of repainting the text inside a selection (which is what turns TODO pills
+inside out); off by default.
+#+begin_src emacs-lisp
+  (setq ps/selection-pale 0.7
+        ps/selection-inactive-pale 0.85
+        ps/selection-show-inactive t
+        ps/selection-keep-foreground nil)
 #+end_src
 
 ** Scroll bars (ps-scrollbar.el)
@@ -999,6 +1016,15 @@ is a safety ceiling on how long a burst can keep the panel's lines clipped
 settles. =ps/claude-no-exit-prompt= lets Emacs quit without asking to confirm
 killing a running session. =ps/claude-debug-resize= appends troubleshooting
 detail to =ps/claude-debug-resize-file=; leave it off otherwise.
+
+The assistant is also told which file you are in and which lines you selected.
+=ps/claude-selection-max-lines= and =ps/claude-selection-max-chars= bound how
+big a selection is sent as text -- past either limit only the file is
+reported, since there is no way to name a range without its content and
+Claude can read the file itself. =ps/claude-selection-connect-delay= is how
+long to wait after a session connects before telling it what is selected (it
+only starts listening once connected). =ps/claude-debug-selection= logs each
+selection sent, and each one skipped, to =ps/claude-debug-resize-file=.
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
         ps/claude-resize-debounce-delay 0.3
@@ -1007,7 +1033,11 @@ detail to =ps/claude-debug-resize-file=; leave it off otherwise.
         ps/claude-resize-burst-gap 0.15
         ps/claude-drag-clip-max-duration 2.0
         ps/claude-no-exit-prompt t
-        ps/claude-debug-resize nil)
+        ps/claude-debug-resize nil
+        ps/claude-selection-max-lines 500
+        ps/claude-selection-max-chars 20000
+        ps/claude-selection-connect-delay 1.5
+        ps/claude-debug-selection nil)
 #+end_src
 
 ** AI context sync (ps-ai-context.el)
@@ -1348,6 +1378,16 @@ themes; any other theme loads cleanly without it.
   ;; fully set up fixes the background without affecting already-correct themes.
   (add-hook 'window-setup-hook
             (lambda () (load-theme ps/color-theme t)))
+#+end_src
+
+** Selection
+Selected text keeps the theme's selection hue but washed toward the page, so
+the text under it keeps its own colours instead of being repainted -- and a
+selection stays visible, dimmed, after you move to another window. Runs after
+the theme is loaded and re-derives its colours whenever the theme changes; see
+/Settings -> Selection (ps-selection.el)/.
+#+begin_src emacs-lisp
+  (ps/selection-setup)
 #+end_src
 
 ** Live theme preview

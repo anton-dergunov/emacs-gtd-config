@@ -116,7 +116,33 @@
 ;;   (setq claude-code-ide-prevent-reflow-glitch nil)
 ;; The resync hook below is harmless either way and can stay.
 ;;
-;; 10. `eat's interactive keymaps redirect most keys straight to the
+;; 10. The editor selection reaches Claude as a `selection_changed'
+;;     notification carrying the file, the selected text and its start/end
+;;     positions; the CLI turns a *non-empty* text into its "selected lines"
+;;     context block and an empty one into a plain "this file is open" block.
+;;     Three things kept that from working here.  (a) Positions: the package
+;;     sends 1-based lines and columns, but the protocol is VS Code's and the
+;;     CLI adds one to the start line, so every range Claude was told about
+;;     was one line too high -- `ps/claude--current-selection' replaces the
+;;     payload builder with a 0-based one.  (b) Nothing was sent when a
+;;     session connects, so the first prompt did not know which file was
+;;     open.  (c) The CLI *clears* what it holds after every prompt you
+;;     submit, while the package only sends on change -- so from the second
+;;     prompt on it had nothing at all, which is why asking about a selection
+;;     was answered with "no selection was passed" even though the panel's
+;;     footer still showed one.  We therefore re-assert the current selection
+;;     when a session connects and whenever the panel window becomes the
+;;     selected one -- the last moment before a prompt is typed.  A resend is
+;;     skipped when the payload is unchanged *and* no prompt has been
+;;     submitted since it was last sent (`ps/claude--panel-input-seen'), so
+;;     follow-up prompts typed without leaving the panel never re-attach the
+;;     same lines.  Finally, a region is easy to lose on the way to the panel
+;;     (any scroll that moves point past it collapses it), so the last
+;;     non-empty region of a file buffer is remembered and used when the live
+;;     one is gone; the snapshot is dropped as soon as a command runs in that
+;;     buffer with no region, which is what an explicit deselect looks like.
+;;
+;; 11. `eat's interactive keymaps redirect most keys straight to the
 ;;     underlying process, but their `:ascii' category (see
 ;;     `eat-term-make-keymap') only covers the control-character range plus
 ;;     a remap of `self-insert-command' -- it never touches Super-modified
@@ -140,6 +166,9 @@
 (declare-function claude-code-ide--sync-terminal-dimensions "claude-code-ide")
 (declare-function claude-code-ide--get-working-directory "claude-code-ide")
 (declare-function claude-code-ide-mcp--get-buffer-project "claude-code-ide-mcp")
+(declare-function claude-code-ide-mcp--send-notification "claude-code-ide-mcp")
+(declare-function claude-code-ide-mcp--on-open "claude-code-ide-mcp")
+(declare-function claude-code-ide-mcp--get-current-selection "claude-code-ide-mcp")
 (declare-function claude-code-ide-mcp--create-diff-buffers "claude-code-ide-mcp-handlers")
 (declare-function claude-code-ide-mcp-handle-open-file "claude-code-ide-mcp-handlers")
 (declare-function eat--process-output-queue "eat")
@@ -220,6 +249,37 @@ Dropbox-backed org tree) so logging cannot block on that mount."
   :type 'file
   :group 'claude-code-ide)
 
+(defcustom ps/claude-debug-selection nil
+  "When non-nil, log what is sent to Claude about the editor selection.
+Records each selection sent (file, range, size) and each resend that was
+skipped and why, into `ps/claude-debug-resize-file'.  Off by default; turn
+it on only to diagnose Claude not seeing the file or lines you selected."
+  :type 'boolean
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-selection-max-lines 500
+  "Largest selection, in lines, sent to Claude as text.
+The protocol has no way to name a range without its content, so a larger
+selection is reported as \"this file is open\" instead of pasting the whole
+region into every prompt.  Claude can read the file itself."
+  :type 'integer
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-selection-max-chars 20000
+  "Largest selection, in characters, sent to Claude as text.
+The companion of `ps/claude-selection-max-lines': whichever limit is
+reached first turns the selection into a plain \"this file is open\"
+report."
+  :type 'integer
+  :group 'claude-code-ide)
+
+(defcustom ps/claude-selection-connect-delay 1.5
+  "Seconds after a session connects before its first selection is sent.
+The CLI only starts listening for editor updates once it has finished
+connecting, so a notification sent immediately would be dropped."
+  :type 'number
+  :group 'claude-code-ide)
+
 (defvar ps/claude--resize-timer nil
   "Pending timer for the next terminal-size resync, or nil.")
 
@@ -229,26 +289,35 @@ Dropbox-backed org tree) so logging cannot block on that mount."
 (defvar ps/claude--last-reflow-time nil
   "Time of the last non-throttled terminal reflow, or nil.")
 
-(defun ps/claude--debug-log (format-string &rest args)
-  "Append FORMAT-STRING/ARGS to the resize log when debugging is enabled.
+(defun ps/claude--write-log (tag format-string args)
+  "Append FORMAT-STRING/ARGS to the debug log under TAG.
 Reuses `ps-freeze-log's pure formatting helpers when that module is loaded
 so timestamps match across logs, and falls back to a plain stamp otherwise.
 Never signals -- diagnostics must not become their own source of failures."
+  (ignore-errors
+    (let* ((message (apply #'format format-string args))
+           (line (if (and (fboundp 'ps/freeze-log--timestamp)
+                          (fboundp 'ps/freeze-log--format-line))
+                     (ps/freeze-log--format-line
+                      (ps/freeze-log--timestamp) tag message)
+                   (format "%s [%s] %s\n"
+                           (format-time-string "%Y-%m-%d %H:%M:%S") tag message)))
+           (write-region-inhibit-fsync nil)
+           (coding-system-for-write 'utf-8-unix)
+           (inhibit-message t)
+           (message-log-max nil))
+      (make-directory (file-name-directory ps/claude-debug-resize-file) t)
+      (write-region line nil ps/claude-debug-resize-file 'append 'silent))))
+
+(defun ps/claude--debug-log (format-string &rest args)
+  "Append FORMAT-STRING/ARGS to the resize log when debugging is enabled."
   (when ps/claude-debug-resize
-    (ignore-errors
-      (let* ((message (apply #'format format-string args))
-             (line (if (and (fboundp 'ps/freeze-log--timestamp)
-                            (fboundp 'ps/freeze-log--format-line))
-                       (ps/freeze-log--format-line
-                        (ps/freeze-log--timestamp) 'claude-resize message)
-                     (format "%s [claude-resize] %s\n"
-                             (format-time-string "%Y-%m-%d %H:%M:%S") message)))
-             (write-region-inhibit-fsync nil)
-             (coding-system-for-write 'utf-8-unix)
-             (inhibit-message t)
-             (message-log-max nil))
-        (make-directory (file-name-directory ps/claude-debug-resize-file) t)
-        (write-region line nil ps/claude-debug-resize-file 'append 'silent)))))
+    (ps/claude--write-log 'claude-resize format-string args)))
+
+(defun ps/claude--selection-log (format-string &rest args)
+  "Append FORMAT-STRING/ARGS to the log when selection debugging is enabled."
+  (when ps/claude-debug-selection
+    (ps/claude--write-log 'claude-selection format-string args)))
 
 (defun ps/claude--session-buffer-p (buffer-or-name)
   "Return non-nil if BUFFER-OR-NAME is a Claude Code session buffer.
@@ -581,6 +650,177 @@ the Org base fall through to ORIG-FN unchanged."
       (expand-file-name my-org-base-directory)
     (apply orig-fn args)))
 
+;;; The editor selection Claude is told about (fix #10)
+
+(defvar-local ps/claude--region-snapshot nil
+  "Bounds (START . END) of the last active region in this buffer, or nil.
+Kept so that a selection which the editor has since collapsed -- scrolling
+past it moves point, which moves the region's end -- can still be reported
+to Claude.  Cleared as soon as a command runs in this buffer with no region,
+which is what deselecting looks like.")
+
+(defvar ps/claude--last-file-buffer nil
+  "Last file buffer under the Org base that had point, or nil.
+The buffer a resend reports from: by the time the panel is focused the
+current buffer is the panel itself.")
+
+(defvar ps/claude--last-sent nil
+  "The last `selection_changed' payload handed to Claude, or nil.")
+
+(defvar ps/claude--panel-input-seen nil
+  "Non-nil once a prompt has been submitted since the last selection was sent.
+The CLI discards what it knows about the editor after every submitted
+prompt, so an unchanged selection has to be sent again -- but only then.")
+
+(defun ps/claude--position (pos)
+  "Return the 0-based (LINE . CHARACTER) of POS in the current buffer.
+The protocol is VS Code's, where both are 0-based; Org buffers are
+character-addressed, so CHARACTER counts characters from the line start
+rather than display columns."
+  (save-excursion
+    (goto-char pos)
+    (cons (1- (line-number-at-pos pos))
+          (- pos (line-beginning-position)))))
+
+(defun ps/claude--selection-params (file-path start end text)
+  "Build the `selection_changed' params for FILE-PATH.
+START and END are 0-based (LINE . CHARACTER) conses and TEXT the selected
+string (empty when there is no selection).  Pure."
+  `((text . ,text)
+    (filePath . ,file-path)
+    (selection . ((start . ((line . ,(car start))
+                            (character . ,(cdr start))))
+                  (end . ((line . ,(car end))
+                          (character . ,(cdr end))))))))
+
+(defun ps/claude--selection-too-large-p (start end)
+  "Non-nil if the region from START to END is too big to send as text."
+  (or (> (- end start) ps/claude-selection-max-chars)
+      (> (count-lines start end) ps/claude-selection-max-lines)))
+
+(defun ps/claude--snapshot-bounds ()
+  "Return this buffer's remembered region bounds if they are still valid."
+  (pcase ps/claude--region-snapshot
+    (`(,start . ,end)
+     (and (integerp start) (integerp end)
+          (<= (point-min) start) (< start end) (<= end (point-max))
+          (cons start end)))))
+
+(defun ps/claude--selection-bounds ()
+  "Return the (START . END) this buffer should report, or nil for none.
+The live region wins; the remembered one stands in when the editor has
+collapsed it."
+  (if (use-region-p)
+      (cons (region-beginning) (region-end))
+    (ps/claude--snapshot-bounds)))
+
+(defun ps/claude--current-selection ()
+  "Return the `selection_changed' params for the current buffer.
+Overrides `claude-code-ide-mcp--get-current-selection', whose payload is
+1-based -- one line off, since the CLI reads it as VS Code's 0-based
+positions -- and which knows nothing about a region the editor has since
+collapsed.  An oversized selection degrades to the cursor position, which
+the CLI reports as \"this file is open\"."
+  (let* ((file-path (or (buffer-file-name) ""))
+         (bounds (ps/claude--selection-bounds))
+         (sendable (and bounds (not (ps/claude--selection-too-large-p
+                                     (car bounds) (cdr bounds))))))
+    (if sendable
+        (ps/claude--selection-params
+         file-path
+         (ps/claude--position (car bounds))
+         (ps/claude--position (cdr bounds))
+         (buffer-substring-no-properties (car bounds) (cdr bounds)))
+      (let ((position (ps/claude--position (if bounds (car bounds) (point)))))
+        (ps/claude--selection-params file-path position position "")))))
+
+(defun ps/claude--track-region ()
+  "Remember this buffer and its region for a later resend.
+Runs from `post-command-hook', so it only ever sees the buffer the user is
+actually working in."
+  (when (ps/claude--buffer-under-org-base-p)
+    (setq ps/claude--last-file-buffer (current-buffer))
+    (setq ps/claude--region-snapshot
+          (when (use-region-p)
+            (cons (region-beginning) (region-end))))))
+
+(defun ps/claude--note-sent-selection (method params)
+  "Record PARAMS as the last selection sent when METHOD is a selection change.
+Added as advice on the package's own notification sender, so a selection it
+sends counts as much as one we send ourselves."
+  (when (equal method "selection_changed")
+    (setq ps/claude--last-sent params
+          ps/claude--panel-input-seen nil)))
+
+(defun ps/claude--resend-needed-p (payload)
+  "Non-nil if PAYLOAD has to be sent to Claude again.
+Either it differs from what Claude was last told, or a prompt has been
+submitted since -- which is when the CLI discards what it knew.  Pure given
+`ps/claude--last-sent' and `ps/claude--panel-input-seen'."
+  (or ps/claude--panel-input-seen
+      (not (equal payload ps/claude--last-sent))))
+
+(defun ps/claude--resend-target ()
+  "Return the buffer a resend should report from, or nil."
+  (and (buffer-live-p ps/claude--last-file-buffer)
+       (with-current-buffer ps/claude--last-file-buffer
+         (and (ps/claude--buffer-under-org-base-p) (current-buffer)))))
+
+(defun ps/claude--resend-selection (reason)
+  "Tell Claude about the current file and selection again, because REASON."
+  (when (fboundp 'claude-code-ide-mcp--send-notification)
+    (if-let ((buffer (ps/claude--resend-target)))
+        (with-current-buffer buffer
+          (let ((payload (ps/claude--current-selection)))
+            (if (not (ps/claude--resend-needed-p payload))
+                (ps/claude--selection-log "%s: unchanged, not resent" reason)
+              (ps/claude--selection-log
+               "%s: %s lines %s-%s, %d chars of text"
+               reason (buffer-name)
+               (1+ (alist-get 'line (alist-get 'start (alist-get 'selection payload))))
+               (1+ (alist-get 'line (alist-get 'end (alist-get 'selection payload))))
+               (length (alist-get 'text payload)))
+              (claude-code-ide-mcp--send-notification "selection_changed" payload))))
+      (ps/claude--selection-log "%s: no file buffer to report from" reason))))
+
+(defun ps/claude--panel-selected-p (window)
+  "Non-nil if WINDOW is the selected window and shows a Claude session."
+  (and (window-live-p window)
+       (eq window (selected-window))
+       (ps/claude--session-buffer-p (window-buffer window))))
+
+(defun ps/claude--selected-window (frame-or-window)
+  "Return the window FRAME-OR-WINDOW stands for, or nil.
+`window-selection-change-functions' hands its *default* value a frame --
+only a buffer-local registration is handed a window -- so a handler that
+assumed a window would never fire at all."
+  (cond ((framep frame-or-window) (frame-selected-window frame-or-window))
+        ((window-live-p frame-or-window) frame-or-window)))
+
+(defun ps/claude--on-window-selection-change (frame-or-window)
+  "Re-assert the selection when the panel becomes the selected window.
+This is the last moment before a prompt is typed, and the CLI has usually
+discarded what it knew by now (it does so after every prompt).  Deferred
+onto a timer because this runs from redisplay."
+  (when (ps/claude--panel-selected-p
+         (ps/claude--selected-window frame-or-window))
+    (run-with-timer 0 nil #'ps/claude--resend-selection "panel focused")))
+
+(defun ps/claude--note-panel-input ()
+  "Note that a prompt was probably just submitted in this panel.
+Buffer-local `post-command-hook' entry in session buffers: RET is the
+CLI's submit key, and submitting is what makes it forget the editor state."
+  (when (memq last-command-event '(?\r ?\n return))
+    (setq ps/claude--panel-input-seen t)))
+
+(defun ps/claude--on-session-connected (&rest _)
+  "Send the current file and selection once a new session has connected.
+Without this the first prompt of a session does not know which file is
+open, since the package only reports changes."
+  (setq ps/claude--panel-input-seen t)
+  (run-with-timer ps/claude-selection-connect-delay nil
+                  #'ps/claude--resend-selection "session connected"))
+
 ;;; Silent reload of stale, unmodified buffers Claude just wrote (fix #5)
 
 (defun ps/claude--revert-stale-unmodified (path)
@@ -765,14 +1005,17 @@ Runs from `eat-mode-hook', which fires for every eat buffer, so each tweak
 is guarded by `ps/claude--session-buffer-p'."
   (when (ps/claude--session-buffer-p (current-buffer))
     (ps/claude--install-mode-line)
-    (ps/claude--suppress-terminal-exit-query)))
+    (ps/claude--suppress-terminal-exit-query)
+    (add-hook 'post-command-hook #'ps/claude--note-panel-input nil t)))
 
 (defun ps/claude-setup ()
   "Apply Claude Code IDE window-size, working-directory and reliability tweaks.
 Sets `claude-code-ide-window-width' from `ps/claude-window-width', installs
 the debounced resize-resync/re-anchor hook and the drag reflow throttle,
 pins the working directory and project key to `my-org-base-directory',
-silences the post-write \"Reread from disk?\" race for unmodified buffers,
+keeps Claude told about the open file and the selected lines (see fix #10
+in the Commentary), silences the post-write \"Reread from disk?\" race for
+unmodified buffers,
 guards eat's output timer against transient `args-out-of-range' glitches,
 docks the panel `right'/`bottom' to match the frame's current shape,
 installs the per-buffer mode line, binds Cmd-V to send pasted text to the
@@ -784,6 +1027,15 @@ when Emacs quits.  Idempotent."
               :override #'ps/claude--working-directory)
   (advice-add 'claude-code-ide-mcp--get-buffer-project
               :around #'ps/claude--buffer-project-advice)
+  (advice-add 'claude-code-ide-mcp--get-current-selection
+              :override #'ps/claude--current-selection)
+  (advice-add 'claude-code-ide-mcp--send-notification
+              :after #'ps/claude--note-sent-selection)
+  (advice-add 'claude-code-ide-mcp--on-open
+              :after #'ps/claude--on-session-connected)
+  (add-hook 'post-command-hook #'ps/claude--track-region)
+  (add-hook 'window-selection-change-functions
+            #'ps/claude--on-window-selection-change)
   (advice-add 'claude-code-ide-mcp--create-diff-buffers
               :before #'ps/claude--diff-revert-advice)
   (advice-add 'claude-code-ide-mcp-handle-open-file

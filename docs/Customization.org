@@ -275,6 +275,32 @@ Change the maximum width, in characters, in =config.org= → /Settings →
 Reading width/ (=ps/prose-width-columns=); set it to =0= to turn margins off
 entirely.
 
+* Selected text
+Selecting text tints it rather than repainting it: the theme's own selection
+colour is washed toward the page background, so headings, links and TODO pills
+keep their own colours under a selection instead of turning inside out.
+
+A selection also stays visible when you move to another window — the file tree,
+the assistant's panel, a second file — drawn in a paler shade to show it is not
+the window you are working in. Stock Emacs draws the region only in the window
+you are in, which makes a selection look like it was thrown away; it never was,
+and going back would show it again.
+
+Both shades are derived from whichever theme you load, and re-derived when you
+change the theme, so there is nothing to re-tune after switching. To make a
+selection stronger or fainter, lower or raise =ps/selection-pale= (and
+=ps/selection-inactive-pale= for the unfocused one) in =config.org= → /Settings
+→ Selection/: 0.0 is the theme's own colour at full strength, 1.0 is invisible.
+Set =ps/selection-show-inactive= to =nil= for stock Emacs behaviour, or
+=ps/selection-keep-foreground= to =t= to let the theme repaint the text inside
+a selection again.
+
+One thing this cannot change: Emacs always keeps the cursor inside the window
+you are looking at, so scrolling far past an active selection drags its end
+along with the cursor. Ask the assistant about a selection before scrolling
+away from it — it is told about the last selection you made, so it still knows
+the lines even when the editor has let go of them.
+
 * Line numbers
 Line numbers show in file buffers and in the Tasks view. In Org buffers they are
 drawn smaller than the text and in a muted colour — the number on the line
@@ -429,6 +455,10 @@ The design rationale is in =design-docs/typo-checker.md=.
   (=ps/prose-width-columns=).
 - Theme machinery and live preview: =config.org= → /Editor & UI/
   (=ps/color-theme=, =ps/preview-theme=).
+- Selected text: =lisp/ps-selection.el=, wired in =config.org= → /Editor & UI →
+  Selection/; settings in =config.org= → /Settings → Selection/
+  (=ps/selection-pale=, =ps/selection-inactive-pale=,
+  =ps/selection-show-inactive=, =ps/selection-keep-foreground=).
 - Line-number gutter width: =config.org= → /Editor & UI → Line numbers/
   (=display-line-numbers-width=).
 - Line-number size and colour in Org buffers: =lisp/ps-line-numbers.el=, wired in
