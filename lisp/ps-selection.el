@@ -25,16 +25,22 @@
 ;;    *derived* from whatever theme is loaded rather than hardcoded, and
 ;;    re-derived whenever the theme changes; blending toward the page
 ;;    background (rather than lightening) is what makes it work on a dark
-;;    theme too.
+;;    theme too.  The wash is then neutralised (`ps/selection-neutral'),
+;;    because a washed colour keeps its hue -- Solarized's blue-grey over a
+;;    cream page lands on a green-grey, which reads as a colour rather than
+;;    as a highlight.
 ;;
 ;; 3. A selection repaints org-modern's TODO and priority pills.  Those two
-;;    faces are drawn with `:inverse-video', which paints the label's text in
-;;    whatever background is *in effect* -- inside a selection that is the
-;;    selection's own colour, so the pill's letters wash out while every
-;;    other pill (tags, dates, DONE) keeps its colours, because those name a
-;;    `:background' outright.  `ps/selection--pin-face' gives the
-;;    inverse-video ones the background they were inheriting, directly, which
-;;    a selection cannot override.
+;;    faces are drawn with `:inverse-video', which does not name the label's
+;;    text colour at all -- it paints the text in whatever background is *in
+;;    effect* at that spot, and inside a selection that is the selection's own
+;;    colour, so the letters vanish while every other pill (tags, dates, DONE)
+;;    stays readable, those naming a `:foreground' outright.  Giving the face
+;;    its inherited background directly is *not* enough (the selection still
+;;    wins the merge), so `ps/selection--flatten-face' resolves the inversion
+;;    instead: it reads the colours the face would have swapped and states
+;;    them plainly, with `:inverse-video' off.  The label then has a real
+;;    foreground of its own, which no selection can take away.
 ;;
 ;; Not fixable here: point must stay visible in the selected window -- an
 ;; Emacs display invariant, which `ultra-scroll' implements faithfully -- so
@@ -85,12 +91,21 @@ strength claims attention it no longer deserves."
   :type 'boolean
   :group 'ps/selection)
 
+(defcustom ps/selection-neutral 1.0
+  "How much of the selection colour's hue to remove, from 0.0 to 1.0.
+Washing a coloured selection toward the page keeps its hue, so Solarized's
+blue-grey ends up green-grey over a cream page.  1.0 leaves a neutral grey
+that reads as a highlight rather than as a colour; 0.0 keeps the theme's
+hue."
+  :type 'number
+  :group 'ps/selection)
+
 (defcustom ps/selection-pinned-faces '(org-modern-todo org-modern-priority)
-  "Faces whose colours must not follow the selection.
-These are drawn with `:inverse-video', which paints their text in whatever
-background is in effect -- inside a selection, the selection's own colour,
-which washes the label out.  Pinning gives each the background it was
-inheriting, directly, where a selection cannot reach it."
+  "Faces whose text colour must not follow the selection.
+These are drawn with `:inverse-video', which never names a text colour --
+it paints the text in whatever background is in effect, which inside a
+selection is the selection's own colour.  Each is rewritten with the
+colours it would have swapped stated plainly instead."
   :type '(repeat face)
   :group 'ps/selection)
 
@@ -109,13 +124,45 @@ wash an already-washed colour a second time.")
 
 ;;; Colours
 
+(defun ps/selection--rgb (color)
+  "Return COLOR as a list of three 0.0-1.0 components, or nil.
+Hex strings are parsed directly rather than through `color-name-to-rgb',
+which quantises to what the *current* display can show -- on a frameless
+Emacs that turns every colour into black, white or a primary, so the
+arithmetic below could not be trusted or tested there.  Named colours still
+go through Emacs, which is the only thing that knows them."
+  (when (stringp color)
+    (if (string-match "\\`#\\([0-9a-fA-F]+\\)\\'" color)
+        (let* ((digits (match-string 1 color))
+               (width (/ (length digits) 3)))
+          (when (and (> width 0) (= (* width 3) (length digits)))
+            (let ((scale (float (1- (expt 16 width)))))
+              (list (/ (string-to-number (substring digits 0 width) 16) scale)
+                    (/ (string-to-number (substring digits width (* 2 width)) 16) scale)
+                    (/ (string-to-number (substring digits (* 2 width)) 16) scale)))))
+      (color-name-to-rgb color))))
+
+(defun ps/selection--neutral (color amount)
+  "Return COLOR with AMOUNT (0.0-1.0) of its colourfulness removed.
+Lightness is preserved, so only the hue goes -- a wash that was faintly
+green becomes the same grey.  Pure."
+  (let ((rgb (ps/selection--rgb color))
+        (share (max 0.0 (min 1.0 (or amount 0.0)))))
+    (if (or (null rgb) (zerop share))
+        color
+      (let* ((hsl (apply #'color-rgb-to-hsl rgb))
+             (drained (color-hsl-to-rgb (nth 0 hsl)
+                                        (* (nth 1 hsl) (- 1.0 share))
+                                        (nth 2 hsl))))
+        (apply #'color-rgb-to-hex (append drained (list 2)))))))
+
 (defun ps/selection--blend (color background fraction)
   "Return COLOR moved FRACTION of the way toward BACKGROUND, as a hex string.
 Returns nil when either colour cannot be read.  Blending toward the page
 rather than lightening is what makes one setting work on light and dark
 themes alike.  Pure."
-  (let ((from (and (stringp color) (color-name-to-rgb color)))
-        (to (and (stringp background) (color-name-to-rgb background)))
+  (let ((from (ps/selection--rgb color))
+        (to (ps/selection--rgb background))
         (amount (max 0.0 (min 1.0 (or fraction 0.0)))))
     (when (and from to)
       (apply #'color-rgb-to-hex
@@ -123,36 +170,66 @@ themes alike.  Pure."
                                from to)
                      (list 2))))))
 
+(defun ps/selection--wash (color background fraction)
+  "Return COLOR washed FRACTION toward BACKGROUND and neutralised."
+  (ps/selection--neutral (ps/selection--blend color background fraction)
+                         ps/selection-neutral))
+
 (defun ps/selection--capture ()
   "Remember the selection colours as the current theme defines them."
   (setq ps/selection--source
         (cons (face-attribute 'region :background nil t)
               (face-attribute 'region :foreground nil t))))
 
-(defun ps/selection--pin-face (face)
-  "Pin FACE's background to the value it inherits, and return non-nil if done.
-An `:inverse-video' face draws its text in the background *in effect*, so
-inside a selection its text takes the selection's colour.  Naming the
-background directly puts it out of the selection's reach.  Our own pin is
-cleared first, so the value read back is always the theme's own and a theme
-change can still move it."
+(defun ps/selection--color-p (color)
+  "Non-nil if COLOR is a colour Emacs can actually paint with."
+  (and (stringp color) (not (string-prefix-p "unspecified" color))))
+
+(defun ps/selection--page-background ()
+  "Return the page background, or nil if this Emacs has no real colours."
+  (let ((background (face-attribute 'default :background nil t)))
+    (if (ps/selection--color-p background)
+        background
+      (let ((parameter (frame-parameter nil 'background-color)))
+        (and (ps/selection--color-p parameter) parameter)))))
+
+(defun ps/selection--flatten-face (face)
+  "State FACE's inverted colours plainly, so a selection cannot repaint it.
+`:inverse-video' names no text colour: the text is painted in whatever
+background is in effect, which inside a selection is the selection's own.
+Reading the two colours it would have swapped and setting them directly
+gives the label a foreground of its own.
+
+Deliberately does not clear the face first: setting an attribute to
+`unspecified' *erases* it rather than restoring what the theme said, which
+would lose the very colours this reads.  Nothing needs clearing anyway --
+a face this has already flattened no longer declares `:inverse-video', so
+running again leaves it alone, and enabling a theme re-applies its own
+spec (inversion included), which is exactly when it should be redone.
+Returns non-nil when FACE exists, whether or not it needed this."
   (when (facep face)
-    (set-face-attribute face nil :background 'unspecified)
-    (let ((background (face-attribute face :background nil t)))
-      (when (stringp background)
-        (set-face-attribute face nil :background background)
-        t))))
+    (let ((foreground (face-attribute face :foreground nil t))
+          (background (face-attribute face :background nil t))
+          (inverted (eq (face-attribute face :inverse-video nil t) t)))
+      (when (and inverted (ps/selection--color-p foreground))
+        (let ((text (if (ps/selection--color-p background)
+                        background
+                      (ps/selection--page-background))))
+          (when text
+            (set-face-attribute face nil :inverse-video nil
+                                :background foreground :foreground text)))))
+    t))
 
-(defun ps/selection--pin-faces ()
-  "Pin every face in `ps/selection-pinned-faces'.  Non-nil if any existed."
-  (let (pinned)
-    (dolist (face ps/selection-pinned-faces pinned)
-      (when (ps/selection--pin-face face) (setq pinned t)))))
+(defun ps/selection--flatten-faces ()
+  "Flatten every face in `ps/selection-pinned-faces'.  Non-nil if any exist."
+  (let (found)
+    (dolist (face ps/selection-pinned-faces found)
+      (when (ps/selection--flatten-face face) (setq found t)))))
 
-(defun ps/selection--pin-faces-once ()
-  "Pin the label faces the first time an Org buffer makes them exist."
-  (when (ps/selection--pin-faces)
-    (remove-hook 'org-mode-hook #'ps/selection--pin-faces-once)))
+(defun ps/selection--flatten-faces-once ()
+  "Flatten the label faces the first time an Org buffer makes them exist."
+  (when (ps/selection--flatten-faces)
+    (remove-hook 'org-mode-hook #'ps/selection--flatten-faces-once)))
 
 (defun ps/selection--frame-focused-p ()
   "Non-nil if any frame has the input focus.
@@ -176,9 +253,9 @@ Run again after changing `ps/selection-pale' or its companions."
   (unless ps/selection--source (ps/selection--capture))
   (let* ((background (face-attribute 'default :background nil t))
          (source (car ps/selection--source))
-         (active (ps/selection--blend source background ps/selection-pale))
-         (inactive (ps/selection--blend source background
-                                        ps/selection-inactive-pale)))
+         (active (ps/selection--wash source background ps/selection-pale))
+         (inactive (ps/selection--wash source background
+                                       ps/selection-inactive-pale)))
     (when active
       (set-face-attribute 'region nil :background active :extend t
                           :foreground (if ps/selection-keep-foreground
@@ -190,7 +267,7 @@ Run again after changing `ps/selection-pale' or its companions."
     (when (and active inactive)
       (setq ps/selection--colors (cons active inactive))
       (ps/selection--update-focus))
-    (ps/selection--pin-faces)))
+    (ps/selection--flatten-faces)))
 
 (defun ps/selection--on-theme-change (&rest _)
   "Re-derive the selection colours after the colour theme changed."
@@ -251,8 +328,8 @@ Idempotent; call after the colour theme has been loaded."
   (add-hook 'window-selection-change-functions #'ps/selection--refresh)
   (add-hook 'deactivate-mark-hook #'ps/selection--hide)
   ;; Late in `org-mode-hook', so `org-modern' -- and this config's own tuning
-  ;; of the faces it draws pills with -- has loaded by the time we pin them.
-  (add-hook 'org-mode-hook #'ps/selection--pin-faces-once 90)
+  ;; of the faces it draws pills with -- has loaded by the time we rewrite them.
+  (add-hook 'org-mode-hook #'ps/selection--flatten-faces-once 90)
   (add-function :after after-focus-change-function #'ps/selection--update-focus)
   (when (boundp 'enable-theme-functions)
     (add-hook 'enable-theme-functions #'ps/selection--on-theme-change)))

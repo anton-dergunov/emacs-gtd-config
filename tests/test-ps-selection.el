@@ -18,8 +18,9 @@
 
 (ert-deftest ps/selection-test-blend-moves-toward-a-dark-background ()
   "On a dark theme the wash darkens rather than lightens."
-  (let ((result (ps/selection--blend "#ffffff" "#000000" 0.75)))
-    (should (equal result "#3f3f3f"))))
+  (should (equal (ps/selection--blend "#ffffff" "#000000" 0.75) "#3f3f3f"))
+  ;; A real pair, which only works because hex is parsed rather than looked up.
+  (should (equal (ps/selection--blend "#586e75" "#fdf6e3" 0.55) "#b2b8b1")))
 
 (ert-deftest ps/selection-test-blend-clamps-the-fraction ()
   "Out-of-range fractions are clamped instead of producing invalid colours."
@@ -44,6 +45,7 @@ turned headings and TODO pills inside out inside a selection."
         (ps/selection-inactive-pale 0.75)
         (ps/selection-keep-foreground nil)
         (ps/selection-dim-unfocused nil)
+        (ps/selection-neutral 0.0)
         (applied nil))
     (cl-letf (((symbol-function 'face-attribute)
                (lambda (face attribute &rest _)
@@ -67,6 +69,7 @@ turned headings and TODO pills inside out inside a selection."
         (ps/selection-pale 0.5)
         (ps/selection-keep-foreground t)
         (ps/selection-dim-unfocused nil)
+        (ps/selection-neutral 0.0)
         (applied nil))
     (cl-letf (((symbol-function 'face-attribute)
                (lambda (face attribute &rest _)
@@ -96,43 +99,115 @@ turned headings and TODO pills inside out inside a selection."
       (ps/selection--on-theme-change 'some-theme))
     (should-not ps/selection--source)))
 
-;;; Pinning faces a selection must not repaint
+;;; Faces a selection must not repaint
 
-(defface ps/selection-test-inherited-face '((t :foreground "#112233"))
+(defface ps/selection-test-inherited-face
+  '((t :foreground "#112233" :background "#445566"))
   "Stand-in for a face an inverse-video label inherits its colours from.")
 
 (defface ps/selection-test-label-face
   '((t :inherit ps/selection-test-inherited-face :inverse-video t))
   "Stand-in for org-modern's TODO pill: colours inherited, inverse video.")
 
-(ert-deftest ps/selection-test-pin-face-names-the-inherited-background ()
-  "A pinned face states its background outright instead of inheriting it.
-That is the whole fix: an inherited background loses to the selection, so
-the pill's text -- which `:inverse-video' draws in the background -- came
-out in the selection's own colour."
-  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#445566")
-  (set-face-attribute 'ps/selection-test-label-face nil :background 'unspecified)
-  (should (eq (face-attribute 'ps/selection-test-label-face :background nil nil)
-              'unspecified))
-  (should (ps/selection--pin-face 'ps/selection-test-label-face))
+(ert-deftest ps/selection-test-flatten-face-states-the-swapped-colours ()
+  "The inversion is resolved into plain colours the label owns.
+That is the whole fix: `:inverse-video' names no text colour, so the label
+was drawn in whatever background was in effect -- the selection's own,
+inside a selection, which made TODO keywords unreadable there."
+  (set-face-attribute 'ps/selection-test-inherited-face nil
+                      :foreground "#112233" :background "#445566")
+  (set-face-attribute 'ps/selection-test-label-face nil
+                      :foreground 'unspecified :background 'unspecified
+                      :inverse-video t)
+  (should (ps/selection--flatten-face 'ps/selection-test-label-face))
+  ;; The fill is what the inversion would have used it for...
   (should (equal (face-attribute 'ps/selection-test-label-face :background nil nil)
-                 "#445566")))
+                 "#112233"))
+  ;; ...and the text now has a colour of its own instead of borrowing one.
+  (should (equal (face-attribute 'ps/selection-test-label-face :foreground nil nil)
+                 "#445566"))
+  (should-not (face-attribute 'ps/selection-test-label-face :inverse-video nil nil)))
 
-(ert-deftest ps/selection-test-pin-face-follows-a-theme-change ()
-  "Pinning again after the inherited colour changed picks up the new one,
-rather than freezing the first value it ever saw."
-  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#445566")
-  (ps/selection--pin-face 'ps/selection-test-label-face)
-  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#778899")
-  (ps/selection--pin-face 'ps/selection-test-label-face)
+(ert-deftest ps/selection-test-flatten-face-follows-a-theme-change ()
+  "Flattening again after the inherited colours changed picks up the new
+ones, rather than freezing the first values it ever saw."
+  (set-face-attribute 'ps/selection-test-inherited-face nil
+                      :foreground "#112233" :background "#445566")
+  (ps/selection--flatten-face 'ps/selection-test-label-face)
+  (set-face-attribute 'ps/selection-test-inherited-face nil
+                      :foreground "#778899" :background "#aabbcc")
+  ;; Enabling a theme re-applies the face's own spec, inversion included --
+  ;; which is the state flattening has to cope with a second time.
+  (set-face-attribute 'ps/selection-test-label-face nil
+                      :foreground 'unspecified :background 'unspecified
+                      :inverse-video t)
+  (ps/selection--flatten-face 'ps/selection-test-label-face)
   (should (equal (face-attribute 'ps/selection-test-label-face :background nil nil)
-                 "#778899")))
+                 "#778899"))
+  (should (equal (face-attribute 'ps/selection-test-label-face :foreground nil nil)
+                 "#aabbcc")))
 
-(ert-deftest ps/selection-test-pin-face-skips-unknown-faces ()
+(ert-deftest ps/selection-test-flatten-face-leaves-plain-faces-alone ()
+  "A face that never inverted anything is not rewritten."
+  (set-face-attribute 'ps/selection-test-inherited-face nil
+                      :foreground "#112233" :background "#445566")
+  (should (ps/selection--flatten-face 'ps/selection-test-inherited-face))
+  (should (equal (face-attribute 'ps/selection-test-inherited-face :foreground nil nil)
+                 "#112233"))
+  (should (equal (face-attribute 'ps/selection-test-inherited-face :background nil nil)
+                 "#445566"))
+  ;; Already flattened: a second pass is a no-op, not another swap.
+  (set-face-attribute 'ps/selection-test-label-face nil
+                      :foreground 'unspecified :background 'unspecified
+                      :inverse-video t)
+  (ps/selection--flatten-face 'ps/selection-test-label-face)
+  (let ((background (face-attribute 'ps/selection-test-label-face :background nil nil))
+        (foreground (face-attribute 'ps/selection-test-label-face :foreground nil nil)))
+    (ps/selection--flatten-face 'ps/selection-test-label-face)
+    (should (equal (face-attribute 'ps/selection-test-label-face :background nil nil)
+                   background))
+    (should (equal (face-attribute 'ps/selection-test-label-face :foreground nil nil)
+                   foreground))))
+
+(ert-deftest ps/selection-test-flatten-face-skips-unknown-faces ()
   "A face the user has not installed is skipped rather than signalling."
-  (should-not (ps/selection--pin-face 'ps/selection-test-no-such-face))
+  (should-not (ps/selection--flatten-face 'ps/selection-test-no-such-face))
   (let ((ps/selection-pinned-faces '(ps/selection-test-no-such-face)))
-    (should-not (ps/selection--pin-faces))))
+    (should-not (ps/selection--flatten-faces))))
+
+;;; Reading colours without a display
+
+(ert-deftest ps/selection-test-rgb-parses-hex-directly ()
+  "Hex colours are parsed by us, not by `color-name-to-rgb', which
+quantises to what the current display can show -- on a frameless Emacs it
+reports this very colour as pure blue."
+  (should (equal (color-name-to-rgb "#586e75") '(0.0 0.0 1.0)))
+  (let ((rgb (ps/selection--rgb "#586e75")))
+    (should (< (abs (- (nth 0 rgb) 0.345)) 0.001))
+    (should (< (abs (- (nth 1 rgb) 0.431)) 0.001))
+    (should (< (abs (- (nth 2 rgb) 0.459)) 0.001)))
+  ;; Four-digit-per-component hex, which Emacs also produces.
+  (should (equal (ps/selection--rgb "#ffffffffffff") '(1.0 1.0 1.0)))
+  (should-not (ps/selection--rgb "#12345"))
+  (should-not (ps/selection--rgb nil)))
+
+;;; Neutralising the wash
+
+(ert-deftest ps/selection-test-neutral-removes-the-hue ()
+  "A washed colour keeps its hue -- Solarized's blue-grey over a cream page
+lands on a green-grey -- so the hue is drained without touching lightness."
+  (should (equal (ps/selection--neutral "#b2b8b1" 1.0) "#b4b4b4"))
+  ;; Half way keeps some of it.
+  (should-not (equal (ps/selection--neutral "#b2b8b1" 0.5) "#b4b4b4"))
+  ;; Zero leaves the colour untouched, as does an unreadable one.
+  (should (equal (ps/selection--neutral "#b2b8b1" 0.0) "#b2b8b1"))
+  (should (equal (ps/selection--neutral 'unspecified 1.0) 'unspecified)))
+
+(ert-deftest ps/selection-test-wash-is-grey-by-default ()
+  "The end-to-end colour for Solarized Light: a neutral grey, not a green one."
+  (let ((ps/selection-neutral 1.0))
+    (should (equal (ps/selection--wash "#586e75" "#fdf6e3" 0.55) "#b4b4b4"))
+    (should (equal (ps/selection--wash "#586e75" "#fdf6e3" 0.7) "#c7c7c7"))))
 
 ;;; Dimming while Emacs is not the focused application
 

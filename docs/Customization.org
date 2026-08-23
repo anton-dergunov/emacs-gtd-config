@@ -288,16 +288,23 @@ are in, which makes a selection look like it was thrown away; it never was, and
 going back would show it again.
 
 One thing a selection deliberately does *not* change is the colour of a TODO or
-priority pill: those are drawn with their colours inverted, so without care
-their text takes the selection's own colour and disappears while everything
-else on the line stays readable. =ps/selection-pinned-faces= is the list that
-holds them still; add a face to it if anything else washes out when selected.
+priority pill. Those are drawn with their colours inverted, which names no text
+colour at all — the label is painted in whatever background is behind it, so
+inside a selection its letters come out in the selection's own colour and
+vanish, while everything else on the line stays readable. Those two faces are
+rewritten with their colours stated plainly instead;
+=ps/selection-pinned-faces= is the list, so add a face to it if anything else
+washes out when you select it.
 
 Both shades are derived from whichever theme you load, and re-derived when you
 change the theme, so there is nothing to re-tune after switching. To make a
 selection stronger or fainter, lower or raise =ps/selection-pale= (and
 =ps/selection-inactive-pale= for the unfocused one) in =config.org= → /Settings
 → Selection/: 0.0 is the theme's own colour at full strength, 1.0 is invisible.
+The wash lands on a plain grey by default, because a washed colour keeps its
+hue and a faintly coloured highlight reads as a colour; =ps/selection-neutral=
+sets how much of that hue to drain, from 1.0 (grey) down to 0.0 (the theme's
+own tint).
 Set =ps/selection-show-inactive= to =nil= for stock Emacs behaviour,
 =ps/selection-dim-unfocused= to =nil= to keep one strength whether or not
 Emacs is in front, or =ps/selection-keep-foreground= to =t= to let the theme
@@ -466,8 +473,9 @@ The design rationale is in =design-docs/typo-checker.md=.
 - Selected text: =lisp/ps-selection.el=, wired in =config.org= → /Editor & UI →
   Selection/; settings in =config.org= → /Settings → Selection/
   (=ps/selection-pale=, =ps/selection-inactive-pale=,
-  =ps/selection-show-inactive=, =ps/selection-dim-unfocused=,
-  =ps/selection-keep-foreground=, =ps/selection-pinned-faces=).
+  =ps/selection-neutral=, =ps/selection-show-inactive=,
+  =ps/selection-dim-unfocused=, =ps/selection-keep-foreground=,
+  =ps/selection-pinned-faces=).
 - Line-number gutter width: =config.org= → /Editor & UI → Line numbers/
   (=display-line-numbers-width=).
 - Line-number size and colour in Org buffers: =lisp/ps-line-numbers.el=, wired in
