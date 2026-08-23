@@ -513,17 +513,23 @@ number outright.
 ** Selection (ps-selection.el)
 How selected text is drawn. =ps/selection-pale= is how far the theme's own
 selection colour is washed toward the page background (0.0 keeps the theme's
-colour, 1.0 makes it invisible); =ps/selection-inactive-pale= is the same for a
-selection whose window is no longer focused, which stays visible instead of
-vanishing -- set =ps/selection-show-inactive= to nil to leave those windows
-blank as stock Emacs does. =ps/selection-keep-foreground= restores the theme's
-habit of repainting the text inside a selection (which is what turns TODO pills
-inside out); off by default.
+colour at full strength, 1.0 makes it invisible); =ps/selection-inactive-pale=
+is the same for a selection whose window is no longer focused, which stays
+visible instead of vanishing -- set =ps/selection-show-inactive= to nil to
+leave those windows blank as stock Emacs does. =ps/selection-dim-unfocused=
+also dims the selection while Emacs itself is behind another application, the
+way other apps do. =ps/selection-keep-foreground= restores the theme's habit of
+repainting the text inside a selection (which is what turns TODO pills inside
+out); off by default. =ps/selection-pinned-faces= lists the label faces whose
+colours a selection must not change -- org-modern draws those with inverted
+video, so without pinning their text takes the selection's own colour.
 #+begin_src emacs-lisp
-  (setq ps/selection-pale 0.7
-        ps/selection-inactive-pale 0.85
+  (setq ps/selection-pale 0.55
+        ps/selection-inactive-pale 0.7
         ps/selection-show-inactive t
-        ps/selection-keep-foreground nil)
+        ps/selection-dim-unfocused t
+        ps/selection-keep-foreground nil
+        ps/selection-pinned-faces '(org-modern-todo org-modern-priority))
 #+end_src
 
 ** Scroll bars (ps-scrollbar.el)

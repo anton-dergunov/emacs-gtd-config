@@ -43,6 +43,7 @@ turned headings and TODO pills inside out inside a selection."
         (ps/selection-pale 0.5)
         (ps/selection-inactive-pale 0.75)
         (ps/selection-keep-foreground nil)
+        (ps/selection-dim-unfocused nil)
         (applied nil))
     (cl-letf (((symbol-function 'face-attribute)
                (lambda (face attribute &rest _)
@@ -65,6 +66,7 @@ turned headings and TODO pills inside out inside a selection."
   (let ((ps/selection--source nil)
         (ps/selection-pale 0.5)
         (ps/selection-keep-foreground t)
+        (ps/selection-dim-unfocused nil)
         (applied nil))
     (cl-letf (((symbol-function 'face-attribute)
                (lambda (face attribute &rest _)
@@ -93,6 +95,82 @@ turned headings and TODO pills inside out inside a selection."
     (cl-letf (((symbol-function 'ps/selection-apply) #'ignore))
       (ps/selection--on-theme-change 'some-theme))
     (should-not ps/selection--source)))
+
+;;; Pinning faces a selection must not repaint
+
+(defface ps/selection-test-inherited-face '((t :foreground "#112233"))
+  "Stand-in for a face an inverse-video label inherits its colours from.")
+
+(defface ps/selection-test-label-face
+  '((t :inherit ps/selection-test-inherited-face :inverse-video t))
+  "Stand-in for org-modern's TODO pill: colours inherited, inverse video.")
+
+(ert-deftest ps/selection-test-pin-face-names-the-inherited-background ()
+  "A pinned face states its background outright instead of inheriting it.
+That is the whole fix: an inherited background loses to the selection, so
+the pill's text -- which `:inverse-video' draws in the background -- came
+out in the selection's own colour."
+  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#445566")
+  (set-face-attribute 'ps/selection-test-label-face nil :background 'unspecified)
+  (should (eq (face-attribute 'ps/selection-test-label-face :background nil nil)
+              'unspecified))
+  (should (ps/selection--pin-face 'ps/selection-test-label-face))
+  (should (equal (face-attribute 'ps/selection-test-label-face :background nil nil)
+                 "#445566")))
+
+(ert-deftest ps/selection-test-pin-face-follows-a-theme-change ()
+  "Pinning again after the inherited colour changed picks up the new one,
+rather than freezing the first value it ever saw."
+  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#445566")
+  (ps/selection--pin-face 'ps/selection-test-label-face)
+  (set-face-attribute 'ps/selection-test-inherited-face nil :background "#778899")
+  (ps/selection--pin-face 'ps/selection-test-label-face)
+  (should (equal (face-attribute 'ps/selection-test-label-face :background nil nil)
+                 "#778899")))
+
+(ert-deftest ps/selection-test-pin-face-skips-unknown-faces ()
+  "A face the user has not installed is skipped rather than signalling."
+  (should-not (ps/selection--pin-face 'ps/selection-test-no-such-face))
+  (let ((ps/selection-pinned-faces '(ps/selection-test-no-such-face)))
+    (should-not (ps/selection--pin-faces))))
+
+;;; Dimming while Emacs is not the focused application
+
+(ert-deftest ps/selection-test-focus-state-treats-unknown-as-focused ()
+  "A platform that cannot report focus must not leave the selection dimmed."
+  (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) 'unknown)))
+    (should (ps/selection--frame-focused-p)))
+  (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) nil)))
+    (should-not (ps/selection--frame-focused-p)))
+  (cl-letf (((symbol-function 'frame-focus-state) (lambda (&rest _) t)))
+    (should (ps/selection--frame-focused-p))))
+
+(ert-deftest ps/selection-test-focus-swaps-the-region-colour ()
+  "Losing focus dims the selection; regaining it restores it."
+  (let ((ps/selection--colors (cons "#aaaaaa" "#dddddd"))
+        (ps/selection-dim-unfocused t)
+        applied)
+    (cl-letf (((symbol-function 'set-face-attribute)
+               (lambda (_face _frame &rest args) (setq applied args)))
+              ((symbol-function 'frame-focus-state) (lambda (&rest _) nil)))
+      (ps/selection--update-focus)
+      (should (equal (plist-get applied :background) "#dddddd")))
+    (cl-letf (((symbol-function 'set-face-attribute)
+               (lambda (_face _frame &rest args) (setq applied args)))
+              ((symbol-function 'frame-focus-state) (lambda (&rest _) t)))
+      (ps/selection--update-focus)
+      (should (equal (plist-get applied :background) "#aaaaaa")))))
+
+(ert-deftest ps/selection-test-focus-dimming-can-be-turned-off ()
+  "With the option off the selection keeps one colour throughout."
+  (let ((ps/selection--colors (cons "#aaaaaa" "#dddddd"))
+        (ps/selection-dim-unfocused nil)
+        applied)
+    (cl-letf (((symbol-function 'set-face-attribute)
+               (lambda (_face _frame &rest args) (setq applied args)))
+              ((symbol-function 'frame-focus-state) (lambda (&rest _) nil)))
+      (ps/selection--update-focus)
+      (should-not applied))))
 
 ;;; The dimmed overlay
 

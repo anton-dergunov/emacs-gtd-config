@@ -282,18 +282,26 @@ keep their own colours under a selection instead of turning inside out.
 
 A selection also stays visible when you move to another window — the file tree,
 the assistant's panel, a second file — drawn in a paler shade to show it is not
-the window you are working in. Stock Emacs draws the region only in the window
-you are in, which makes a selection look like it was thrown away; it never was,
-and going back would show it again.
+the window you are working in, and dimmed the same way while Emacs itself is
+behind another application. Stock Emacs draws the region only in the window you
+are in, which makes a selection look like it was thrown away; it never was, and
+going back would show it again.
+
+One thing a selection deliberately does *not* change is the colour of a TODO or
+priority pill: those are drawn with their colours inverted, so without care
+their text takes the selection's own colour and disappears while everything
+else on the line stays readable. =ps/selection-pinned-faces= is the list that
+holds them still; add a face to it if anything else washes out when selected.
 
 Both shades are derived from whichever theme you load, and re-derived when you
 change the theme, so there is nothing to re-tune after switching. To make a
 selection stronger or fainter, lower or raise =ps/selection-pale= (and
 =ps/selection-inactive-pale= for the unfocused one) in =config.org= → /Settings
 → Selection/: 0.0 is the theme's own colour at full strength, 1.0 is invisible.
-Set =ps/selection-show-inactive= to =nil= for stock Emacs behaviour, or
-=ps/selection-keep-foreground= to =t= to let the theme repaint the text inside
-a selection again.
+Set =ps/selection-show-inactive= to =nil= for stock Emacs behaviour,
+=ps/selection-dim-unfocused= to =nil= to keep one strength whether or not
+Emacs is in front, or =ps/selection-keep-foreground= to =t= to let the theme
+repaint the text inside a selection again.
 
 One thing this cannot change: Emacs always keeps the cursor inside the window
 you are looking at, so scrolling far past an active selection drags its end
@@ -458,7 +466,8 @@ The design rationale is in =design-docs/typo-checker.md=.
 - Selected text: =lisp/ps-selection.el=, wired in =config.org= → /Editor & UI →
   Selection/; settings in =config.org= → /Settings → Selection/
   (=ps/selection-pale=, =ps/selection-inactive-pale=,
-  =ps/selection-show-inactive=, =ps/selection-keep-foreground=).
+  =ps/selection-show-inactive=, =ps/selection-dim-unfocused=,
+  =ps/selection-keep-foreground=, =ps/selection-pinned-faces=).
 - Line-number gutter width: =config.org= → /Editor & UI → Line numbers/
   (=display-line-numbers-width=).
 - Line-number size and colour in Org buffers: =lisp/ps-line-numbers.el=, wired in

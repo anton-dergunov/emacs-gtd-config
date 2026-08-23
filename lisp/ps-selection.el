@@ -27,6 +27,15 @@
 ;;    background (rather than lightening) is what makes it work on a dark
 ;;    theme too.
 ;;
+;; 3. A selection repaints org-modern's TODO and priority pills.  Those two
+;;    faces are drawn with `:inverse-video', which paints the label's text in
+;;    whatever background is *in effect* -- inside a selection that is the
+;;    selection's own colour, so the pill's letters wash out while every
+;;    other pill (tags, dates, DONE) keeps its colours, because those name a
+;;    `:background' outright.  `ps/selection--pin-face' gives the
+;;    inverse-video ones the background they were inheriting, directly, which
+;;    a selection cannot override.
+;;
 ;; Not fixable here: point must stay visible in the selected window -- an
 ;; Emacs display invariant, which `ultra-scroll' implements faithfully -- so
 ;; scrolling far past an active region drags its end along.  That is why
@@ -42,14 +51,14 @@
   "How the selection (the region) is drawn."
   :group 'ps)
 
-(defcustom ps/selection-pale 0.7
+(defcustom ps/selection-pale 0.55
   "How far the selection colour is washed toward the page background.
 0.0 keeps the theme's own selection colour, 1.0 makes it invisible.  The
 default is pale enough that text inside a selection keeps its own colours."
   :type 'number
   :group 'ps/selection)
 
-(defcustom ps/selection-inactive-pale 0.85
+(defcustom ps/selection-inactive-pale 0.7
   "How far the selection is washed out in a window that is not selected.
 Higher than `ps/selection-pale', so a selection you left behind is visible
 but clearly not the one you are working with."
@@ -68,10 +77,30 @@ headings and TODO pills turn inside out when you select them."
   :type 'boolean
   :group 'ps/selection)
 
+(defcustom ps/selection-dim-unfocused t
+  "When non-nil, dim the selection while Emacs itself is not the focused app.
+What every other application does, and the reason is practical: with the
+assistant's panel or another app in front, a selection drawn at full
+strength claims attention it no longer deserves."
+  :type 'boolean
+  :group 'ps/selection)
+
+(defcustom ps/selection-pinned-faces '(org-modern-todo org-modern-priority)
+  "Faces whose colours must not follow the selection.
+These are drawn with `:inverse-video', which paints their text in whatever
+background is in effect -- inside a selection, the selection's own colour,
+which washes the label out.  Pinning gives each the background it was
+inheriting, directly, where a selection cannot reach it."
+  :type '(repeat face)
+  :group 'ps/selection)
+
 (defface ps/selection-inactive '((t :inherit region))
   "Face for the selection in a window that is not the selected one.
 Recoloured by `ps/selection-apply' from the theme's own selection colour."
   :group 'ps/selection)
+
+(defvar ps/selection--colors nil
+  "Cons of the (ACTIVE . INACTIVE) selection backgrounds now in use.")
 
 (defvar ps/selection--source nil
   "Cons of (BACKGROUND . FOREGROUND) of `region' as the theme defines it.
@@ -100,6 +129,46 @@ themes alike.  Pure."
         (cons (face-attribute 'region :background nil t)
               (face-attribute 'region :foreground nil t))))
 
+(defun ps/selection--pin-face (face)
+  "Pin FACE's background to the value it inherits, and return non-nil if done.
+An `:inverse-video' face draws its text in the background *in effect*, so
+inside a selection its text takes the selection's colour.  Naming the
+background directly puts it out of the selection's reach.  Our own pin is
+cleared first, so the value read back is always the theme's own and a theme
+change can still move it."
+  (when (facep face)
+    (set-face-attribute face nil :background 'unspecified)
+    (let ((background (face-attribute face :background nil t)))
+      (when (stringp background)
+        (set-face-attribute face nil :background background)
+        t))))
+
+(defun ps/selection--pin-faces ()
+  "Pin every face in `ps/selection-pinned-faces'.  Non-nil if any existed."
+  (let (pinned)
+    (dolist (face ps/selection-pinned-faces pinned)
+      (when (ps/selection--pin-face face) (setq pinned t)))))
+
+(defun ps/selection--pin-faces-once ()
+  "Pin the label faces the first time an Org buffer makes them exist."
+  (when (ps/selection--pin-faces)
+    (remove-hook 'org-mode-hook #'ps/selection--pin-faces-once)))
+
+(defun ps/selection--frame-focused-p ()
+  "Non-nil if any frame has the input focus.
+A frame whose focus state is unknown counts as focused: guessing that
+Emacs is away would leave the selection dimmed on a platform that cannot
+tell us."
+  (seq-some (lambda (frame) (frame-focus-state frame)) (frame-list)))
+
+(defun ps/selection--update-focus (&rest _)
+  "Dim the selection while Emacs is not the focused application."
+  (when (and ps/selection-dim-unfocused ps/selection--colors)
+    (set-face-attribute 'region nil :background
+                        (if (ps/selection--frame-focused-p)
+                            (car ps/selection--colors)
+                          (cdr ps/selection--colors)))))
+
 (defun ps/selection-apply ()
   "Recolour the selection from the theme currently loaded.
 Run again after changing `ps/selection-pale' or its companions."
@@ -117,7 +186,11 @@ Run again after changing `ps/selection-pale' or its companions."
                                         'unspecified)))
     (when inactive
       (set-face-attribute 'ps/selection-inactive nil :background inactive
-                          :foreground 'unspecified :extend t))))
+                          :foreground 'unspecified :extend t))
+    (when (and active inactive)
+      (setq ps/selection--colors (cons active inactive))
+      (ps/selection--update-focus))
+    (ps/selection--pin-faces)))
 
 (defun ps/selection--on-theme-change (&rest _)
   "Re-derive the selection colours after the colour theme changed."
@@ -177,6 +250,10 @@ Idempotent; call after the colour theme has been loaded."
   (ps/selection-apply)
   (add-hook 'window-selection-change-functions #'ps/selection--refresh)
   (add-hook 'deactivate-mark-hook #'ps/selection--hide)
+  ;; Late in `org-mode-hook', so `org-modern' -- and this config's own tuning
+  ;; of the faces it draws pills with -- has loaded by the time we pin them.
+  (add-hook 'org-mode-hook #'ps/selection--pin-faces-once 90)
+  (add-function :after after-focus-change-function #'ps/selection--update-focus)
   (when (boundp 'enable-theme-functions)
     (add-hook 'enable-theme-functions #'ps/selection--on-theme-change)))
 
