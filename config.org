@@ -527,8 +527,8 @@ tint. =ps/selection-pinned-faces= lists the label faces whose text colour a
 selection must not change -- org-modern draws those with inverted video, which
 names no text colour at all, so theirs would come out in the selection's own.
 #+begin_src emacs-lisp
-  (setq ps/selection-pale 0.55
-        ps/selection-inactive-pale 0.7
+  (setq ps/selection-pale 0.625
+        ps/selection-inactive-pale 0.775
         ps/selection-neutral 1.0
         ps/selection-show-inactive t
         ps/selection-dim-unfocused t

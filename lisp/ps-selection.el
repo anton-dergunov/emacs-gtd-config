@@ -57,14 +57,14 @@
   "How the selection (the region) is drawn."
   :group 'ps)
 
-(defcustom ps/selection-pale 0.55
+(defcustom ps/selection-pale 0.625
   "How far the selection colour is washed toward the page background.
 0.0 keeps the theme's own selection colour, 1.0 makes it invisible.  The
 default is pale enough that text inside a selection keeps its own colours."
   :type 'number
   :group 'ps/selection)
 
-(defcustom ps/selection-inactive-pale 0.7
+(defcustom ps/selection-inactive-pale 0.775
   "How far the selection is washed out in a window that is not selected.
 Higher than `ps/selection-pale', so a selection you left behind is visible
 but clearly not the one you are working with."
