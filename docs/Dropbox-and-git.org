@@ -141,16 +141,55 @@ each machine, which Dropbox's own location often breaks —
 =~/Library/CloudStorage/Dropbox/= on macOS against =~/Dropbox/= elsewhere.
 
 On each further machine, either move its =.git= aside the same way, or rebuild
-it from your remote:
+it from your remote.
+
+The pointer file names the repository directory itself, so the rebuilt
+repository has to sit exactly there — which is why it is created with
+=git init --bare=. A plain =git init= would put it one level lower, in
+=~/.gitrepos/notes-org/.git=, where the pointer would not find it. But =--bare=
+also records that the repository has no working tree, and this one does have
+one — your vault — so turn that back off. And a brand-new repository has no
+remotes at all: =origin= is a name you have to define before it means anything.
 
 #+begin_src bash
 mkdir -p ~/.gitrepos/notes-org
 cd ~/.gitrepos/notes-org
-git init --bare .                          # a plain `git init` works too
-cd /path/to/your/vault
+git init --bare .
+git config core.bare false                 # it does have a working tree: the vault
+git remote add origin git@github.com:you/your-notes.git
 git fetch origin
-git reset --mixed origin/main
 #+end_src
+
+Take the remote URL from a machine where the vault still works (=git remote -v=
+there) or from the repository's page on GitHub. Skip that line and
+=git fetch origin= reads the word =origin= as a URL, and says so:
+=fatal: 'origin' does not appear to be a git repository=. Skip =core.bare=
+instead and it is =git status= that fails later, with
+=this operation must be run in a work tree=.
+
+Then point the vault at the history you just fetched:
+
+#+begin_src bash
+cd /path/to/your/vault
+git symbolic-ref HEAD refs/heads/main      # git init may have left HEAD on master
+git reset --mixed origin/main
+git branch --set-upstream-to=origin/main main
+git status
+#+end_src
+
+If you are not certain your default branch is =main=, ask the remote first with
+=git ls-remote --symref origin HEAD= and substitute the name it prints.
+
+=git reset --mixed= only rewrites Git's index; your note files are left exactly
+as they are on disk. Expect =git status= to come out clean if this machine's
+vault matches the remote, or to list ordinary modifications if it holds edits
+that were never pushed — either is fine.
+
+One thing worth checking afterwards: whether this machine had a real =.git=
+folder before the pointer file arrived from Dropbox. If Dropbox moved the old
+one aside rather than replacing it, it is still sitting in the vault under a
+name like =.git (conflicted copy)=. That is this machine's old history, and you
+can delete it once the rebuilt repository looks right.
 
 *If you forget on a machine*, it says so immediately and precisely. Git refuses
 to do anything, naming the path it wanted —
