@@ -84,18 +84,26 @@
 ;;    does.
 ;;
 ;; 8. eat never calls `set-window-start' anywhere -- it positions windows
-;;    only via `set-window-point' plus an unclamped `recenter'.  Two
-;;    consequences after a resize: `eat--t-resize' refuses to move the
-;;    display region's start backwards when the window grows, so `recenter'
-;;    is handed a more negative argument than there are lines and drags the
-;;    window up into stale scrollback (content missing at the top, dead
-;;    space at the bottom); and `eat--synchronize-scroll-windows' only
-;;    re-anchors windows whose point sits exactly on the terminal cursor, so
-;;    a window the user scrolled up in is abandoned while the reflow
-;;    rewrites and trims the text under it (a blank window).  We supply the
-;;    missing explicit anchoring: windows at the bottom are pinned to the
-;;    display beginning, scrolled-up windows keep their position and are
-;;    only corrected when it is no longer valid.
+;;    only via `set-window-point' plus an unclamped `recenter', and it
+;;    derives that `recenter' argument from `how-many "\n"', a count of
+;;    *buffer* lines, while `recenter' itself positions by *screen* lines.
+;;    Those two agree only for as long as nothing wraps, which is not
+;;    guaranteed (see #12).  Three consequences: `eat--t-resize' refuses to
+;;    move the display region's start backwards when the window grows, so
+;;    `recenter' is handed a more negative argument than there are lines and
+;;    drags the window up into stale scrollback (content missing at the top,
+;;    dead space at the bottom); a single wrapped row shifts the whole region
+;;    up by one line for the same reason; and
+;;    `eat--synchronize-scroll-windows' only re-anchors windows whose point
+;;    sits exactly on the terminal cursor, so a window the user scrolled up
+;;    in is abandoned while the reflow rewrites and trims the text under it
+;;    (a blank window).  So in session buffers eat's synchronizer is replaced
+;;    by `ps/claude--synchronize-scroll', which sets the window start
+;;    straight to eat's display beginning -- the position all that arithmetic
+;;    is trying to arrive at, stated directly so it cannot drift -- and the
+;;    same explicit anchoring is applied after a resize: windows at the
+;;    bottom are pinned to the display beginning, scrolled-up windows keep
+;;    their position and are only corrected when it is no longer valid.
 ;;
 ;; 9. A running session keeps several processes alive whose query-on-exit
 ;;    flags would make `save-buffers-kill-emacs' prompt: eat's terminal, the
@@ -157,6 +165,29 @@
 ;;     as Handy) silently does nothing in a Claude Code session while `C-y'
 ;;     already works. We bind `s-v' to `eat-yank' in both of eat's
 ;;     interactive keymaps so it behaves like `C-y' already does.
+;;
+;; 12. A session buffer must never soft-wrap.  eat has already wrapped the
+;;     program's output at the terminal width, so one terminal row is one
+;;     buffer line -- but only `truncate-lines' makes that also one *screen*
+;;     line, and every scroll calculation above assumes it is.  Several
+;;     glyphs Claude puts on almost every line are drawn wider than the cell
+;;     they are counted as: measured here against an 8px monospace cell,
+;;     U+23FA (the tool bullet), U+23BF (its result), U+23F5 (the mode
+;;     footer), U+29C9 (the selection badge) and U+26A0 all render at 14px
+;;     and U+2713 at 9px, while `char-width' reports 1 for each.  No
+;;     installed font supplied a one-cell version of them all, so this cannot
+;;     be fixed by choosing a font, and it is not Claude's error either --
+;;     it pads a row to the width it was told.  Such a row then overruns the
+;;     window by those few pixels and spills one character onto a second
+;;     screen line, which is both visible as a stray fragment and enough to
+;;     make the display region need more screen lines than the terminal has
+;;     rows: the last rows fall out of view and the anchoring above is off by
+;;     the number of wrapped rows.  Measured live at 67x39: 39 buffer lines
+;;     occupying 41 screen lines in a 39-line window, which is what a
+;;     half-painted pane that a manual resize "fixes" actually is.  Clipping
+;;     is the right trade -- a few overhanging pixels of one glyph, rather
+;;     than the layout of the whole pane.  The truncation arrow is suppressed
+;;     along with it, because the right fringe here is the scroll-bar track.
 
 ;;; Code:
 
@@ -182,6 +213,7 @@
 (declare-function ps/freeze-log--format-line "ps-freeze-log")
 (defvar eat-query-before-killing-running-terminal)
 (declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
+(declare-function claude-code-ide--terminal-position-keeper "claude-code-ide")
 (declare-function eat-yank "eat")
 (defvar claude-code-ide-window-width)
 (defvar claude-code-ide-window-side)
@@ -189,6 +221,7 @@
 (defvar eat-terminal)
 (defvar eat-semi-char-mode-map)
 (defvar eat-char-mode-map)
+(defvar eat--synchronize-scroll-function)
 
 (defcustom ps/claude-window-width 90
   "Width (in columns) of the Claude Code IDE side window.
@@ -346,6 +379,65 @@ reading.  Returns nil when START is already valid and needs no correction."
    ((> start display-begin) display-begin)
    (t nil)))
 
+(defun ps/claude--anchor-skip (rows window-lines)
+  "Rows of the display region that belong above a window's first line.
+ROWS is the terminal's height, WINDOW-LINES the window's.  Pure/testable.
+Normally zero -- the terminal is kept as tall as the window, so its first
+row is the window's first line.  While the window is shorter than the
+terminal (the transient state between a shrink and the reflow that follows
+it) only the last WINDOW-LINES rows fit, and the region has to start that
+many rows further down."
+  (if (and (integerp rows) (integerp window-lines))
+      (max 0 (- rows window-lines))
+    0))
+
+(defun ps/claude--display-anchor (window)
+  "Return the position WINDOW should start at to show eat's display region.
+Nil when the current buffer has no live terminal."
+  (when (ps/claude--terminal-live-p)
+    (let ((skip (ps/claude--anchor-skip (cdr (eat-term-size eat-terminal))
+                                        (window-body-height window))))
+      (save-excursion
+        (goto-char (eat-term-display-beginning eat-terminal))
+        (forward-line skip)
+        (point)))))
+
+(defun ps/claude--synchronize-scroll (windows)
+  "Anchor WINDOWS on eat's display region.
+
+Installed buffer-locally in session buffers in place of
+`eat--synchronize-scroll' (see `ps/claude--setup-buffer').  eat's own
+version never sets a window start: it puts point on the terminal cursor and
+`recenter's by an offset counted in buffer lines, which is the screen line
+only for as long as nothing wraps (Commentary #8, #12).  Setting the start
+directly says the same thing without the arithmetic that can drift.
+
+WINDOWS may contain the symbol `buffer', as eat's version does, meaning the
+current buffer's point rather than a window.
+
+Installed by two routes, because two packages want this slot and their
+order is not ours to rely on: the buffer-local `setq' above wins when
+`claude-code-ide-eat-preserve-position' is off (eat's own default is then
+left in place for us to replace), and the `:override' on
+`claude-code-ide--terminal-position-keeper' wins when it is on -- that
+function is assigned after `eat-mode' has already run our hook.  Its own
+strategy is `recenter' too, and `recenter' counts screen lines, so it has
+the same defect.
+
+Its one behaviour worth keeping is the `buffer-read-only' guard: that is
+what `eat-emacs-mode' (\[eat-emacs-mode]) sets to let you move around the
+buffer with ordinary Emacs keys, and a window being read in must not be
+dragged back to the prompt under you."
+  (when (ps/claude--terminal-live-p)
+    (let ((cursor (eat-term-display-cursor eat-terminal)))
+      (dolist (window windows)
+        (if (eq window 'buffer)
+            (goto-char cursor)
+          (when (and (window-live-p window) (not buffer-read-only))
+            (when-let ((start (ps/claude--display-anchor window)))
+              (set-window-start window start))
+            (set-window-point window cursor)))))))
+
 (defun ps/claude--reanchor-window (window)
   "Re-anchor WINDOW to eat's live display region.
 
@@ -366,6 +458,7 @@ is no longer valid."
         (with-current-buffer buffer
           (when (ps/claude--terminal-live-p)
             (let* ((display-begin (eat-term-display-beginning eat-terminal))
+                   (anchor (ps/claude--display-anchor window))
                    (cursor (eat-term-display-cursor eat-terminal))
                    (start (window-start window))
                    (at-bottom (= (window-point window) cursor)))
@@ -373,8 +466,8 @@ is no longer valid."
                   (progn
                     (ps/claude--debug-log
                      "%s: anchor at-bottom start=%s -> %s cursor=%s"
-                     (buffer-name buffer) start display-begin cursor)
-                    (set-window-start window display-begin)
+                     (buffer-name buffer) start anchor cursor)
+                    (set-window-start window anchor)
                     (set-window-point window cursor))
                 (let ((clamped (ps/claude--clamp-window-start
                                 start display-begin)))
@@ -472,11 +565,6 @@ Schedules a second re-anchor pass: SIGWINCH is asynchronous, so Claude's
 own repaint lands tens to hundreds of milliseconds after the resize, and
 the window must be re-anchored again once that content exists."
   (setq ps/claude--resize-timer nil)
-  ;; The drag has settled: stop clipping before the authoritative reflow, so
-  ;; the resize below is computed against the buffer's real wrapping mode.
-  (dolist (window (ps/claude--claude-windows))
-    (with-current-buffer (window-buffer window)
-      (ps/claude--end-drag-clipping)))
   (dolist (window (ps/claude--claude-windows))
     (ps/claude--resync-window window))
   (ps/claude--reanchor-windows)
@@ -546,70 +634,37 @@ which is the visible flicker.  Returning nil skips both the reflow and the
 SIGWINCH for that event; the debounced resync then delivers one
 authoritative resize once the burst settles.
 
-Also clips lines for the duration of the burst (see
-`ps/claude--begin-drag-clipping'): with the reflow suppressed, eat's rows
-are still padded to the old terminal width, so a narrower window would wrap
-every single row into a two-screen-line continuation -- a full-height
-re-wrap on every drag pixel that throttling alone cannot prevent."
+Rows left padded to the pre-drag width while the reflow is suppressed do
+not need clipping of their own: session buffers never soft-wrap at all
+(see `ps/claude--no-soft-wrap')."
   (let* ((now (current-time))
          (burst (ps/claude--in-resize-burst-p now)))
     (setq ps/claude--last-attempt-time now)
     (if (ps/claude--throttle-reflow-p now burst)
         (progn
-          (ps/claude--begin-drag-clipping)
           (ps/claude--debug-log "reflow throttled (burst in flight)")
           nil)
       (setq ps/claude--last-reflow-time now)
-      (when burst (ps/claude--begin-drag-clipping))
       (apply orig-fn args))))
 
-;;; Line clipping during a resize burst
+;;; No soft wrapping in a session buffer (fix #12)
 
-(defcustom ps/claude-drag-clip-max-duration 2.0
-  "Hard ceiling, in seconds, on how long drag clipping can stay on.
-The debounced resync already ends clipping on every settle, so this
-watchdog should never fire in practice; it exists only so a bug in that
-path cannot leave a Claude buffer permanently clipped."
-  :type 'number
-  :group 'claude-code-ide)
+(defun ps/claude--no-soft-wrap ()
+  "Stop the current session buffer from soft-wrapping eat's terminal rows.
 
-(defvar-local ps/claude--saved-truncate-lines 'unset
-  "Buffer's `truncate-lines' before drag clipping, or the symbol `unset'.")
-
-(defvar-local ps/claude--drag-clip-watchdog nil
-  "Pending failsafe timer that force-ends drag clipping, or nil.")
-
-(defun ps/claude--begin-drag-clipping ()
-  "Clip lines in the current Claude buffer for the duration of a burst.
-Idempotent: the original `truncate-lines' is saved only on the first call,
-so repeated motion events cannot lose it.  Arms a bounded watchdog (see
-`ps/claude-drag-clip-max-duration') as a last-resort safety net."
-  (when (and (ps/claude--session-buffer-p (current-buffer))
-             (eq ps/claude--saved-truncate-lines 'unset))
-    (setq ps/claude--saved-truncate-lines truncate-lines)
-    (setq-local truncate-lines t)
-    (ps/claude--debug-log "drag clipping on (was truncate-lines=%s)"
-                           ps/claude--saved-truncate-lines)
-    (let ((buf (current-buffer)))
-      (setq ps/claude--drag-clip-watchdog
-            (run-with-timer
-             ps/claude-drag-clip-max-duration nil
-             (lambda ()
-               (when (buffer-live-p buf)
-                 (with-current-buffer buf
-                   (ps/claude--debug-log "drag clip watchdog fired")
-                   (ps/claude--end-drag-clipping)))))))))
-
-(defun ps/claude--end-drag-clipping ()
-  "Restore `truncate-lines' in the current Claude buffer after a burst."
-  (when (timerp ps/claude--drag-clip-watchdog)
-    (cancel-timer ps/claude--drag-clip-watchdog))
-  (setq ps/claude--drag-clip-watchdog nil)
-  (unless (eq ps/claude--saved-truncate-lines 'unset)
-    (setq-local truncate-lines ps/claude--saved-truncate-lines)
-    (ps/claude--debug-log "drag clipping off (restored truncate-lines=%s)"
-                           ps/claude--saved-truncate-lines)
-    (setq ps/claude--saved-truncate-lines 'unset)))
+eat has already wrapped the program's output at the terminal width, so one
+terminal row is one buffer line -- and every scroll calculation here and in
+eat assumes it is also one *screen* line.  A glyph drawn wider than the cell
+it is counted as is enough to break that (Commentary #12), and the cost of
+letting it is the layout of the whole pane, so the row is clipped instead.
+`truncate-partial-width-windows' is pinned to nil so `truncate-lines' is the
+only thing deciding, whatever width the panel is docked at, and the
+truncation arrow is turned off because the right fringe here is the
+scroll-bar track."
+  (setq-local truncate-lines t)
+  (setq-local truncate-partial-width-windows nil)
+  (setq-local fringe-indicator-alist
+              (cons '(truncation nil nil) fringe-indicator-alist)))
 
 (defun ps/claude--working-directory ()
   "Always use `my-org-base-directory' as the Claude Code IDE working directory.
@@ -1005,6 +1060,9 @@ Runs from `eat-mode-hook', which fires for every eat buffer, so each tweak
 is guarded by `ps/claude--session-buffer-p'."
   (when (ps/claude--session-buffer-p (current-buffer))
     (ps/claude--install-mode-line)
+    (ps/claude--no-soft-wrap)
+    (setq-local eat--synchronize-scroll-function
+                #'ps/claude--synchronize-scroll)
     (ps/claude--suppress-terminal-exit-query)
     (add-hook 'post-command-hook #'ps/claude--note-panel-input nil t)))
 
@@ -1018,7 +1076,9 @@ in the Commentary), silences the post-write \"Reread from disk?\" race for
 unmodified buffers,
 guards eat's output timer against transient `args-out-of-range' glitches,
 docks the panel `right'/`bottom' to match the frame's current shape,
-installs the per-buffer mode line, binds Cmd-V to send pasted text to the
+installs the per-buffer mode line, stops session buffers from soft-wrapping
+eat's rows and anchors their windows on eat's display region directly,
+binds Cmd-V to send pasted text to the
 process instead of the buffer, and stops a running session from prompting
 when Emacs quits.  Idempotent."
   (setq claude-code-ide-window-width ps/claude-window-width)
@@ -1046,6 +1106,8 @@ when Emacs quits.  Idempotent."
               :around #'ps/claude--reflow-throttle-advice)
   (advice-add 'claude-code-ide--display-buffer-in-side-window
               :around #'ps/claude--adaptive-side-advice)
+  (advice-add 'claude-code-ide--terminal-position-keeper
+              :override #'ps/claude--synchronize-scroll)
   (advice-add 'save-buffers-kill-emacs
               :before #'ps/claude--clear-exit-queries)
   (add-hook 'eat-mode-hook #'ps/claude--setup-buffer)

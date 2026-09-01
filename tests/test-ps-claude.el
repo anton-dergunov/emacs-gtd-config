@@ -336,78 +336,76 @@ global `track-mouse' used to cause permanently."
                 'size))
     (should called)))
 
-;;; Line clipping during a drag
+;;; No soft wrapping in a session buffer
 
-(ert-deftest ps/claude-test-drag-clipping-saves-and-restores ()
-  "Clipping turns on `truncate-lines' and restores the original value."
+(ert-deftest ps/claude-test-no-soft-wrap-clips-lines ()
+  "A session buffer truncates rather than wraps eat's rows."
   (let ((buf (generate-new-buffer "*claude-code[demo]*")))
     (unwind-protect
         (with-current-buffer buf
           (setq-local truncate-lines nil)
-          (ps/claude--begin-drag-clipping)
-          (should truncate-lines)
-          (ps/claude--end-drag-clipping)
-          (should-not truncate-lines))
-      (kill-buffer buf))))
-
-(ert-deftest ps/claude-test-drag-clipping-is-idempotent ()
-  "Repeated motion events must not overwrite the saved value."
-  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (setq-local truncate-lines nil)
-          (ps/claude--begin-drag-clipping)
-          (ps/claude--begin-drag-clipping)
-          (ps/claude--begin-drag-clipping)
-          (ps/claude--end-drag-clipping)
-          (should-not truncate-lines))
-      (kill-buffer buf))))
-
-(ert-deftest ps/claude-test-drag-clipping-restore-without-begin ()
-  "Restoring without a preceding begin is a harmless no-op."
-  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
-    (unwind-protect
-        (with-current-buffer buf
-          (setq-local truncate-lines t)
-          (ps/claude--end-drag-clipping)
+          (ps/claude--no-soft-wrap)
           (should truncate-lines))
       (kill-buffer buf))))
 
-(ert-deftest ps/claude-test-drag-clipping-skips-non-claude-buffer ()
-  "Non-Claude buffers are left alone."
-  (with-temp-buffer
-    (setq-local truncate-lines nil)
-    (ps/claude--begin-drag-clipping)
-    (should-not truncate-lines)))
-
-(ert-deftest ps/claude-test-drag-clip-watchdog-force-ends-clipping ()
-  "The watchdog restores `truncate-lines' even if end is never called.
-Guards against exactly the failure mode found live: a signal this code
-depends on getting stuck and the normal settle path never running."
-  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
-        (ps/claude-drag-clip-max-duration 0.05))
+(ert-deftest ps/claude-test-no-soft-wrap-ignores-partial-width ()
+  "`truncate-lines' decides alone, whichever width the panel is docked at.
+The panel is a side window, so it is never full width, and the stock
+`truncate-partial-width-windows' would otherwise get a say."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
     (unwind-protect
         (with-current-buffer buf
-          (setq-local truncate-lines nil)
-          (ps/claude--begin-drag-clipping)
-          (should truncate-lines)
-          (sit-for 0.2)
-          (should-not truncate-lines)
-          (should-not ps/claude--drag-clip-watchdog))
+          (ps/claude--no-soft-wrap)
+          (should-not truncate-partial-width-windows))
       (kill-buffer buf))))
 
-(ert-deftest ps/claude-test-drag-clipping-end-cancels-watchdog ()
-  "A normal end before the watchdog fires cancels it cleanly."
-  (let ((buf (generate-new-buffer "*claude-code[demo]*"))
-        (ps/claude-drag-clip-max-duration 30))
+(ert-deftest ps/claude-test-no-soft-wrap-hides-the-truncation-arrow ()
+  "No truncation arrow: the right fringe here is the scroll-bar track."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
     (unwind-protect
         (with-current-buffer buf
-          (setq-local truncate-lines nil)
-          (ps/claude--begin-drag-clipping)
-          (should (timerp ps/claude--drag-clip-watchdog))
-          (ps/claude--end-drag-clipping)
-          (should-not ps/claude--drag-clip-watchdog))
+          (ps/claude--no-soft-wrap)
+          (should (equal (assq 'truncation fringe-indicator-alist)
+                         '(truncation nil nil))))
       (kill-buffer buf))))
+
+;;; Window anchoring on eat's display region
+
+(ert-deftest ps/claude-test-synchronize-scroll-leaves-a-read-only-buffer-alone ()
+  "Navigation mode (`eat-emacs-mode') must not be dragged back to the prompt.
+That mode is exactly `buffer-read-only' plus ordinary Emacs keys, so a
+window being read in has to keep its position."
+  (let ((buf (generate-new-buffer "*claude-code[demo]*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (insert "one\ntwo\nthree\n")
+          (setq buffer-read-only t)
+          (let ((window (display-buffer buf)))
+            (unwind-protect
+                (let ((start (window-start window)))
+                  ;; No terminal here, so this also covers the guard that
+                  ;; keeps the scroll path from signalling before one exists.
+                  (ps/claude--synchronize-scroll (list window))
+                  (should (= (window-start window) start)))
+              (delete-window window))))
+      (kill-buffer buf))))
+
+(ert-deftest ps/claude-test-anchor-skip-is-zero-when-terminal-fits ()
+  "The terminal is normally as tall as the window: nothing is skipped."
+  (should (= (ps/claude--anchor-skip 39 39) 0)))
+
+(ert-deftest ps/claude-test-anchor-skip-is-zero-when-window-is-taller ()
+  "A window taller than the terminal still starts at the first row."
+  (should (= (ps/claude--anchor-skip 30 39) 0)))
+
+(ert-deftest ps/claude-test-anchor-skip-drops-rows-that-do-not-fit ()
+  "Between a shrink and its reflow, only the last rows fit."
+  (should (= (ps/claude--anchor-skip 39 30) 9)))
+
+(ert-deftest ps/claude-test-anchor-skip-tolerates-unknown-sizes ()
+  "A size that is not yet known must not signal from the scroll path."
+  (should (= (ps/claude--anchor-skip nil 39) 0))
+  (should (= (ps/claude--anchor-skip 39 nil) 0)))
 
 ;;; Blank-window detection
 

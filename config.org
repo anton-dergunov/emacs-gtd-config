@@ -1020,10 +1020,8 @@ reflow is what makes the panel blink, so a larger value means less flicker
 but coarser tracking during the drag. =ps/claude-resize-burst-gap= is how
 close together resize events must arrive to count as the same burst;
 anything farther apart is treated as an isolated resize and always reflows
-immediately, regardless of the throttle. =ps/claude-drag-clip-max-duration=
-is a safety ceiling on how long a burst can keep the panel's lines clipped
-(rather than wrapped) before it's forced back, in case a burst never
-settles. =ps/claude-no-exit-prompt= lets Emacs quit without asking to confirm
+immediately, regardless of the throttle. =ps/claude-no-exit-prompt= lets
+Emacs quit without asking to confirm
 killing a running session. =ps/claude-debug-resize= appends troubleshooting
 detail to =ps/claude-debug-resize-file=; leave it off otherwise.
 
@@ -1041,7 +1039,6 @@ selection sent, and each one skipped, to =ps/claude-debug-resize-file=.
         ps/claude-reanchor-delay 0.2
         ps/claude-resize-throttle-interval 0.25
         ps/claude-resize-burst-gap 0.15
-        ps/claude-drag-clip-max-duration 2.0
         ps/claude-no-exit-prompt t
         ps/claude-debug-resize nil
         ps/claude-selection-max-lines 500
