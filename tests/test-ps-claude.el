@@ -520,36 +520,6 @@ it -- this was the one process still blocking exit."
       (ps/claude--clear-exit-queries)
       (should-not cleared))))
 
-;;; Debug logging toggle
-
-(ert-deftest ps/claude-test-debug-log-off-by-default ()
-  "Writes nothing when `ps/claude-debug-resize' is nil (the default)."
-  (let* ((file (make-temp-name (expand-file-name "ps-claude-log-"
-                                                 temporary-file-directory)))
-         (ps/claude-debug-resize nil)
-         (ps/claude-debug-resize-file file))
-    (ps/claude--debug-log "test %d" 1)
-    (should-not (file-exists-p file))))
-
-(ert-deftest ps/claude-test-debug-log-appends-when-enabled ()
-  "Appends a tagged line to the log file when enabled."
-  (let* ((file (make-temp-name (expand-file-name "ps-claude-log-"
-                                                 temporary-file-directory)))
-         (ps/claude-debug-resize t)
-         (ps/claude-debug-resize-file file))
-    (unwind-protect
-        (progn
-          (ps/claude--debug-log "hello %d" 42)
-          (ps/claude--debug-log "again")
-          (should (file-exists-p file))
-          (let ((content (with-temp-buffer
-                           (insert-file-contents file)
-                           (buffer-string))))
-            (should (string-match-p "claude-resize" content))
-            (should (string-match-p "hello 42" content))
-            (should (string-match-p "again" content))))
-      (ignore-errors (delete-file file)))))
-
 ;;; adaptive dock side
 
 (ert-deftest ps/claude-test-adaptive-side-docks-right-when-wide ()
@@ -569,34 +539,6 @@ it -- this was the one process still blocking exit."
       (ps/claude--adaptive-side-advice
        (lambda (&rest _) (setq seen claude-code-ide-window-side)))
       (should (eq seen 'bottom)))))
-
-;;; eat geometry freeze diagnostics
-
-(ert-deftest ps/claude-test-eat-desync-p-detects-mismatch ()
-  "Desync is reported only when both eat and window sizes are known and differ."
-  ;; cols differ
-  (should (ps/claude--eat-desync-p '(80 24 100 24 500 1)))
-  ;; rows differ
-  (should (ps/claude--eat-desync-p '(80 24 80 40 500 1)))
-  ;; agree -> no desync
-  (should-not (ps/claude--eat-desync-p '(80 24 80 24 500 1)))
-  ;; window size unknown (windowless buffer) -> never a false positive
-  (should-not (ps/claude--eat-desync-p '(80 24 nil nil 500 1)))
-  ;; eat size unknown -> not reported
-  (should-not (ps/claude--eat-desync-p '(nil nil 80 24 500 1)))
-  ;; nil geometry -> nil
-  (should-not (ps/claude--eat-desync-p nil)))
-
-(ert-deftest ps/claude-test-eat-geometry-string ()
-  "The marker string is compact and flags a desync."
-  (should (equal (ps/claude--eat-geometry-string nil) "eat=none"))
-  (should (equal (ps/claude--eat-geometry-string '(80 24 80 24 500 1))
-                 "eat=80x24 win=80x24 pmax=500 db=1"))
-  (should (equal (ps/claude--eat-geometry-string '(80 24 100 24 500 1))
-                 "eat=80x24 win=100x24 DESYNC pmax=500 db=1"))
-  ;; nil fields render without erroring
-  (should (equal (ps/claude--eat-geometry-string '(80 24 nil nil 500 nil))
-                 "eat=80x24 win=nilxnil pmax=500 db=nil")))
 
 ;;; The editor selection Claude is told about
 

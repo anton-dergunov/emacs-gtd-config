@@ -40,11 +40,6 @@ numbers, and the selected lines themselves. Two details are worth knowing:
 With nothing selected, it is simply told which file you are in — including
 right after you start a session, so the first question can say "this file".
 
-If it ever answers that it cannot see your selection, set
-=ps/claude-debug-selection= to =t=, reproduce it once, and look at the log named
-by =ps/claude-debug-resize-file=: it records every selection sent and every one
-skipped, with the reason.
-
 * Reviewing proposed edits
 Changes the assistant wants to make are shown as an Emacs diff (Ediff) so you
 can step through them and accept or reject. Your mouse pointer is left where
@@ -142,17 +137,13 @@ to cost a whole screen line each, which pushed the bottom of the panel out of
 sight and left blank bands and half-painted screens behind — the thing a
 manual resize appeared to "fix".
 
-If the panel still misbehaves, set =ps/claude-debug-resize= to =t=, reproduce
-the problem once, and inspect the log named by =ps/claude-debug-resize-file=.
-
 ** Under the hood
 Module: =lisp/ps-claude.el=. Settings block: =config.org= → /Package Management
 → Claude Code (ps-claude.el)/ — =ps/claude-window-width=,
 =ps/claude-resize-debounce-delay=, =ps/claude-reanchor-delay=,
 =ps/claude-resize-throttle-interval=, =ps/claude-no-exit-prompt=,
-=ps/claude-debug-resize=, =ps/claude-selection-max-lines=,
-=ps/claude-selection-max-chars=, =ps/claude-selection-connect-delay=,
-=ps/claude-debug-selection=.
+=ps/claude-selection-max-lines=, =ps/claude-selection-max-chars=,
+=ps/claude-selection-connect-delay=.
 
 * Quitting Emacs with a session running
 Emacs normally asks to confirm before killing running processes, which a live

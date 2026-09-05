@@ -98,15 +98,6 @@ effectively useless -- a motionless pointer counted as \"not hovering\", so a
 hovered pill faded out after `ps/scrollbar-hide-delay' while the pointer was
 still sitting on the track.")
 
-(defvar ps/scrollbar--tick-count 0
-  "Number of tick-timer firings since load.
-Read by the freeze-log heartbeat (see `lisp/ps-freeze-log.el') so that after
-a freeze the log shows whether this 0.15 s timer was still firing, and how
-fast, right up to the wedge.  Every timer firing makes Emacs run
-`redisplay_preserve_echo_area' from `detect_input_pending_run_timers', which
-on the NS build enters a nested AppKit event loop -- the operation a freeze
-gets stuck in -- so this rate is the module's freeze exposure.")
-
 (defvar ps/scrollbar--torn-down nil
   "Non-nil while the hooks/advice below are fully uninstalled.
 Set by `ps/scrollbar--teardown-hooks', cleared by
@@ -276,20 +267,6 @@ With MR of 0 this is exactly the original geometry: LEFT comes back to BR."
          (top (- bt pt)))
     (list left top (+ left strip-w) (+ top (- ib it)))))
 
-(defun ps/scrollbar--log-op (label)
-  "Record LABEL as the operation in progress, via `ps/freeze-log-op-begin'.
-A thin, loosely-coupled wrapper (checked with `fboundp', not `require'd) so
-this module stays self-contained if `ps-freeze-log' (a temporary diagnostic;
-see its Commentary) is removed. Used to bracket every native Cocoa call this
-module makes -- `make-frame', `set-frame-size'/`-position', `delete-frame',
-`mouse-position'/`mouse-pixel-position' -- any of which is a candidate for
-the whole-main-thread freeze under investigation (see design-docs/scroll-bars)."
-  (when (fboundp 'ps/freeze-log-op-begin) (ps/freeze-log-op-begin label)))
-
-(defun ps/scrollbar--log-op-done ()
-  "Clear the in-progress marker set by `ps/scrollbar--log-op'."
-  (when (fboundp 'ps/freeze-log-op-end) (ps/freeze-log-op-end)))
-
 (defun ps/scrollbar--color ()
   "Resolve the pill colour from `ps/scrollbar-thumb'."
   (or (face-foreground 'ps/scrollbar-thumb nil t) "gray60"))
@@ -398,13 +375,6 @@ The buffer is empty: the pill is the frame's own background colour."
 
 (defun ps/scrollbar--make-frame (parent)
   "Create the invisible pill child frame for PARENT."
-  (ps/scrollbar--log-op "make-frame")
-  (unwind-protect
-      (ps/scrollbar--make-frame-1 parent)
-    (ps/scrollbar--log-op-done)))
-
-(defun ps/scrollbar--make-frame-1 (parent)
-  "Body of `ps/scrollbar--make-frame', factored out for the `unwind-protect' there."
   (let* ((buf (ps/scrollbar--buffer))
          (frame (make-frame
                  `((parent-frame . ,parent)
@@ -462,10 +432,7 @@ Deleting and recreating a fresh frame on the next show is self-healing."
              ps/scrollbar--frames)
     (when (frame-live-p frame)
       (let ((ps/scrollbar--busy t))
-        (ps/scrollbar--log-op "delete-frame")
-        (unwind-protect
-            (delete-frame frame)
-          (ps/scrollbar--log-op-done))))))
+        (delete-frame frame)))))
 
 (defun ps/scrollbar--reveal (child)
   "Make CHILD the single visible pill frame, destroying any other."
@@ -475,10 +442,7 @@ Deleting and recreating a fresh frame on the next show is self-healing."
     (ps/scrollbar--destroy ps/scrollbar--visible-frame))
   (setq ps/scrollbar--visible-frame child)
   (unless (frame-visible-p child)
-    (ps/scrollbar--log-op "make-frame-visible")
-    (unwind-protect
-        (make-frame-visible child)
-      (ps/scrollbar--log-op-done))))
+    (make-frame-visible child)))
 
 (defun ps/scrollbar--fade-cancel ()
   "Cancel an in-progress fade.
@@ -635,12 +599,8 @@ window the user is just hovering over) does not flash active."
                 (set-frame-parameter child 'background-color color))
               (unless (equal geom (frame-parameter child 'ps/scrollbar-geom))
                 (set-frame-parameter child 'ps/scrollbar-geom geom)
-                (ps/scrollbar--log-op "set-geom")
-                (unwind-protect
-                    (progn
-                      (set-frame-size child pill-w thumb-h t)
-                      (set-frame-position child fleft ftop))
-                  (ps/scrollbar--log-op-done)))
+                (set-frame-size child pill-w thumb-h t)
+                (set-frame-position child fleft ftop))
               ;; If we were ducked out of a forwarded wheel event's way,
               ;; stay invisible for a beat before the tick loop re-shows
               ;; the pill at its (now updated) position.
@@ -661,22 +621,10 @@ window the user is just hovering over) does not flash active."
               ;; removing the earlier reason to select WINDOW specifically.
               (unless (eq (selected-window) orig-window)
                 (select-window orig-window 'norecord))
-              ;; Diagnostic: bracket the forced synchronous flush (`redisplay
-              ;; t' -> `ns_flush_display' on the NS build), one of several
-              ;; suspects for the whole-main-thread freeze under
-              ;; investigation.  A BEGIN with no matching END in
-              ;; ps-freeze.log (or a stale marker) means the wedge happened
-              ;; right here.  See lisp/ps-freeze-log.el and
-              ;; design-docs/scroll-bars.md.
-              (when (fboundp 'ps/freeze-log)
-                (ps/freeze-log 'scrollbar "redisplay BEGIN win=%s geom=%s"
-                               window geom))
-              (ps/scrollbar--log-op "redisplay")
-              (unwind-protect
-                  (redisplay t)
-                (ps/scrollbar--log-op-done))
-              (when (fboundp 'ps/freeze-log)
-                (ps/freeze-log 'scrollbar "redisplay END win=%s" window)))
+              ;; Force a synchronous flush so the pill's new geometry is
+              ;; painted in this tick rather than a frame later, which on a
+              ;; mirrored display shows as the pill lagging behind the scroll.
+              (redisplay t))
             'rendered))))))
 
 (defun ps/scrollbar--reposition (window click-y)
@@ -833,10 +781,7 @@ track): jump to the clicked position."
 nil.  Pixel-precise (`mouse-pixel-position'), unlike the coarse char-cell
 `ps/scrollbar--mouse-window' used for scroll detection -- the track is often
 narrower than one character cell, so a char-cell test would be too coarse."
-  (pcase-let ((`(,frame ,x . ,y)
-               (progn (ps/scrollbar--log-op "mouse-pixel-position")
-                      (unwind-protect (mouse-pixel-position)
-                        (ps/scrollbar--log-op-done)))))
+  (pcase-let ((`(,frame ,x . ,y) (mouse-pixel-position)))
     (cond
      ((not (frame-live-p frame)) nil)
      ;; Hovering the pill itself: it only ever covers track pixels, and we
@@ -902,14 +847,10 @@ would otherwise keep such a pill pinned in place)."
                       (ps/scrollbar--busy t))
             (unless (and (= (frame-pixel-width f) w)
                          (= (frame-pixel-height f) h))
-              (ps/scrollbar--log-op "snap-back-size")
-              (unwind-protect (set-frame-size f w h t)
-                (ps/scrollbar--log-op-done)))
+              (set-frame-size f w h t))
             (let ((cur (frame-position f)))
               (unless (and (= (car cur) l) (= (cdr cur) tp))
-                (ps/scrollbar--log-op "snap-back-position")
-                (unwind-protect (set-frame-position f l tp)
-                  (ps/scrollbar--log-op-done))))))))))
+                (set-frame-position f l tp)))))))))
 
 ;;; Tick scheduling (two-speed: see `ps/scrollbar-idle-poll-interval')
 
@@ -1017,22 +958,17 @@ is not part of what this guards against."
   (advice-remove 'mouse-drag-vertical-line #'ps/scrollbar--resize-advice)
   (ps/scrollbar--delete-all-frames)
   (ps/scrollbar--hide-now)
-  (setq ps/scrollbar--torn-down t)
-  (when (fboundp 'ps/freeze-log)
-    (ps/freeze-log 'scrollbar "teardown (long unfocus): hooks/advice removed")))
+  (setq ps/scrollbar--torn-down t))
 
 (defun ps/scrollbar--reinstall-hooks ()
   "Undo `ps/scrollbar--teardown-hooks': reinstall hooks/advice on focus gain."
   (add-hook 'window-size-change-functions #'ps/scrollbar--on-size-change)
   (add-hook 'window-scroll-functions      #'ps/scrollbar--on-scroll)
   (advice-add 'mouse-drag-vertical-line :around #'ps/scrollbar--resize-advice)
-  (setq ps/scrollbar--torn-down nil)
-  (when (fboundp 'ps/freeze-log)
-    (ps/freeze-log 'scrollbar "reinstall (focus regained): hooks/advice restored")))
+  (setq ps/scrollbar--torn-down nil))
 
 (defun ps/scrollbar--tick ()
   "Refresh the pill: reveal on scroll/hover, fade when idle, snap back nudges."
-  (setq ps/scrollbar--tick-count (1+ ps/scrollbar--tick-count))
   (when (and ps/scrollbar-mode
              (not ps/scrollbar--drag-in-progress)
              ;; Skip entirely when Emacs is definitely not focused: no hover
@@ -1054,14 +990,11 @@ is not part of what this guards against."
          ;; Call mouse-position ONCE and cache the result.  The cached value is
          ;; compared each tick to avoid calling mouse-pixel-position (the more
          ;; expensive strip-hover check) when the mouse hasn't moved.
-         ;; Diagnostic: this runs unconditionally on every 0.15s tick, making
-         ;; it the highest-frequency native NS call in this module and a
-         ;; prime suspect for the whole-main-thread freeze (see
-         ;; design-docs/scroll-bars.md); bracketed with the freeze-log marker
-         ;; rather than the append log to stay cheap at this frequency.
-         (mp (progn (ps/scrollbar--log-op "mouse-position")
-                    (unwind-protect (mouse-position)
-                      (ps/scrollbar--log-op-done))))
+         ;; This runs unconditionally on every 0.15s tick, making it the
+         ;; highest-frequency native NS call in this module -- one reason the
+         ;; tick drops to `ps/scrollbar-idle-poll-interval' when nothing is
+         ;; happening, and pauses entirely while Emacs is unfocused.
+         (mp (mouse-position))
          (mouse-moved (not (equal mp ps/scrollbar--last-mp)))
          ;; Derive mouse-win from the already-computed mp — no second call.
          (mouse-win (pcase-let ((`(,frame ,x . ,y) mp))

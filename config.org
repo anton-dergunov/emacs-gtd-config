@@ -115,7 +115,6 @@ All self-contained logic lives in =lisp/ps-*.el=.
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   ;; Prefer source (.el) over stale bytecode (.elc) for local modules.
   (setq load-prefer-newer t)
-  (require 'ps-freeze-log)   ; diagnostic; other modules log via it if present
   (require 'ps-utils)
   (require 'ps-fonts)
   (require 'ps-vault)        ; already loaded by Bootstrap; listed for completeness
@@ -574,22 +573,6 @@ To disable the custom scrollbar entirely (revert to native bars), set
         ps/scrollbar-teardown-delay   (* 30 60))
 #+end_src
 
-** Freeze diagnostics (ps-freeze-log.el)
-Temporary instrumentation for the intermittent whole-Emacs freeze (main thread
-wedged in =ns_flush_display= on return from background). Writes a heartbeat +
-focus + risky-op log; set =ps/freeze-log-enabled= to =nil= to turn it all off.
-Remove once the root cause is found.
-#+begin_src emacs-lisp
-  (setq ps/freeze-log-enabled            t
-        ps/freeze-log-heartbeat-interval 2
-        ps/freeze-log-max-bytes          (* 5 1024 1024))
-  ;; Start instrumentation now that settings (above) are applied.  Writes to
-  ;; `user-emacs-directory'/tmp/ps-freeze.log; the tail names whatever ran
-  ;; last before a freeze, and the ps-freeze-current-op.txt marker names any
-  ;; high-frequency op (eat output) in progress at the wedge.
-  (ps/freeze-log-setup)
-#+end_src
-
 ** Mode line (ps-mode-line.el)
 Two shapes. A *plan file* — one this config scans for the agenda, see /Org
 files/ above — shows its short name, its open task count, how far through it
@@ -1021,9 +1004,7 @@ but coarser tracking during the drag. =ps/claude-resize-burst-gap= is how
 close together resize events must arrive to count as the same burst;
 anything farther apart is treated as an isolated resize and always reflows
 immediately, regardless of the throttle. =ps/claude-no-exit-prompt= lets
-Emacs quit without asking to confirm
-killing a running session. =ps/claude-debug-resize= appends troubleshooting
-detail to =ps/claude-debug-resize-file=; leave it off otherwise.
+Emacs quit without asking to confirm killing a running session.
 
 The assistant is also told which file you are in and which lines you selected.
 =ps/claude-selection-max-lines= and =ps/claude-selection-max-chars= bound how
@@ -1031,8 +1012,7 @@ big a selection is sent as text -- past either limit only the file is
 reported, since there is no way to name a range without its content and
 Claude can read the file itself. =ps/claude-selection-connect-delay= is how
 long to wait after a session connects before telling it what is selected (it
-only starts listening once connected). =ps/claude-debug-selection= logs each
-selection sent, and each one skipped, to =ps/claude-debug-resize-file=.
+only starts listening once connected).
 #+begin_src emacs-lisp
   (setq ps/claude-window-width 90
         ps/claude-resize-debounce-delay 0.3
@@ -1040,11 +1020,9 @@ selection sent, and each one skipped, to =ps/claude-debug-resize-file=.
         ps/claude-resize-throttle-interval 0.25
         ps/claude-resize-burst-gap 0.15
         ps/claude-no-exit-prompt t
-        ps/claude-debug-resize nil
         ps/claude-selection-max-lines 500
         ps/claude-selection-max-chars 20000
-        ps/claude-selection-connect-delay 1.5
-        ps/claude-debug-selection nil)
+        ps/claude-selection-connect-delay 1.5)
 #+end_src
 
 ** AI context sync (ps-ai-context.el)

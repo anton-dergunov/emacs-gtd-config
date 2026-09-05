@@ -35,9 +35,7 @@
 ;;    deliberately not gated on `track-mouse': a live diagnostic found
 ;;    Emacs's own drag bookkeeping can leave it stuck reporting an active
 ;;    drag forever (see `ps/claude--in-resize-burst-p'), which would have
-;;    made every future resize misbehave the same way.  Set
-;;    `ps/claude-debug-resize' to log each resize/resync event if this ever
-;;    needs diagnosing again.
+;;    made every future resize misbehave the same way.
 ;;
 ;; 3. `claude-code-ide--get-working-directory' defaults to the current
 ;;    project root, which for any buffer in this repo is this config's own
@@ -209,8 +207,6 @@
 (declare-function eat-term-display-beginning "eat")
 (declare-function eat-term-display-cursor "eat")
 (declare-function eat--adjust-process-window-size "eat")
-(declare-function ps/freeze-log--timestamp "ps-freeze-log")
-(declare-function ps/freeze-log--format-line "ps-freeze-log")
 (defvar eat-query-before-killing-running-terminal)
 (declare-function claude-code-ide--display-buffer-in-side-window "claude-code-ide")
 (declare-function claude-code-ide--terminal-position-keeper "claude-code-ide")
@@ -264,32 +260,6 @@ this long after the previous attempt -- never is."
   :type 'number
   :group 'claude-code-ide)
 
-(defcustom ps/claude-debug-resize nil
-  "When non-nil, append Claude Code resize/resync diagnostics to a log file.
-The file is `ps/claude-debug-resize-file'.  Records each size-change event,
-throttled reflows, the dimensions sent to the `claude' process, and the
-window re-anchor decisions.  Off by default (no cost when disabled); turn
-on only to diagnose a stuck or partially-rendered Claude Code pane."
-  :type 'boolean
-  :group 'claude-code-ide)
-
-(defcustom ps/claude-debug-resize-file
-  (expand-file-name "tmp/ps-claude-resize.log" user-emacs-directory)
-  "File `ps/claude-debug-resize' diagnostics are appended to.
-Deliberately separate from `ps/freeze-log-file' so the freeze
-investigation's log stays uncluttered, and kept on local disk (never the
-Dropbox-backed org tree) so logging cannot block on that mount."
-  :type 'file
-  :group 'claude-code-ide)
-
-(defcustom ps/claude-debug-selection nil
-  "When non-nil, log what is sent to Claude about the editor selection.
-Records each selection sent (file, range, size) and each resend that was
-skipped and why, into `ps/claude-debug-resize-file'.  Off by default; turn
-it on only to diagnose Claude not seeing the file or lines you selected."
-  :type 'boolean
-  :group 'claude-code-ide)
-
 (defcustom ps/claude-selection-max-lines 500
   "Largest selection, in lines, sent to Claude as text.
 The protocol has no way to name a range without its content, so a larger
@@ -321,36 +291,6 @@ connecting, so a notification sent immediately would be dropped."
 
 (defvar ps/claude--last-reflow-time nil
   "Time of the last non-throttled terminal reflow, or nil.")
-
-(defun ps/claude--write-log (tag format-string args)
-  "Append FORMAT-STRING/ARGS to the debug log under TAG.
-Reuses `ps-freeze-log's pure formatting helpers when that module is loaded
-so timestamps match across logs, and falls back to a plain stamp otherwise.
-Never signals -- diagnostics must not become their own source of failures."
-  (ignore-errors
-    (let* ((message (apply #'format format-string args))
-           (line (if (and (fboundp 'ps/freeze-log--timestamp)
-                          (fboundp 'ps/freeze-log--format-line))
-                     (ps/freeze-log--format-line
-                      (ps/freeze-log--timestamp) tag message)
-                   (format "%s [%s] %s\n"
-                           (format-time-string "%Y-%m-%d %H:%M:%S") tag message)))
-           (write-region-inhibit-fsync nil)
-           (coding-system-for-write 'utf-8-unix)
-           (inhibit-message t)
-           (message-log-max nil))
-      (make-directory (file-name-directory ps/claude-debug-resize-file) t)
-      (write-region line nil ps/claude-debug-resize-file 'append 'silent))))
-
-(defun ps/claude--debug-log (format-string &rest args)
-  "Append FORMAT-STRING/ARGS to the resize log when debugging is enabled."
-  (when ps/claude-debug-resize
-    (ps/claude--write-log 'claude-resize format-string args)))
-
-(defun ps/claude--selection-log (format-string &rest args)
-  "Append FORMAT-STRING/ARGS to the log when selection debugging is enabled."
-  (when ps/claude-debug-selection
-    (ps/claude--write-log 'claude-selection format-string args)))
 
 (defun ps/claude--session-buffer-p (buffer-or-name)
   "Return non-nil if BUFFER-OR-NAME is a Claude Code session buffer.
@@ -464,16 +404,10 @@ is no longer valid."
                    (at-bottom (= (window-point window) cursor)))
               (if at-bottom
                   (progn
-                    (ps/claude--debug-log
-                     "%s: anchor at-bottom start=%s -> %s cursor=%s"
-                     (buffer-name buffer) start anchor cursor)
                     (set-window-start window anchor)
                     (set-window-point window cursor))
                 (let ((clamped (ps/claude--clamp-window-start
                                 start display-begin)))
-                  (ps/claude--debug-log
-                   "%s: anchor scrolled-up start=%s display-begin=%s clamped=%s"
-                   (buffer-name buffer) start display-begin clamped)
                   (when clamped
                     (set-window-start window clamped))
                   ;; Safety net: a scrolled-up window can survive the clamp
@@ -483,9 +417,6 @@ is no longer valid."
                   ;; A blank window is never a position worth preserving, so
                   ;; fall back to the live display region.
                   (when (ps/claude--window-blank-p window)
-                    (ps/claude--debug-log
-                     "%s: window blank after anchor, falling back to display-begin"
-                     (buffer-name buffer))
                     (set-window-start window display-begin)
                     (set-window-point window cursor)))))))))))
 
@@ -532,16 +463,11 @@ done separately by `ps/claude--reanchor-window'."
                      (current (eat-term-size eat-terminal))
                      (proc (get-buffer-process buffer))
                      (inhibit-read-only t))
-                (ps/claude--debug-log "%s: resync eat=%s -> window=(%d . %d) proc=%s"
-                                       (buffer-name buffer) current width height
-                                       (and proc t))
                 (unless (equal current (cons width height))
                   (eat-term-resize eat-terminal width height))
                 (eat-term-redisplay eat-terminal)
                 (when proc
                   (set-process-window-size proc height width)))
-            (ps/claude--debug-log "%s: eat-terminal unset, falling back to window-body-height/width"
-                                   (buffer-name buffer))
             (claude-code-ide--sync-terminal-dimensions buffer window)))))))
 
 (defun ps/claude--claude-windows ()
@@ -587,8 +513,6 @@ the window must be re-anchored again once that content exists."
 Added to `window-size-change-functions'; only schedules work when a Claude
 Code session buffer is currently displayed."
   (when (ps/claude--claude-windows)
-    (ps/claude--debug-log "window-size-change detected, scheduling resync in %ss"
-                           ps/claude-resize-debounce-delay)
     (ps/claude--schedule-resync)))
 
 ;;; Reflow throttling during a resize burst (fix #2b)
@@ -641,9 +565,7 @@ not need clipping of their own: session buffers never soft-wrap at all
          (burst (ps/claude--in-resize-burst-p now)))
     (setq ps/claude--last-attempt-time now)
     (if (ps/claude--throttle-reflow-p now burst)
-        (progn
-          (ps/claude--debug-log "reflow throttled (burst in flight)")
-          nil)
+        nil
       (setq ps/claude--last-reflow-time now)
       (apply orig-fn args))))
 
@@ -821,22 +743,15 @@ submitted since -- which is when the CLI discards what it knew.  Pure given
        (with-current-buffer ps/claude--last-file-buffer
          (and (ps/claude--buffer-under-org-base-p) (current-buffer)))))
 
-(defun ps/claude--resend-selection (reason)
-  "Tell Claude about the current file and selection again, because REASON."
+(defun ps/claude--resend-selection (_reason)
+  "Tell Claude about the current file and selection again.
+_REASON names the trigger at each call site; it is not acted on."
   (when (fboundp 'claude-code-ide-mcp--send-notification)
-    (if-let ((buffer (ps/claude--resend-target)))
-        (with-current-buffer buffer
-          (let ((payload (ps/claude--current-selection)))
-            (if (not (ps/claude--resend-needed-p payload))
-                (ps/claude--selection-log "%s: unchanged, not resent" reason)
-              (ps/claude--selection-log
-               "%s: %s lines %s-%s, %d chars of text"
-               reason (buffer-name)
-               (1+ (alist-get 'line (alist-get 'start (alist-get 'selection payload))))
-               (1+ (alist-get 'line (alist-get 'end (alist-get 'selection payload))))
-               (length (alist-get 'text payload)))
-              (claude-code-ide-mcp--send-notification "selection_changed" payload))))
-      (ps/claude--selection-log "%s: no file buffer to report from" reason))))
+    (when-let ((buffer (ps/claude--resend-target)))
+      (with-current-buffer buffer
+        (let ((payload (ps/claude--current-selection)))
+          (when (ps/claude--resend-needed-p payload)
+            (claude-code-ide-mcp--send-notification "selection_changed" payload)))))))
 
 (defun ps/claude--panel-selected-p (window)
   "Non-nil if WINDOW is the selected window and shows a Claude session."
@@ -901,87 +816,19 @@ left alone so genuine edit conflicts still prompt (\"Discard your edits?\")."
 
 ;;; eat output-queue crash guard (fix #6)
 
-(defun ps/claude--eat-geometry ()
-  "Return (EAT-COLS EAT-ROWS WIN-W WIN-H PMAX DISP-BEGIN) for the current eat
-buffer, or nil if there is no live terminal.  Each element may be nil if
-unavailable.  Pure-ish snapshot used only for freeze diagnostics; never signals."
-  (ignore-errors
-    (when (ps/claude--terminal-live-p)
-      (let* ((size (ignore-errors (eat-term-size eat-terminal)))
-             (win  (get-buffer-window (current-buffer)))
-             (db   (ignore-errors (eat-term-display-beginning eat-terminal))))
-        (list (and (consp size) (car size))
-              (and (consp size) (cdr size))
-              (and win (window-body-width win))
-              (and win (window-body-height win))
-              (point-max)
-              (cond ((markerp db) (marker-position db))
-                    ((integerp db) db)
-                    (t nil)))))))
-
-(defun ps/claude--eat-desync-p (geom)
-  "Non-nil if GEOM (from `ps/claude--eat-geometry') shows eat's terminal size
-disagreeing with the window body size -- the corrupted state that precedes an
-`eat--process-output-queue' runaway.  Pure/testable.  Only reports when BOTH
-sides are known, so a windowless buffer is never a false positive."
-  (pcase geom
-    (`(,ec ,er ,ww ,wh ,_pmax ,_db)
-     (and (integerp ec) (integerp er) (integerp ww) (integerp wh)
-          (or (/= ec ww) (/= er wh))))))
-
-(defun ps/claude--eat-geometry-string (geom)
-  "Format GEOM compactly for the freeze-log op marker.  Pure/testable."
-  (pcase geom
-    ('nil "eat=none")
-    (`(,ec ,er ,ww ,wh ,pmax ,db)
-     (format "eat=%sx%s win=%sx%s%s pmax=%s db=%s"
-             ec er ww wh (if (ps/claude--eat-desync-p geom) " DESYNC" "")
-             pmax db))))
-
-(defvar ps/claude--eat-desync-log-time nil
-  "Time of the last appended eat-desync line, to throttle the append log.")
-
 (defun ps/claude--eat-output-guard (orig-fn &rest args)
   "Swallow transient `args-out-of-range' errors from eat's output timer.
 When the Claude diff window first opens, eat's terminal width state can
 momentarily desync, making `eat--process-output-queue' signal
 `args-out-of-range' from inside its timer.  Catch it, schedule a window
-resync so the terminal re-renders cleanly, and continue.
-
-Also brackets the call with the freeze-log op marker (see
-`lisp/ps-freeze-log.el'): a single non-returning `eat--process-output-queue'
-call, spinning at 100%% CPU over a desynced terminal, is a confirmed freeze
-mode.  The marker records eat's geometry at entry (via
-`ps/claude--eat-geometry-string')
-so that after a freeze `cat ps-freeze-current-op.txt' shows the exact
-terminal-vs-window mismatch that triggered the runaway; a gross desync is
-also appended (throttled) to the main log so recoverable near-misses leave a
-timeline.  The marker (not per-call appends) carries the state because this
-runs per output chunk."
-  (let ((geom (ps/claude--eat-geometry)))
-    ;; `unwind-protect' so the marker is cleared even on the caught error.
-    (when (fboundp 'ps/freeze-log-op-begin)
-      (ps/freeze-log-op-begin
-       (concat "eat--process-output-queue " (ps/claude--eat-geometry-string geom))))
-    ;; Throttled append (<=1/5s) when grossly desynced, for a timeline of
-    ;; near-misses that recovered vs. the one that eventually wedged.
-    (when (and (ps/claude--eat-desync-p geom) (fboundp 'ps/freeze-log)
-               (let ((now (float-time)))
-                 (prog1 (or (null ps/claude--eat-desync-log-time)
-                            (> (- now ps/claude--eat-desync-log-time) 5))
-                   (setq ps/claude--eat-desync-log-time now))))
-      (ps/freeze-log 'eat "desync at output-queue entry: %s"
-                     (ps/claude--eat-geometry-string geom)))
-    (unwind-protect
-        (condition-case err
-            (apply orig-fn args)
-          (args-out-of-range
-           (ps/claude--schedule-resync)
-           (message "ps/claude: recovered from eat output glitch (%s)"
-                    (error-message-string err))
-           nil))
-      (when (fboundp 'ps/freeze-log-op-end)
-        (ps/freeze-log-op-end)))))
+resync so the terminal re-renders cleanly, and continue."
+  (condition-case err
+      (apply orig-fn args)
+    (args-out-of-range
+     (ps/claude--schedule-resync)
+     (message "ps/claude: recovered from eat output glitch (%s)"
+              (error-message-string err))
+     nil)))
 
 ;;; Adaptive dock side (fix #7)
 
